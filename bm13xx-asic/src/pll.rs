@@ -61,6 +61,7 @@ impl Pll {
     /// pll.set_dividers(0x60, 1, 6, 1); // BM1397 PLL0 default values
     /// ```
     pub fn set_dividers(&mut self, fb_div: u16, ref_div: u8, post_div_1: u8, post_div_2: u8) {
+        //TODO: add some arg tests : post_div_1 >= post_div_2
         self.fb_div = fb_div;
         self.ref_div = ref_div;
         self.post_div_1 = post_div_1;
