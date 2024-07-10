@@ -1,0 +1,7 @@
+[package]
+name = "bm13xx-asic"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+fugit = "0.3"

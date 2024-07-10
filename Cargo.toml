@@ -1,0 +1,11 @@
+[workspace]
+resolver = "2"
+members = [
+  "bm13xx-asic"
+]
+
+[workspace.dependencies]
+fugit = "0.3.7"
+
+[build]
+incremental = true
