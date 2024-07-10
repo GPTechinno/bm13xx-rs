@@ -1,3 +1,6 @@
+#![no_std]
+//! BM1397 ASIC implementation.
+
 use core::time::Duration;
 use fugit::HertzU32;
 

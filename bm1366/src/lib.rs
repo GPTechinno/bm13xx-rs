@@ -1,3 +1,6 @@
+#![no_std]
+//! BM1366 ASIC implementation.
+
 use core::time::Duration;
 use fugit::HertzU32;
 
@@ -143,7 +146,6 @@ impl BM1366 {
                 - BM1366_NONCE_SMALL_CORES_BITS
                 - CHIP_ADDR_BITS)) as f32
         };
-        println!("space: {}", space);
         Duration::from_secs_f32(space * self.chip_interval as f32 / (self.hash_freq().raw() as f32))
     }
 }
