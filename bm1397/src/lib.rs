@@ -86,10 +86,10 @@ impl BM1397 {
     /// ## Get the rolling duration
     ///
     /// BM1397 only roll the Nonce Space (32 bits), but:
-    /// - Nonce[31:24] is used to hardcode the Core ID.
-    /// - Nonce[23:22] is used to hardcode the Small Core ID.
-    /// - Nonce[21:14] is used to hardcode the Chip Address.
-    /// So only the Nonce[13:0] are rolled for each Chip Address.
+    /// - Nonce\[31:24\] is used to hardcode the Core ID.
+    /// - Nonce\[23:22\] is used to hardcode the Small Core ID.
+    /// - Nonce\[21:14\] is used to hardcode the Chip Address.
+    /// So only the Nonce\[13:0\] are rolled for each Chip Address.
     ///
     /// ### Example
     /// ```

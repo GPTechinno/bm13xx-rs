@@ -112,17 +112,17 @@ impl BM1366 {
     /// BM1366 can do Version Rolling in Hardware.
     ///
     /// If Hardware Version Rolling is not enabled, BM1366 only roll the Nonce Space (32 bits), but:
-    /// - Nonce[31:25] is used to hardcode the Core ID.
-    /// - Nonce[24:22] is used to hardcode the Small Core ID.
-    /// - Nonce[21:14] is used to hardcode the Chip Address.
-    /// So only the Nonce[13:0] are rolled for each Chip Address.
+    /// - Nonce\[31:25\] is used to hardcode the Core ID.
+    /// - Nonce\[24:22\] is used to hardcode the Small Core ID.
+    /// - Nonce\[21:14\] is used to hardcode the Chip Address.
+    /// So only the Nonce\[13:0\] are rolled for each Chip Address.
     ///
     /// If Hardware Version Rolling is enabled, BM1366 roll the Nonce Space (32 bits) and
     /// up to 16 bits in Version Space, but:
-    /// - Nonce[31:25] is used to hardcode the Core ID.
-    /// - Nonce[24:17] is used to hardcode the Chip Address.
-    /// - Version[15:13] is used to hardcode the Small Core ID (assuming the Version Mask is 0x1fffe000).
-    /// So only the Nonce[16:0] and Version[28:16] are rolled for each Chip Address.
+    /// - Nonce\[31:25\] is used to hardcode the Core ID.
+    /// - Nonce\[24:17\] is used to hardcode the Chip Address.
+    /// - Version\[15:13\] is used to hardcode the Small Core ID (assuming the Version Mask is 0x1fffe000).
+    /// So only the Nonce\[16:0\] and Version\[28:16\] are rolled for each Chip Address.
     ///
     /// ### Example
     /// ```
