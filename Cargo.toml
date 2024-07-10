@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+  "bm1397",
   "bm13xx-asic"
 ]
 

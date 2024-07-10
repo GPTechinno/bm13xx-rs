@@ -1,0 +1,9 @@
+[package]
+name = "bm1397"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+"bm13xx-asic" = { path = "../bm13xx-asic" }
+
+fugit = "0.3"
