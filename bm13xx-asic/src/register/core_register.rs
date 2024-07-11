@@ -61,8 +61,8 @@ impl CoreRegisterControl {
     } */
 }
 
-impl ::core::fmt::Display for CoreRegisterControl {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+impl core::fmt::Display for CoreRegisterControl {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("CoreRegisterControl").finish()
     }
 }
@@ -190,8 +190,8 @@ impl CoreRegisterValue {
     } */
 }
 
-impl ::core::fmt::Display for CoreRegisterValue {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+impl core::fmt::Display for CoreRegisterValue {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("CoreRegisterValue").finish()
     }
 }

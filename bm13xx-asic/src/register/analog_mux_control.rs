@@ -13,8 +13,8 @@ impl AnalogMuxControl {
     // const DIODE_VDD_MUX_SEL_MASK: u32 = 0b111;
 }
 
-impl ::core::fmt::Display for AnalogMuxControl {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+impl core::fmt::Display for AnalogMuxControl {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("AnalogMuxControl").finish()
     }
 }

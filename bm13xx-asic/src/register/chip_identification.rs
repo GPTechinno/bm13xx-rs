@@ -65,7 +65,7 @@ impl ChipIdentification {
 }
 
 impl core::fmt::Display for ChipIdentification {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("ChipIdentification")
             .field("chip_id", &self.chip_id())
             .field("core_num", &self.core_num())

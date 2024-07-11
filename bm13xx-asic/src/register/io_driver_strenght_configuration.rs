@@ -31,8 +31,8 @@ impl IoDriverStrenghtConfiguration {
     // const CO_DS_MASK: u32 = 0b1111;
 }
 
-impl ::core::fmt::Display for IoDriverStrenghtConfiguration {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+impl core::fmt::Display for IoDriverStrenghtConfiguration {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("IoDriverStrenghtConfiguration").finish()
     }
 }

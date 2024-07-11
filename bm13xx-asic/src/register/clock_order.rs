@@ -17,8 +17,8 @@ impl OrderedClockMonitor {
     // const CLK_COUNT_MASK: u32 = 0xffff;
 }
 
-impl ::core::fmt::Display for OrderedClockMonitor {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+impl core::fmt::Display for OrderedClockMonitor {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("OrderedClockMonitor").finish()
     }
 }
@@ -143,7 +143,7 @@ impl ClockOrderControl0 {
 }
 
 impl core::fmt::Display for ClockOrderControl0 {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("ClockOrderControl0")
             .field("clock0_select", &self.clock_select(0))
             .field("clock1_select", &self.clock_select(1))
@@ -230,7 +230,7 @@ impl ClockOrderControl1 {
 }
 
 impl core::fmt::Display for ClockOrderControl1 {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("ClockOrderControl1")
             .field("clock8_select", &self.clock_select(0))
             .field("clock9_select", &self.clock_select(1))
@@ -275,8 +275,8 @@ impl ClockOrderStatus {
     // const CLOK_ORDER_STATUS_MASK: u32 = 0xffff_ffff;
 }
 
-impl ::core::fmt::Display for ClockOrderStatus {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+impl core::fmt::Display for ClockOrderStatus {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("ClockOrderStatus").finish()
     }
 }

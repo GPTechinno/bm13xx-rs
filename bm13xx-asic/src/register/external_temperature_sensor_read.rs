@@ -20,8 +20,8 @@ impl ExternalTemperatureSensorRead {
     // const EXTERNAL_TEMP_DATA_MASK: u32 = 0xff;
 }
 
-impl ::core::fmt::Display for ExternalTemperatureSensorRead {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+impl core::fmt::Display for ExternalTemperatureSensorRead {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("ExternalTemperatureSensorRead").finish()
     }
 }

@@ -16,7 +16,7 @@ impl ChipNonceOffset {
 }
 
 impl core::fmt::Display for ChipNonceOffset {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("ChipNonceOffset").finish()
     }
 }

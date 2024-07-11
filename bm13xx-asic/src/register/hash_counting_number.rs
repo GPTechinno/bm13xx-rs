@@ -13,8 +13,8 @@ impl HashCountingNumber {
     // const HCN_MASK: u32 = 0xffff_ffff;
 }
 
-impl ::core::fmt::Display for HashCountingNumber {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+impl core::fmt::Display for HashCountingNumber {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("HashCountingNumber").finish()
     }
 }

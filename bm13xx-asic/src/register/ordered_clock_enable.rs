@@ -13,8 +13,8 @@ impl OrderedClockEnable {
     // const CLKEN_MASK: u32 = 0xffff;
 }
 
-impl ::core::fmt::Display for OrderedClockEnable {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+impl core::fmt::Display for OrderedClockEnable {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("OrderedClockEnable").finish()
     }
 }

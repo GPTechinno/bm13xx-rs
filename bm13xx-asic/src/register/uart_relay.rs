@@ -17,8 +17,8 @@ impl UARTRelay {
     // const CO_REL_EN_MASK: u32 = 0b1;
 }
 
-impl ::core::fmt::Display for UARTRelay {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+impl core::fmt::Display for UARTRelay {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("UARTRelay").finish()
     }
 }

@@ -127,7 +127,7 @@ impl MiscControl {
 }
 
 impl core::fmt::Display for MiscControl {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("MiscControl")
             .field("bt8d", &self.bt8d())
             .field("core_srst", &self.core_srst())

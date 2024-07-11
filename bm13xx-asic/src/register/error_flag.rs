@@ -17,8 +17,8 @@ impl ErrorFlag {
     // const CORE_RESP_ERR_MASK: u32 = 0xff;
 }
 
-impl ::core::fmt::Display for ErrorFlag {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+impl core::fmt::Display for ErrorFlag {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("ErrorFlag").finish()
     }
 }

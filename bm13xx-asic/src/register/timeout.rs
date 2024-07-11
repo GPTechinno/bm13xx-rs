@@ -13,8 +13,8 @@ impl TimeOut {
     // const TMOUT_MASK: u32 = 0xffff;
 }
 
-impl ::core::fmt::Display for TimeOut {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+impl core::fmt::Display for TimeOut {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("TimeOut").finish()
     }
 }

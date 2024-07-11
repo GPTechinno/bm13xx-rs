@@ -16,7 +16,7 @@ impl HashRate {
 }
 
 impl core::fmt::Display for HashRate {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("HashRate").finish()
     }
 }

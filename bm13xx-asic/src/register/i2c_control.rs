@@ -23,8 +23,8 @@ impl I2CControl {
     // const I2C_REG_VAL_MASK: u32 = 0xff;
 }
 
-impl ::core::fmt::Display for I2CControl {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+impl core::fmt::Display for I2CControl {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("I2CControl").finish()
     }
 }

@@ -1,6 +1,8 @@
 #![no_std]
 //! BM1397 ASIC implementation.
 
+use bm13xx_asic::register::*;
+
 use core::time::Duration;
 use fugit::HertzU32;
 
@@ -29,6 +31,7 @@ pub struct BM1397 {
     >,
     pub plls: [bm13xx_asic::pll::Pll; BM1397_PLL_CNT],
     pub chip_addr: u8,
+    pub registers: [Registers; 37],
 }
 
 impl BM1397 {
@@ -163,6 +166,49 @@ impl Default for BM1397 {
             sha: bm13xx_asic::sha::Asic::default(),
             plls: [bm13xx_asic::pll::Pll::default(); BM1397_PLL_CNT],
             chip_addr: 0,
+            registers: [
+                Registers::ChipIdentification(ChipIdentification(0x1397_1800)),
+                Registers::HashRate(HashRate(0x8000_0000)),
+                Registers::PLL0Parameter(PLL0Parameter(0xC060_0161)),
+                Registers::ChipNonceOffset(ChipNonceOffset(0x0000_0000)),
+                Registers::HashCountingNumber(HashCountingNumber(0x0000_0000)),
+                Registers::TicketMask(TicketMask(0x0000_0000)),
+                Registers::MiscControl(MiscControl(0x0000_3A01)),
+                Registers::I2CControl(I2CControl(0x0100_0000)),
+                Registers::OrderedClockEnable(OrderedClockEnable(0x0000_FFFF)),
+                Registers::FastUARTConfiguration(FastUARTConfiguration(0x0600_000F)),
+                Registers::UARTRelay(UARTRelay(0x000F_0000)),
+                Registers::TicketMask2(TicketMask2(0x0000_0000)),
+                Registers::CoreRegisterControl(CoreRegisterControl(0x0000_4000)),
+                Registers::CoreRegisterValue(CoreRegisterValue(0x0000_0000)),
+                Registers::ExternalTemperatureSensorRead(ExternalTemperatureSensorRead(
+                    0x0000_0100,
+                )),
+                Registers::ErrorFlag(ErrorFlag(0xFF00_0000)),
+                Registers::NonceErrorCounter(NonceErrorCounter(0x0000_0000)),
+                Registers::NonceOverflowCounter(NonceOverflowCounter(0x0000_0000)),
+                Registers::AnalogMuxControl(AnalogMuxControl(0x0000_0000)),
+                Registers::IoDriverStrenghtConfiguration(IoDriverStrenghtConfiguration(
+                    0x0211_2111,
+                )),
+                Registers::TimeOut(TimeOut(0x0000_FFFF)),
+                Registers::PLL1Parameter(PLL1Parameter(0x0064_0111)),
+                Registers::PLL2Parameter(PLL2Parameter(0x0068_0111)),
+                Registers::PLL3Parameter(PLL3Parameter(0x0070_0111)),
+                Registers::OrderedClockMonitor(OrderedClockMonitor(0x0000_0000)),
+                Registers::PLL0Divider(PLL0Divider(0x0304_0607)),
+                Registers::PLL1Divider(PLL1Divider(0x0304_0506)),
+                Registers::PLL2Divider(PLL2Divider(0x0304_0506)),
+                Registers::PLL3Divider(PLL3Divider(0x0304_0506)),
+                Registers::ClockOrderControl0(ClockOrderControl0(0xD95C_8410)),
+                Registers::ClockOrderControl1(ClockOrderControl1(0xFB73_EA62)),
+                Registers::ClockOrderStatus(ClockOrderStatus(0x0000_0000)),
+                Registers::FrequencySweepControl1(FrequencySweepControl1(0x0000_0070)),
+                Registers::GoldenNonceForSweepReturn(GoldenNonceForSweepReturn(0x0037_6400)),
+                Registers::ReturnedGroupPatternStatus(ReturnedGroupPatternStatus(0x3030_3030)),
+                Registers::NonceReturnedTimeout(NonceReturnedTimeout(0x0000_FFFF)),
+                Registers::ReturnedSinglePatternStatus(ReturnedSinglePatternStatus(0x0000_0000)),
+            ],
         };
         bm1397.plls[0].set_parameter(0xC060_0161);
         bm1397.plls[1].set_parameter(0x0064_0111);

@@ -55,6 +55,7 @@ mod returned_single_pattern_status;
 mod ticket_mask;
 mod timeout;
 mod uart_relay;
+mod unknown;
 
 pub use analog_mux_control::AnalogMuxControl;
 pub use chip_identification::ChipIdentification;
@@ -85,20 +86,27 @@ pub use returned_single_pattern_status::ReturnedSinglePatternStatus;
 pub use ticket_mask::{TicketMask, TicketMask2};
 pub use timeout::TimeOut;
 pub use uart_relay::UARTRelay;
+pub use unknown::{
+    Reg24, Reg30, Reg34, RegA4, RegA8, RegAC, RegB0, RegB4, RegB8, RegBC, RegC0, RegC4, RegC8,
+    RegCC, RegD0, RegD4, RegD8, RegDC, RegE0, RegE4, RegE8, RegEC, RegF0, RegF4, RegF8, RegFC,
+};
 
 #[derive(Debug, PartialEq)]
 pub enum Registers {
-    ChipIdentification(ChipIdentification),
-    HashRate(HashRate),
-    PLL0Parameter(PLL0Parameter),
-    ChipNonceOffset(ChipNonceOffset),
-    HashCountingNumber(HashCountingNumber),
-    TicketMask(TicketMask),
-    MiscControl(MiscControl),
-    I2CControl(I2CControl),
-    OrderedClockEnable(OrderedClockEnable),
-    FastUARTConfiguration(FastUARTConfiguration),
-    UARTRelay(UARTRelay),
+    ChipIdentification(ChipIdentification),       // 0x00
+    HashRate(HashRate),                           // 0x04
+    PLL0Parameter(PLL0Parameter),                 // 0x08
+    ChipNonceOffset(ChipNonceOffset),             // 0x0C
+    HashCountingNumber(HashCountingNumber),       // 0x10
+    TicketMask(TicketMask),                       // 0x14
+    MiscControl(MiscControl),                     // 0x18
+    I2CControl(I2CControl),                       // 0x1C
+    OrderedClockEnable(OrderedClockEnable),       // 0x20
+    Reg24(Reg24),                                 // 0x24
+    FastUARTConfiguration(FastUARTConfiguration), // 0x28
+    UARTRelay(UARTRelay),                         // 0x2C
+    Reg30(Reg30),                                 // 0x30
+    Reg34(Reg34),                                 // 0x34
     TicketMask2(TicketMask2),
     CoreRegisterControl(CoreRegisterControl),
     CoreRegisterValue(CoreRegisterValue),
@@ -125,6 +133,29 @@ pub enum Registers {
     ReturnedGroupPatternStatus(ReturnedGroupPatternStatus),
     NonceReturnedTimeout(NonceReturnedTimeout),
     ReturnedSinglePatternStatus(ReturnedSinglePatternStatus),
+    RegA4(RegA4),
+    RegA8(RegA8),
+    RegAC(RegAC),
+    RegB0(RegB0),
+    RegB4(RegB4),
+    RegB8(RegB8),
+    RegBC(RegBC),
+    RegC0(RegC0),
+    RegC4(RegC4),
+    RegC8(RegC8),
+    RegCC(RegCC),
+    RegD0(RegD0),
+    RegD4(RegD4),
+    RegD8(RegD8),
+    RegDC(RegDC),
+    RegE0(RegE0),
+    RegE4(RegE4),
+    RegE8(RegE8),
+    RegEC(RegEC),
+    RegF0(RegF0),
+    RegF4(RegF4),
+    RegF8(RegF8),
+    RegFC(RegFC),
 }
 
 pub fn parse(addr: u8, val: u32) -> Result<Registers> {
@@ -184,6 +215,29 @@ pub fn parse(addr: u8, val: u32) -> Result<Registers> {
         ReturnedSinglePatternStatus::ADDR => Ok(Registers::ReturnedSinglePatternStatus(
             ReturnedSinglePatternStatus(val),
         )),
+        RegA4::ADDR => Ok(Registers::RegA4(RegA4(val))),
+        RegA8::ADDR => Ok(Registers::RegA8(RegA8(val))),
+        RegAC::ADDR => Ok(Registers::RegAC(RegAC(val))),
+        RegB0::ADDR => Ok(Registers::RegB0(RegB0(val))),
+        RegB4::ADDR => Ok(Registers::RegB4(RegB4(val))),
+        RegB8::ADDR => Ok(Registers::RegB8(RegB8(val))),
+        RegBC::ADDR => Ok(Registers::RegBC(RegBC(val))),
+        RegC0::ADDR => Ok(Registers::RegC0(RegC0(val))),
+        RegC4::ADDR => Ok(Registers::RegC4(RegC4(val))),
+        RegC8::ADDR => Ok(Registers::RegC8(RegC8(val))),
+        RegCC::ADDR => Ok(Registers::RegCC(RegCC(val))),
+        RegD0::ADDR => Ok(Registers::RegD0(RegD0(val))),
+        RegD4::ADDR => Ok(Registers::RegD4(RegD4(val))),
+        RegD8::ADDR => Ok(Registers::RegD8(RegD8(val))),
+        RegDC::ADDR => Ok(Registers::RegDC(RegDC(val))),
+        RegE0::ADDR => Ok(Registers::RegE0(RegE0(val))),
+        RegE4::ADDR => Ok(Registers::RegE4(RegE4(val))),
+        RegE8::ADDR => Ok(Registers::RegE8(RegE8(val))),
+        RegEC::ADDR => Ok(Registers::RegEC(RegEC(val))),
+        RegF0::ADDR => Ok(Registers::RegF0(RegF0(val))),
+        RegF4::ADDR => Ok(Registers::RegF4(RegF4(val))),
+        RegF8::ADDR => Ok(Registers::RegF8(RegF8(val))),
+        RegFC::ADDR => Ok(Registers::RegFC(RegFC(val))),
         addr => Err(Error::UnknownRegister { reg_addr: addr }),
     }
 }

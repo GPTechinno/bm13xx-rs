@@ -162,7 +162,7 @@ impl dyn PLLParameterRegister {
 }
 
 impl core::fmt::Display for dyn PLLParameterRegister {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("PLLParameter")
             .field("locked", &self.locked())
             .field("enabled", &self.enabled())

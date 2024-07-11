@@ -45,8 +45,8 @@ impl FastUARTConfiguration {
     }
 }
 
-impl ::core::fmt::Display for FastUARTConfiguration {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+impl core::fmt::Display for FastUARTConfiguration {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("FastUARTConfiguration")
             .field("pll3_div4", &self.pll3_div4())
             .finish()
