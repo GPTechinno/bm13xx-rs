@@ -26,7 +26,6 @@ pub struct BM1366 {
     >,
     pub plls: [bm13xx_asic::pll::Pll; BM1366_PLL_CNT],
     pub chip_addr: u8,
-    pub chip_interval: usize,
     pub version_rolling_enabled: bool,
     pub version_mask: u32,
 }
@@ -48,13 +47,11 @@ impl BM1366 {
     /// use bm1366::BM1366;
     ///
     /// let mut bm1366 = BM1366::default();
-    /// bm1366.set_chip_addr(2, 2);
+    /// bm1366.set_chip_addr(2);
     /// assert_eq!(bm1366.chip_addr, 2);
-    /// assert_eq!(bm1366.chip_interval, 2);
     /// ```
-    pub fn set_chip_addr(&mut self, chip_addr: u8, chip_interval: usize) {
+    pub fn set_chip_addr(&mut self, chip_addr: u8) {
         self.chip_addr = chip_addr;
-        self.chip_interval = chip_interval;
     }
 
     /// ## Enable the Hardware Version Rolling
@@ -130,9 +127,8 @@ impl BM1366 {
     /// use core::time::Duration;
     ///
     /// let mut bm1366 = BM1366::default();
-    /// assert_eq!(bm1366.rolling_duration(), Duration::from_secs_f32(0.059918629));
+    /// assert_eq!(bm1366.rolling_duration(), Duration::from_secs_f32(0.000234057));
     /// bm1366.enable_version_rolling(0x1fffe000);
-    /// bm1366.set_chip_addr(0, 1); // example of S19k-Pro HB56601 with 204 ASIC in the chain
     /// assert_eq!(bm1366.rolling_duration(), Duration::from_secs_f32(15.339168549));
     /// ```
     pub fn rolling_duration(&self) -> Duration {
@@ -146,7 +142,7 @@ impl BM1366 {
                 - BM1366_NONCE_SMALL_CORES_BITS
                 - CHIP_ADDR_BITS)) as f32
         };
-        Duration::from_secs_f32(space * self.chip_interval as f32 / (self.hash_freq().raw() as f32))
+        Duration::from_secs_f32(space / (self.hash_freq().raw() as f32))
     }
 }
 
@@ -156,7 +152,6 @@ impl Default for BM1366 {
             sha: bm13xx_asic::sha::Asic::default(),
             plls: [bm13xx_asic::pll::Pll::default(); BM1366_PLL_CNT],
             chip_addr: 0,
-            chip_interval: 256,
             version_rolling_enabled: false,
             version_mask: 0x1fffe000,
         };

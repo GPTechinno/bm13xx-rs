@@ -26,7 +26,6 @@ pub struct BM1397 {
     >,
     pub plls: [bm13xx_asic::pll::Pll; BM1397_PLL_CNT],
     pub chip_addr: u8,
-    pub chip_interval: usize,
 }
 
 impl BM1397 {
@@ -46,13 +45,11 @@ impl BM1397 {
     /// use bm1397::BM1397;
     ///
     /// let mut bm1397 = BM1397::default();
-    /// bm1397.set_chip_addr(2, 2);
+    /// bm1397.set_chip_addr(2);
     /// assert_eq!(bm1397.chip_addr, 2);
-    /// assert_eq!(bm1397.chip_interval, 2);
     /// ```
-    pub fn set_chip_addr(&mut self, chip_addr: u8, chip_interval: usize) {
+    pub fn set_chip_addr(&mut self, chip_addr: u8) {
         self.chip_addr = chip_addr;
-        self.chip_interval = chip_interval;
     }
 
     /// ## Get the SHA Hashing Frequency
@@ -97,7 +94,7 @@ impl BM1397 {
     /// use core::time::Duration;
     ///
     /// let bm1397 = BM1397::default();
-    /// assert_eq!(bm1397.rolling_duration(), Duration::from_secs_f32(0.083886079));
+    /// assert_eq!(bm1397.rolling_duration(), Duration::from_secs_f32(0.00032768));
     /// ```
     pub fn rolling_duration(&self) -> Duration {
         let space = (1
@@ -105,7 +102,7 @@ impl BM1397 {
                 - BM1397_NONCE_CORES_BITS
                 - BM1397_NONCE_SMALL_CORES_BITS
                 - CHIP_ADDR_BITS)) as f32;
-        Duration::from_secs_f32(space * self.chip_interval as f32 / (self.hash_freq().raw() as f32))
+        Duration::from_secs_f32(space / (self.hash_freq().raw() as f32))
     }
 }
 
@@ -115,7 +112,6 @@ impl Default for BM1397 {
             sha: bm13xx_asic::sha::Asic::default(),
             plls: [bm13xx_asic::pll::Pll::default(); BM1397_PLL_CNT],
             chip_addr: 0,
-            chip_interval: 256,
         };
         bm1397.plls[0].set_parameter(0xC060_0161);
         bm1397.plls[1].set_parameter(0x0064_0111);
