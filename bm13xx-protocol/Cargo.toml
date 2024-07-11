@@ -6,3 +6,11 @@ edition = "2021"
 [dependencies]
 crc = "3.2"
 derive_more = { version = "1.0.0-beta",  features = ["from"] }
+
+[dev-dependencies]
+serialport = { version="4.4.0", default-features = false}
+
+[[example]]
+name = "reg_probe"
+path = "examples/reg_probe.rs"
+dev-dependencies = ["serialport"]
