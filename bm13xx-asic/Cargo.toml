@@ -5,3 +5,4 @@ edition = "2021"
 
 [dependencies]
 fugit = "0.3"
+derive_more = { version = "1.0.0-beta",  features = ["from"] }
