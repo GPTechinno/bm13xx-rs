@@ -32,13 +32,14 @@ impl defmt::Format for OrderedClockMonitor {
 
 /// Clock Select.
 ///
-/// This is used by [`ClockOrderControl0::clock_select`], [`ClockOrderControl0::set_clock_select`],
-/// [`ClockOrderControl1::clock_select`] and [`ClockOrderControl1::set_clock_select`] method
+/// This is used by [`ClockOrderControl0::clock_select`] and [`ClockOrderControl1::clock_select`] methods
+// This is used by [`ClockOrderControl0::clock_select`], [`ClockOrderControl0::set_clock_select`],
+// [`ClockOrderControl1::clock_select`] and [`ClockOrderControl1::set_clock_select`] method
 ///
 /// [`ClockOrderControl0::clock_select`]: crate::register::ClockOrderControl0::clock_select
-/// [`ClockOrderControl0::set_clock_select`]: crate::register::ClockOrderControl0::set_clock_select
+// [`ClockOrderControl0::set_clock_select`]: crate::register::ClockOrderControl0::set_clock_select
 /// [`ClockOrderControl1::clock_select`]: crate::register::ClockOrderControl1::clock_select
-/// [`ClockOrderControl1::set_clock_select`]: crate::register::ClockOrderControl1::set_clock_select
+// [`ClockOrderControl1::set_clock_select`]: crate::register::ClockOrderControl1::set_clock_select
 #[derive(Copy, Clone, Eq, PartialEq, Debug, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[repr(u8)]

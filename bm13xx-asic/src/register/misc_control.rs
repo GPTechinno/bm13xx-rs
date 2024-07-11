@@ -2,10 +2,9 @@ use crate::register::Register;
 
 /// Baudrate CLocK SELect.
 ///
-/// This is used by [`MiscControl::bclk_sel`] and [`MiscControl::set_bclk_sel`] method.
+/// This is used by [`MiscControl::bclk_sel`] method.
 ///
 /// [`MiscControl::bclk_sel`]: crate::register::MiscControl::bclk_sel
-/// [`MiscControl::set_bclk_sel`]: crate::register::MiscControl::set_bclk_sel
 #[derive(Copy, Clone, Eq, PartialEq, Debug, PartialOrd, Ord, Hash, Default)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[repr(u8)]
