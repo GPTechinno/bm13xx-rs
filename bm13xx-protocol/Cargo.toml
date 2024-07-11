@@ -1,0 +1,8 @@
+[package]
+name = "bm13xx-protocol"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+crc = "3.2"
+derive_more = { version = "1.0.0-beta",  features = ["from"] }
