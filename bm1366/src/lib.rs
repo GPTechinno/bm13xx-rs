@@ -10,10 +10,13 @@ pub const BM1366_CORE_SMALL_CORE_CNT: usize = 8;
 pub const BM1366_DOMAIN_CNT: usize = 1;
 pub const BM1366_PLL_CNT: usize = 2;
 pub const BM1366_NONCE_CORES_BITS: usize = 7; // Core ID is hardcoded on Nonce[31:25] -> 7 bits
+pub const BM1366_NONCE_CORES_MASK: u32 = 0b111_1111;
 pub const BM1366_NONCE_SMALL_CORES_BITS: usize = 3; // Small Core ID is hardcoded on Nonce[24:22] -> 3 bits
+pub const BM1366_NONCE_SMALL_CORES_MASK: u32 = 0b111;
 
 const NONCE_BITS: usize = 32;
 const CHIP_ADDR_BITS: usize = 8;
+const CHIP_ADDR_MASK: u32 = 0b1111_1111;
 
 /// # BM1366
 #[derive(Debug)]
@@ -143,6 +146,96 @@ impl BM1366 {
                 - CHIP_ADDR_BITS)) as f32
         };
         Duration::from_secs_f32(space / (self.hash_freq().raw() as f32))
+    }
+
+    /// ## Get the Core ID that produced a given Nonce
+    ///
+    /// Core ID is always hardcoded in Nonce\[31:25\].
+    ///
+    /// ### Example
+    /// ```
+    /// use bm1366::BM1366;
+    ///
+    /// let bm1366 = BM1366::default();
+    /// assert_eq!(bm1366.nonce2core_id(0x12345678), 0x09);
+    /// ```
+    pub fn nonce2core_id(&self, nonce: u32) -> usize {
+        ((nonce >> (NONCE_BITS - BM1366_NONCE_CORES_BITS)) & BM1366_NONCE_CORES_MASK) as usize
+    }
+
+    /// ## Get the Small Core ID that produced a given Nonce
+    ///
+    /// If the Hardware Version Rolling is disabled, the Small Core ID is hardcoded in Nonce\[24:22\].
+    ///
+    /// ### Example
+    /// ```
+    /// use bm1366::BM1366;
+    ///
+    /// let bm1366 = BM1366::default();
+    /// assert_eq!(bm1366.nonce2small_core_id(0x12045678), 0);
+    /// assert_eq!(bm1366.nonce2small_core_id(0x12445678), 1);
+    /// assert_eq!(bm1366.nonce2small_core_id(0x12845678), 2);
+    /// assert_eq!(bm1366.nonce2small_core_id(0x12c45678), 3);
+    /// assert_eq!(bm1366.nonce2small_core_id(0x13045678), 4);
+    /// assert_eq!(bm1366.nonce2small_core_id(0x13445678), 5);
+    /// assert_eq!(bm1366.nonce2small_core_id(0x13845678), 6);
+    /// assert_eq!(bm1366.nonce2small_core_id(0x13c45678), 7);
+    /// ```
+    pub fn nonce2small_core_id(&self, nonce: u32) -> usize {
+        ((nonce >> (NONCE_BITS - BM1366_NONCE_CORES_BITS - BM1366_NONCE_SMALL_CORES_BITS))
+            & BM1366_NONCE_SMALL_CORES_MASK) as usize
+    }
+
+    /// ## Get the Small Core ID that produced a given Version
+    ///
+    /// If the Hardware Version Rolling is enabled, the Small Core ID is hardcoded in Version\[15:13\]
+    /// (assuming the Version Mask is 0x1fffe000).
+    ///
+    /// ### Example
+    /// ```
+    /// use bm1366::BM1366;
+    ///
+    /// let mut bm1366 = BM1366::default();
+    /// bm1366.enable_version_rolling(0x1fffe000);
+    /// assert_eq!(bm1366.version2small_core_id(0x1fff0000), 0);
+    /// assert_eq!(bm1366.version2small_core_id(0x1fff2000), 1);
+    /// assert_eq!(bm1366.version2small_core_id(0x1fff4000), 2);
+    /// assert_eq!(bm1366.version2small_core_id(0x1fff6000), 3);
+    /// assert_eq!(bm1366.version2small_core_id(0x1fff8000), 4);
+    /// assert_eq!(bm1366.version2small_core_id(0x1fffa000), 5);
+    /// assert_eq!(bm1366.version2small_core_id(0x1fffd000), 6);
+    /// assert_eq!(bm1366.version2small_core_id(0x1fffe000), 7);
+    /// ```
+    pub fn version2small_core_id(&self, version: u32) -> usize {
+        ((version >> self.version_mask.trailing_zeros()) & BM1366_NONCE_SMALL_CORES_MASK) as usize
+    }
+
+    /// ## Get the Chip Address that produced a given Nonce
+    ///
+    /// If the Hardware Version Rolling is enabled, the Chip Address is hardcoded in Nonce\[24:17\],
+    /// else it is hardcoded in Nonce\[21:14\].
+    ///
+    /// ### Example
+    /// ```
+    /// use bm1366::BM1366;
+    ///
+    /// let mut bm1366 = BM1366::default();
+    /// assert_eq!(bm1366.nonce2chip_addr(0x12345678), 0xD1);
+    /// bm1366.enable_version_rolling(0x1fffe000);
+    /// assert_eq!(bm1366.nonce2chip_addr(0x12345679), 0x1A);
+    /// ```
+    pub fn nonce2chip_addr(&self, nonce: u32) -> usize {
+        if self.version_rolling_enabled {
+            ((nonce >> (NONCE_BITS - BM1366_NONCE_CORES_BITS - CHIP_ADDR_BITS)) & CHIP_ADDR_MASK)
+                as usize
+        } else {
+            ((nonce
+                >> (NONCE_BITS
+                    - BM1366_NONCE_CORES_BITS
+                    - BM1366_NONCE_SMALL_CORES_BITS
+                    - CHIP_ADDR_BITS))
+                & CHIP_ADDR_MASK) as usize
+        }
     }
 }
 

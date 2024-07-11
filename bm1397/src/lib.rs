@@ -10,10 +10,13 @@ pub const BM1397_CORE_SMALL_CORE_CNT: usize = 4;
 pub const BM1397_DOMAIN_CNT: usize = 4;
 pub const BM1397_PLL_CNT: usize = 4;
 pub const BM1397_NONCE_CORES_BITS: usize = 8; // Core ID is hardcoded on Nonce[31:24] -> 8 bits
+pub const BM1397_NONCE_CORES_MASK: u32 = 0b1111_1111;
 pub const BM1397_NONCE_SMALL_CORES_BITS: usize = 2; // Small Core ID is hardcoded on Nonce[23:22] -> 2 bits
+pub const BM1397_NONCE_SMALL_CORES_MASK: u32 = 0b11;
 
 const NONCE_BITS: usize = 32;
 const CHIP_ADDR_BITS: usize = 8;
+const CHIP_ADDR_MASK: u32 = 0b1111_1111;
 
 /// # BM1397
 #[derive(Debug)]
@@ -103,6 +106,54 @@ impl BM1397 {
                 - BM1397_NONCE_SMALL_CORES_BITS
                 - CHIP_ADDR_BITS)) as f32;
         Duration::from_secs_f32(space / (self.hash_freq().raw() as f32))
+    }
+
+    /// ## Get the Core ID that produced a given Nonce
+    ///
+    /// ### Example
+    /// ```
+    /// use bm1397::BM1397;
+    ///
+    /// let bm1397 = BM1397::default();
+    /// assert_eq!(bm1397.nonce2core_id(0x12345678), 0x12);
+    /// ```
+    pub fn nonce2core_id(&self, nonce: u32) -> usize {
+        ((nonce >> (NONCE_BITS - BM1397_NONCE_CORES_BITS)) & BM1397_NONCE_CORES_MASK) as usize
+    }
+
+    /// ## Get the Small Core ID that produced a given Nonce
+    ///
+    /// ### Example
+    /// ```
+    /// use bm1397::BM1397;
+    ///
+    /// let bm1397 = BM1397::default();
+    /// assert_eq!(bm1397.nonce2small_core_id(0x12045678), 0);
+    /// assert_eq!(bm1397.nonce2small_core_id(0x12445678), 1);
+    /// assert_eq!(bm1397.nonce2small_core_id(0x12845678), 2);
+    /// assert_eq!(bm1397.nonce2small_core_id(0x12c45678), 3);
+    /// ```
+    pub fn nonce2small_core_id(&self, nonce: u32) -> usize {
+        ((nonce >> (NONCE_BITS - BM1397_NONCE_CORES_BITS - BM1397_NONCE_SMALL_CORES_BITS))
+            & BM1397_NONCE_SMALL_CORES_MASK) as usize
+    }
+
+    /// ## Get the Chip Address that produced a given Nonce
+    ///
+    /// ### Example
+    /// ```
+    /// use bm1397::BM1397;
+    ///
+    /// let bm1397 = BM1397::default();
+    /// assert_eq!(bm1397.nonce2chip_addr(0x12345678), 0xD1);
+    /// ```
+    pub fn nonce2chip_addr(&self, nonce: u32) -> usize {
+        ((nonce
+            >> (NONCE_BITS
+                - BM1397_NONCE_CORES_BITS
+                - BM1397_NONCE_SMALL_CORES_BITS
+                - CHIP_ADDR_BITS))
+            & CHIP_ADDR_MASK) as usize
     }
 }
 
