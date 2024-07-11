@@ -63,10 +63,10 @@ impl BM1397 {
     /// use fugit::HertzU32;
     ///
     /// let bm1397 = BM1397::default();
-    /// assert_eq!(bm1397.hash_freq(), HertzU32::MHz(400u32));
+    /// assert_eq!(bm1397.hash_freq(), HertzU32::MHz(50u32));
     /// ```
     pub fn hash_freq(&self) -> HertzU32 {
-        self.plls[0].frequency()
+        self.plls[0].frequency(0)
     }
 
     /// ## Get the theoretical Hashrate in GH/s
@@ -77,7 +77,7 @@ impl BM1397 {
     /// use fugit::HertzU32;
     ///
     /// let bm1397 = BM1397::default();
-    /// assert_eq!(bm1397.theoretical_hashrate_ghs(), 268.8);
+    /// assert_eq!(bm1397.theoretical_hashrate_ghs(), 33.6);
     /// ```
     pub fn theoretical_hashrate_ghs(&self) -> f32 {
         self.hash_freq().raw() as f32 * self.sha.small_core_count() as f32 / 1_000_000_000.0
@@ -97,7 +97,7 @@ impl BM1397 {
     /// use core::time::Duration;
     ///
     /// let bm1397 = BM1397::default();
-    /// assert_eq!(bm1397.rolling_duration(), Duration::from_secs_f32(0.01048576));
+    /// assert_eq!(bm1397.rolling_duration(), Duration::from_secs_f32(0.083886079));
     /// ```
     pub fn rolling_duration(&self) -> Duration {
         let space = (1
@@ -117,11 +117,14 @@ impl Default for BM1397 {
             chip_addr: 0,
             chip_interval: 256,
         };
-        bm1397.plls[0].set_dividers(0x60, 1, 6, 1);
-        bm1397.plls[0].enable();
-        bm1397.plls[1].set_dividers(0x64, 1, 1, 1);
-        bm1397.plls[2].set_dividers(0x68, 1, 1, 1);
-        bm1397.plls[3].set_dividers(0x70, 1, 1, 1);
+        bm1397.plls[0].set_parameter(0xC060_0161);
+        bm1397.plls[1].set_parameter(0x0064_0111);
+        bm1397.plls[2].set_parameter(0x0068_0111);
+        bm1397.plls[3].set_parameter(0x0070_0111);
+        bm1397.plls[0].set_divider(0x0304_0607);
+        bm1397.plls[1].set_divider(0x0304_0506);
+        bm1397.plls[2].set_divider(0x0304_0506);
+        bm1397.plls[3].set_divider(0x0304_0506);
         bm1397
     }
 }

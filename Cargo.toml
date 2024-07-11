@@ -8,6 +8,3 @@ members = [
 
 [workspace.dependencies]
 fugit = "0.3.7"
-
-[build]
-incremental = true

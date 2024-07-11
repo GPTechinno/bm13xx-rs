@@ -86,11 +86,11 @@ impl BM1366 {
     ///
     /// let mut bm1366 = BM1366::default();
     /// assert_eq!(bm1366.hash_freq(), HertzU32::MHz(70u32));
-    // bm1366.plls[0].set_dividers(0x60, 1, 6, 1); // TODO: add some real life test cases
-    // assert_eq!(bm1366.hash_freq(), HertzU32::MHz(400u32));
+    // bm1366.plls[0].set_parameter(0x40A0_0241); // from Bitaxe default freq
+    // assert_eq!(bm1366.hash_freq(), HertzU32::MHz(200u32));
     /// ```
     pub fn hash_freq(&self) -> HertzU32 {
-        self.plls[0].frequency()
+        self.plls[0].frequency(0)
     }
 
     /// ## Get the theoretical Hashrate in GH/s
@@ -160,9 +160,11 @@ impl Default for BM1366 {
             version_rolling_enabled: false,
             version_mask: 0x1fffe000,
         };
-        bm1366.plls[0].set_dividers(0x54, 1, 6, 5);
-        bm1366.plls[0].enable();
-        bm1366.plls[1].set_dividers(0x50, 1, 7, 4);
+        bm1366.plls[0].set_parameter(0xC054_0165);
+        bm1366.plls[1].set_parameter(0x2050_0174); // TODO: understand what is the 2 in MSB
+
+        // bm1366.plls[0].set_divider(0x0000_0000); // already default value
+        // bm1366.plls[1].set_divider(0x0000_0000);
         bm1366
     }
 }
