@@ -17,3 +17,7 @@ path = "examples/reg_probe.rs"
 [[example]]
 name = "version_rolling"
 path = "examples/version_rolling.rs"
+
+[[example]]
+name = "chain_enum"
+path = "examples/chain_enum.rs"
