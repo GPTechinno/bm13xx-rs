@@ -8,8 +8,6 @@ pub enum Destination {
     Chip(u8),
 }
 
-pub type Midstate = [u8; 32];
-
 pub struct Command;
 
 impl Command {
@@ -26,7 +24,6 @@ impl Command {
     /// Usually done before setting each chip address individually using `Command::set_chip_addr`.
     ///
     /// ## Example
-    ///
     /// ```
     /// use bm13xx_protocol::command::Command;
     ///
@@ -58,10 +55,9 @@ impl Command {
     /// This logical `ChipAddress` have 2 utilities :
     /// - sending command to a specific chip on the chain, using `Destination::Chip(ChipAddress)`.
     /// - when mining, the nonce space (u32) will be divided evenly according to `ChipAddress` :
-    /// each chip will add it's own `ChipAddress` to the MSB of the starting nonce for a job.
+    /// each chip will add it's own `ChipAddress` near by the MSB of the starting nonce for a job.
     ///
     /// ## Example
-    ///
     /// ```
     /// use bm13xx_protocol::command::Command;
     ///
@@ -85,11 +81,10 @@ impl Command {
     /// using the `dest` parameter.
     ///
     /// Usually the first command sent by a driver to the chain is the Read Register
-    /// command of `ChipAddress` to all chips on the chain, this is usefull to
+    /// command of `ChipIdentification` to all chips on the chain, this is usefull to
     /// enumerate all chips on the chain.
     ///
     /// ## Example
-    ///
     /// ```
     /// use bm13xx_protocol::command::{Command, Destination};
     ///
@@ -119,7 +114,6 @@ impl Command {
     /// using the `dest` parameter.
     ///
     /// ## Example
-    ///
     /// ```
     /// use bm13xx_protocol::command::{Command, Destination};
     ///
@@ -156,12 +150,11 @@ impl Command {
     /// # Job with 1 Midstate Command
     ///
     /// ## Example
-    ///
     /// ```
-    /// use bm13xx_protocol::command::{Command, Midstate};
+    /// use bm13xx_protocol::command::Command;
     ///
-    /// let midstates: [&Midstate; 1] = [
-    ///     &[
+    /// let midstates = [
+    ///     [
     ///         0xDE, 0x60, 0x4A, 0x09, 0xE9, 0x30, 0x1D, 0xE1, 0x25, 0x6D, 0x7E, 0xB8, 0x0E, 0xA1,
     ///         0xE6, 0x43, 0x82, 0xDF, 0x61, 0x14, 0x15, 0x03, 0x96, 0x6C, 0x18, 0x5F, 0x50, 0x2F,
     ///         0x55, 0x74, 0xD4, 0xBA,
@@ -183,9 +176,9 @@ impl Command {
         n_bits: u32,
         n_time: u32,
         merkle_root: u32,
-        midstates: [&Midstate; 1],
+        midstates: [[u8; 32]; 1],
     ) -> [u8; 56] {
-        let mut data: [u8; 56] = [0; 56];
+        let mut data = [0; 56];
         data[0] = 0x55;
         data[1] = 0xAA;
         data[2] = Self::CMD_SEND_JOB;
@@ -198,7 +191,7 @@ impl Command {
         data[14..18].clone_from_slice(&n_time.to_le_bytes());
         data[18..22].clone_from_slice(&merkle_root.to_le_bytes());
         let mut offset = 22;
-        for ms in midstates.into_iter() {
+        for ms in midstates.iter() {
             data[offset..offset + ms.len()].clone_from_slice(ms);
             offset += ms.len();
         }
@@ -210,27 +203,26 @@ impl Command {
     /// # Job with 4 Midstate Command
     ///
     /// ## Example
-    ///
     /// ```
-    /// use bm13xx_protocol::command::{Command, Midstate};
+    /// use bm13xx_protocol::command::Command;
     ///
-    /// let midstates: [&Midstate; 4] = [
-    ///     &[
+    /// let midstates = [
+    ///     [
     ///         0xDE, 0x60, 0x4A, 0x09, 0xE9, 0x30, 0x1D, 0xE1, 0x25, 0x6D, 0x7E, 0xB8, 0x0E, 0xA1,
     ///         0xE6, 0x43, 0x82, 0xDF, 0x61, 0x14, 0x15, 0x03, 0x96, 0x6C, 0x18, 0x5F, 0x50, 0x2F,
     ///         0x55, 0x74, 0xD4, 0xBA,
     ///     ],
-    ///     &[
+    ///     [
     ///         0xAE, 0x2F, 0x3F, 0xC6, 0x02, 0xD9, 0xCD, 0x3B, 0x9E, 0x39, 0xAD, 0x97, 0x9C, 0xFD,
     ///         0xFF, 0x3A, 0x40, 0x49, 0x4D, 0xB6, 0xD7, 0x8D, 0xA4, 0x51, 0x34, 0x99, 0x29, 0xD1,
     ///         0xAD, 0x36, 0x66, 0x1D,
     ///     ],
-    ///     &[
+    ///     [
     ///         0xDF, 0xFF, 0xC1, 0xCC, 0x89, 0x33, 0xEA, 0xF3, 0xE8, 0x3A, 0x91, 0x58, 0xA6, 0xD6,
     ///         0xFA, 0x02, 0x0D, 0xCF, 0x60, 0xF8, 0xC1, 0x0E, 0x99, 0x36, 0xDE, 0x71, 0xDB, 0xD3,
     ///         0xF7, 0xD2, 0x86, 0xAF,
     ///     ],
-    ///     &[
+    ///     [
     ///         0xAD, 0x62, 0x59, 0x3A, 0x8D, 0xA3, 0x28, 0xAF, 0xEC, 0x09, 0x6D, 0x86, 0xB9, 0x8E,
     ///         0x30, 0xE5, 0x79, 0xAE, 0xA4, 0x35, 0xE1, 0x4B, 0xB5, 0xD7, 0x09, 0xCC, 0xE1, 0x74,
     ///         0x04, 0x3A, 0x7C, 0x2D,
@@ -259,9 +251,9 @@ impl Command {
         n_bits: u32,
         n_time: u32,
         merkle_root: u32,
-        midstates: [&Midstate; 4],
+        midstates: [[u8; 32]; 4],
     ) -> [u8; 152] {
-        let mut data: [u8; 152] = [0; 152];
+        let mut data = [0; 152];
         data[0] = 0x55;
         data[1] = 0xAA;
         data[2] = Self::CMD_SEND_JOB;
@@ -274,12 +266,64 @@ impl Command {
         data[14..18].clone_from_slice(&n_time.to_le_bytes());
         data[18..22].clone_from_slice(&merkle_root.to_le_bytes());
         let mut offset = 22;
-        for ms in midstates.into_iter() {
+        for ms in midstates.iter() {
             data[offset..offset + ms.len()].clone_from_slice(ms);
             offset += ms.len();
         }
         let crc = crc16(&data[2..offset]);
         data[offset..offset + 2].clone_from_slice(&crc.to_be_bytes());
+        data
+    }
+
+    /// # Job with Header (for Hardware Version Rolling) Command
+    ///
+    /// ## Example
+    /// ```
+    /// use bm13xx_protocol::command::Command;
+    ///
+    /// let merkle_root = [0x2d, 0x19, 0x75, 0x74, 0x66, 0x63, 0x21, 0x46, 0xb8, 0x71, 0x7a, 0x7e,
+    ///         0xfe, 0x83, 0xec, 0x35, 0xc0, 0x96, 0xf3, 0xa4, 0xc0, 0xd8, 0x86, 0xda, 0xa8, 0x0e,
+    ///         0x70, 0x2e, 0xed, 0xe9, 0x96, 0x71];
+    /// let prev_hash = [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0x86, 0x02, 0x00,
+    ///         0x5b, 0xa4, 0xa5, 0x0e, 0x55, 0xd3, 0x00, 0xfc, 0xae, 0x0e, 0xd5, 0x56, 0xd7, 0x76,
+    ///         0xd8, 0x1a, 0x38, 0xe1, 0x99, 0x1f];
+    /// let header = Command::job_header(168, 0x1704_2450, 0x6570_de83, merkle_root, prev_hash, 0x2000_0000);
+    /// assert_eq!(
+    ///     header,
+    ///     [
+    ///         0x55, 0xaa, 0x21, 0x36, 0xa8, 0x01, 0x00, 0x00, 0x00, 0x00, 0x50, 0x24, 0x04, 0x17,
+    ///         0x83, 0xde, 0x70, 0x65, 0x2d, 0x19, 0x75, 0x74, 0x66, 0x63, 0x21, 0x46, 0xb8, 0x71,
+    ///         0x7a, 0x7e, 0xfe, 0x83, 0xec, 0x35, 0xc0, 0x96, 0xf3, 0xa4, 0xc0, 0xd8, 0x86, 0xda,
+    ///         0xa8, 0x0e, 0x70, 0x2e, 0xed, 0xe9, 0x96, 0x71, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    ///         0x00, 0x00, 0xff, 0x86, 0x02, 0x00, 0x5b, 0xa4, 0xa5, 0x0e, 0x55, 0xd3, 0x00, 0xfc,
+    ///         0xae, 0x0e, 0xd5, 0x56, 0xd7, 0x76, 0xd8, 0x1a, 0x38, 0xe1, 0x99, 0x1f, 0x00, 0x00,
+    ///         0x00, 0x20, 0x30, 0xb9,
+    ///     ]);
+    /// ```
+    pub fn job_header(
+        job_id: u8,
+        n_bits: u32,
+        n_time: u32,
+        full_merkle_root: [u8; 32],
+        prev_block_header_hash: [u8; 32],
+        version: u32,
+    ) -> [u8; 88] {
+        let mut data = [0; 88];
+        data[0] = 0x55;
+        data[1] = 0xAA;
+        data[2] = Self::CMD_SEND_JOB;
+        // data[3] = 54;
+        data[3] = data.len() as u8 - 32 - 2;
+        data[4] = job_id;
+        data[5] = 1;
+        // data[6..].clone_from_slice(&0u32.to_le_bytes()); // starting_nonce ?
+        data[10..14].clone_from_slice(&n_bits.to_le_bytes());
+        data[14..18].clone_from_slice(&n_time.to_le_bytes());
+        data[18..50].clone_from_slice(&full_merkle_root);
+        data[50..82].clone_from_slice(&prev_block_header_hash);
+        data[82..86].clone_from_slice(&version.to_le_bytes());
+        let crc = crc16(&data[2..86]);
+        data[86..88].clone_from_slice(&crc.to_be_bytes());
         data
     }
 }

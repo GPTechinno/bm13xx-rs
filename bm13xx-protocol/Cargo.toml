@@ -13,4 +13,7 @@ serialport = { version="4.4.0", default-features = false}
 [[example]]
 name = "reg_probe"
 path = "examples/reg_probe.rs"
-# dev-dependencies = ["serialport"]
+
+[[example]]
+name = "version_rolling"
+path = "examples/version_rolling.rs"

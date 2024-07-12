@@ -56,6 +56,7 @@ mod ticket_mask;
 mod timeout;
 mod uart_relay;
 mod unknown;
+mod version_rolling;
 
 pub use analog_mux_control::AnalogMuxControl;
 pub use chip_identification::ChipIdentification;
@@ -87,9 +88,10 @@ pub use ticket_mask::{TicketMask, TicketMask2};
 pub use timeout::TimeOut;
 pub use uart_relay::UARTRelay;
 pub use unknown::{
-    Reg24, Reg30, Reg34, RegA4, RegA8, RegAC, RegB0, RegB4, RegB8, RegBC, RegC0, RegC4, RegC8,
-    RegCC, RegD0, RegD4, RegD8, RegDC, RegE0, RegE4, RegE8, RegEC, RegF0, RegF4, RegF8, RegFC,
+    Reg24, Reg30, Reg34, RegA8, RegAC, RegB0, RegB4, RegB8, RegBC, RegC0, RegC4, RegC8, RegCC,
+    RegD0, RegD4, RegD8, RegDC, RegE0, RegE4, RegE8, RegEC, RegF0, RegF4, RegF8, RegFC,
 };
+pub use version_rolling::VersionRolling;
 
 #[derive(Debug, PartialEq)]
 pub enum Registers {
@@ -133,7 +135,7 @@ pub enum Registers {
     ReturnedGroupPatternStatus(ReturnedGroupPatternStatus),
     NonceReturnedTimeout(NonceReturnedTimeout),
     ReturnedSinglePatternStatus(ReturnedSinglePatternStatus),
-    RegA4(RegA4),
+    VersionRolling(VersionRolling),
     RegA8(RegA8),
     RegAC(RegAC),
     RegB0(RegB0),
@@ -215,7 +217,7 @@ pub fn parse(addr: u8, val: u32) -> Result<Registers> {
         ReturnedSinglePatternStatus::ADDR => Ok(Registers::ReturnedSinglePatternStatus(
             ReturnedSinglePatternStatus(val),
         )),
-        RegA4::ADDR => Ok(Registers::RegA4(RegA4(val))),
+        VersionRolling::ADDR => Ok(Registers::VersionRolling(VersionRolling(val))),
         RegA8::ADDR => Ok(Registers::RegA8(RegA8(val))),
         RegAC::ADDR => Ok(Registers::RegAC(RegAC(val))),
         RegB0::ADDR => Ok(Registers::RegB0(RegB0(val))),

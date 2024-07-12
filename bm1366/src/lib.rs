@@ -293,7 +293,7 @@ impl Default for BM1366 {
                 Registers::ReturnedGroupPatternStatus(ReturnedGroupPatternStatus(0x0000_0000)),
                 Registers::NonceReturnedTimeout(NonceReturnedTimeout(0x00fd_0077)),
                 Registers::ReturnedSinglePatternStatus(ReturnedSinglePatternStatus(0x0000_0000)),
-                Registers::RegA4(RegA4(0x0000_ffff)),
+                Registers::VersionRolling(VersionRolling(0x0000_ffff)),
                 Registers::RegA8(RegA8(0x0007_0000)),
                 Registers::RegAC(RegAC(0x0000_0000)),
                 Registers::RegB0(RegB0(0x0000_0000)),

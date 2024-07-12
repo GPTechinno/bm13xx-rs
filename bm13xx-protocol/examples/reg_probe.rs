@@ -28,6 +28,7 @@ fn main() {
         match Response::parse(&resp).expect("Error parsing") {
             ResponseType::Reg(reg) => println!("{:x?}", reg),
             ResponseType::Job(job) => println!("{:x?}", job),
+            ResponseType::JobVer(job) => println!("{:x?}", job),
         };
         sleep(Duration::from_millis(50));
     }
