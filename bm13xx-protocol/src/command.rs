@@ -1,5 +1,7 @@
 //! BM13xx Protocol Commands.
 
+use heapless::Vec;
+
 use crate::crc::{crc16, crc5};
 
 /// Some command can be send to All chip in the chain or to a specific one
@@ -147,22 +149,21 @@ impl Command {
         data
     }
 
-    /// # Job with 1 Midstate Command
+    /// # Job with Midstates Command
     ///
     /// ## Example
     /// ```
     /// use bm13xx_protocol::command::Command;
+    /// use heapless::Vec;
     ///
-    /// let midstates = [
-    ///     [
+    /// let mut midstates: Vec<[u8; 32], 4> = Vec::new();
+    /// midstates.push([
     ///         0xDE, 0x60, 0x4A, 0x09, 0xE9, 0x30, 0x1D, 0xE1, 0x25, 0x6D, 0x7E, 0xB8, 0x0E, 0xA1,
     ///         0xE6, 0x43, 0x82, 0xDF, 0x61, 0x14, 0x15, 0x03, 0x96, 0x6C, 0x18, 0x5F, 0x50, 0x2F,
     ///         0x55, 0x74, 0xD4, 0xBA,
-    ///     ],
-    /// ];
-    /// let cmd = Command::job_1_midstate(0, 0x1707_9E15, 0x638E_3275, 0x706A_B3A2, midstates);
+    /// ]);
     /// assert_eq!(
-    ///     cmd,
+    ///     Command::job_midstate(0, 0x1707_9E15, 0x638E_3275, 0x706A_B3A2, midstates.clone()),
     ///     [
     ///         0x55, 0xAA, 0x21, 0x36, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x15, 0x9E, 0x07, 0x17,
     ///         0x75, 0x32, 0x8E, 0x63, 0xA2, 0xB3, 0x6A, 0x70, 0xDE, 0x60, 0x4A, 0x09, 0xE9, 0x30,
@@ -170,67 +171,24 @@ impl Command {
     ///         0x15, 0x03, 0x96, 0x6C, 0x18, 0x5F, 0x50, 0x2F, 0x55, 0x74, 0xD4, 0xBA, 0xD3, 0xDC
     ///     ]
     /// );
-    /// ```
-    pub fn job_1_midstate(
-        job_id: u8,
-        n_bits: u32,
-        n_time: u32,
-        merkle_root: u32,
-        midstates: [[u8; 32]; 1],
-    ) -> [u8; 56] {
-        let mut data = [0; 56];
-        data[0] = 0x55;
-        data[1] = 0xAA;
-        data[2] = Self::CMD_SEND_JOB;
-        // data[3] = 22 + (midstates.len() * 32) as u8;
-        data[3] = data.len() as u8 - 2;
-        data[4] = job_id;
-        data[5] = midstates.len() as u8;
-        // data[6..].clone_from_slice(&0u32.to_le_bytes()); // starting_nonce ?
-        data[10..14].clone_from_slice(&n_bits.to_le_bytes());
-        data[14..18].clone_from_slice(&n_time.to_le_bytes());
-        data[18..22].clone_from_slice(&merkle_root.to_le_bytes());
-        let mut offset = 22;
-        for ms in midstates.iter() {
-            data[offset..offset + ms.len()].clone_from_slice(ms);
-            offset += ms.len();
-        }
-        let crc = crc16(&data[2..offset]);
-        data[offset..offset + 2].clone_from_slice(&crc.to_be_bytes());
-        data
-    }
-
-    /// # Job with 4 Midstate Command
     ///
-    /// ## Example
-    /// ```
-    /// use bm13xx_protocol::command::Command;
-    ///
-    /// let midstates = [
-    ///     [
-    ///         0xDE, 0x60, 0x4A, 0x09, 0xE9, 0x30, 0x1D, 0xE1, 0x25, 0x6D, 0x7E, 0xB8, 0x0E, 0xA1,
-    ///         0xE6, 0x43, 0x82, 0xDF, 0x61, 0x14, 0x15, 0x03, 0x96, 0x6C, 0x18, 0x5F, 0x50, 0x2F,
-    ///         0x55, 0x74, 0xD4, 0xBA,
-    ///     ],
-    ///     [
+    /// midstates.push([
     ///         0xAE, 0x2F, 0x3F, 0xC6, 0x02, 0xD9, 0xCD, 0x3B, 0x9E, 0x39, 0xAD, 0x97, 0x9C, 0xFD,
     ///         0xFF, 0x3A, 0x40, 0x49, 0x4D, 0xB6, 0xD7, 0x8D, 0xA4, 0x51, 0x34, 0x99, 0x29, 0xD1,
     ///         0xAD, 0x36, 0x66, 0x1D,
-    ///     ],
-    ///     [
+    /// ]);
+    /// midstates.push([
     ///         0xDF, 0xFF, 0xC1, 0xCC, 0x89, 0x33, 0xEA, 0xF3, 0xE8, 0x3A, 0x91, 0x58, 0xA6, 0xD6,
     ///         0xFA, 0x02, 0x0D, 0xCF, 0x60, 0xF8, 0xC1, 0x0E, 0x99, 0x36, 0xDE, 0x71, 0xDB, 0xD3,
     ///         0xF7, 0xD2, 0x86, 0xAF,
-    ///     ],
-    ///     [
+    /// ]);
+    /// midstates.push([
     ///         0xAD, 0x62, 0x59, 0x3A, 0x8D, 0xA3, 0x28, 0xAF, 0xEC, 0x09, 0x6D, 0x86, 0xB9, 0x8E,
     ///         0x30, 0xE5, 0x79, 0xAE, 0xA4, 0x35, 0xE1, 0x4B, 0xB5, 0xD7, 0x09, 0xCC, 0xE1, 0x74,
     ///         0x04, 0x3A, 0x7C, 0x2D,
-    ///     ],
-    /// ];
-    /// let cmd = Command::job_4_midstate(0, 0x1707_9E15, 0x638E_3275, 0x706A_B3A2, midstates);
+    /// ]);
     /// assert_eq!(
-    ///     cmd,
+    ///     Command::job_midstate(0, 0x1707_9E15, 0x638E_3275, 0x706A_B3A2, midstates),
     ///     [
     ///         0x55, 0xAA, 0x21, 0x96, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x15, 0x9E, 0x07, 0x17,
     ///         0x75, 0x32, 0x8E, 0x63, 0xA2, 0xB3, 0x6A, 0x70, 0xDE, 0x60, 0x4A, 0x09, 0xE9, 0x30,
@@ -246,32 +204,30 @@ impl Command {
     ///     ]
     /// );
     /// ```
-    pub fn job_4_midstate(
+    pub fn job_midstate(
         job_id: u8,
         n_bits: u32,
         n_time: u32,
-        merkle_root: u32,
-        midstates: [[u8; 32]; 4],
-    ) -> [u8; 152] {
-        let mut data = [0; 152];
-        data[0] = 0x55;
-        data[1] = 0xAA;
-        data[2] = Self::CMD_SEND_JOB;
-        // data[3] = 22 + (midstates.len() * 32) as u8;
-        data[3] = data.len() as u8 - 2;
-        data[4] = job_id;
-        data[5] = midstates.len() as u8;
-        // data[6..].clone_from_slice(&0u32.to_le_bytes()); // starting_nonce ?
-        data[10..14].clone_from_slice(&n_bits.to_le_bytes());
-        data[14..18].clone_from_slice(&n_time.to_le_bytes());
-        data[18..22].clone_from_slice(&merkle_root.to_le_bytes());
-        let mut offset = 22;
+        merkle_root_end: u32,
+        midstates: Vec<[u8; 32], 4>,
+    ) -> Vec<u8, 152> {
+        let mut data = Vec::new();
+        data.push(0x55).unwrap();
+        data.push(0xAA).unwrap();
+        data.push(Self::CMD_SEND_JOB).unwrap();
+        data.push(22 + (midstates.len() * 32) as u8).unwrap();
+        data.push(job_id).unwrap();
+        data.push(midstates.len() as u8).unwrap();
+        data.extend_from_slice(&0u32.to_le_bytes()).unwrap(); // starting_nonce ?
+        data.extend_from_slice(&n_bits.to_le_bytes()).unwrap();
+        data.extend_from_slice(&n_time.to_le_bytes()).unwrap();
+        data.extend_from_slice(&merkle_root_end.to_le_bytes())
+            .unwrap();
         for ms in midstates.iter() {
-            data[offset..offset + ms.len()].clone_from_slice(ms);
-            offset += ms.len();
+            data.extend_from_slice(ms).unwrap();
         }
-        let crc = crc16(&data[2..offset]);
-        data[offset..offset + 2].clone_from_slice(&crc.to_be_bytes());
+        let crc = crc16(&data[2..data.len()]);
+        data.extend_from_slice(&crc.to_be_bytes()).unwrap();
         data
     }
 
