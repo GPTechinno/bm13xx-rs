@@ -1,6 +1,7 @@
 #![no_std]
 //! BM13xx ASIC representation.
 
+pub mod core_register;
 mod error;
 pub mod pll;
 pub mod register;

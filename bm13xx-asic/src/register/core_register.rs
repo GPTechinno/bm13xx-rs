@@ -1,4 +1,4 @@
-use crate::register::Register;
+use crate::{core_register::CoreRegister, register::Register};
 
 /// # Core Register Control register
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
@@ -8,18 +8,18 @@ impl_boilerplate_for!(CoreRegisterControl);
 impl CoreRegisterControl {
     pub const ADDR: u8 = 0x3C;
 
-    // const RD_WR1_OFFSET: u8 = 31;
-    // const CORE_ID_OFFSET: u8 = 16;
-    // const RD_WR2_OFFSET: u8 = 15;
-    // const CORE_REG_ID_OFFSET: u8 = 8;
-    // const CORE_REG_VAL_OFFSET: u8 = 0;
+    const DO_CMD_OFFSET: u8 = 31;
+    const CORE_ID_OFFSET: u8 = 16;
+    const RD_WR_OFFSET: u8 = 15;
+    const CORE_REG_ID_OFFSET: u8 = 8;
+    const CORE_REG_VAL_OFFSET: u8 = 0;
 
-    // const RD_WR_MASK: u32 = 0b1;
-    // const CORE_ID_MASK: u32 = 0xff;
-    // const CORE_REG_ID_MASK: u32 = 0b1111;
-    // const CORE_REG_VAL_MASK: u32 = 0xff;
+    const DO_CMD_MASK: u32 = 0b1;
+    const RD_WR_MASK: u32 = 0b1;
+    const CORE_ID_MASK: u32 = 0x1ff;
+    const CORE_REG_ID_MASK: u32 = 0x1f;
+    const CORE_REG_VAL_MASK: u32 = 0xff;
 
-    /* TODO
     /// ## Set CoreRegisterControl for a Core Register Read.
     ///
     /// ### Example
@@ -28,37 +28,30 @@ impl CoreRegisterControl {
     /// use bm13xx_asic::register::{CoreRegisterControl, Register};
     /// use bm13xx_asic::core_register::{ClockDelayCtrl};
     ///
-    /// let crc: CoreRegisterControl = CoreRegisterControl::DEFAULT;
-    /// assert_eq!(crc.val(), 0x0000_0000);
-    /// let cdc: ClockDelayCtrl = ClockDelayCtrl::default();
-    /// let crc: CoreRegisterControl = crc.read(0, cdc);
-    /// assert_eq!(crc.val(), 0x0000_00ff);
-    /// let cdc: ClockDelayCtrl = cdc.enable_multi_midstate();
-    /// let crc: CoreRegisterControl = crc.write(0, cdc);
-    /// assert_eq!(crc.val(), 0x8000_8004);
+    /// assert_eq!(CoreRegisterControl::read_core_reg(0, ClockDelayCtrl(0x74)), 0x8000_00ff);
     /// ```
-    #[must_use = "read returns a modified CoreRegisterControl"]
-    pub fn read(mut self, core_id: u8, core_reg: impl CoreRegister) -> Self {
-        self.0 &= !Self::RD_WR_MASK;
-        self.0 &= !Self::CORE_ID_MASK;
-        self.0 |= ((core_id as u32) << Self::CORE_ID_OFFSET) & Self::CORE_ID_MASK;
-        self.0 &= !Self::CORE_REG_ID_MASK;
-        self.0 |= ((core_reg.id() as u32) << Self::CORE_REG_ID_OFFSET) & Self::CORE_REG_ID_MASK;
-        self.0 |= Self::CORE_REG_VAL_MASK;
-        self
+    pub fn read_core_reg(core_id: u8, core_reg: impl CoreRegister) -> u32 {
+        (Self::DO_CMD_MASK << Self::DO_CMD_OFFSET)
+            | (((core_id as u32) & Self::CORE_ID_MASK) << Self::CORE_ID_OFFSET)
+            | (((core_reg.id() as u32) & Self::CORE_REG_ID_MASK) << Self::CORE_REG_ID_OFFSET)
+            | Self::CORE_REG_VAL_MASK
     }
     /// ## Set CoreRegisterControl for a Core Register Write.
-    #[must_use = "write returns a modified CoreRegisterControl"]
-    pub fn write(mut self, core_id: u8, core_reg: impl CoreRegister) -> Self {
-        self.0 |= Self::RD_WR_MASK;
-        self.0 &= !Self::CORE_ID_MASK;
-        self.0 |= ((core_id as u32) << Self::CORE_ID_OFFSET) & Self::CORE_ID_MASK;
-        self.0 &= !Self::CORE_REG_ID_MASK;
-        self.0 |= ((core_reg.id() as u32) << Self::CORE_REG_ID_OFFSET) & Self::CORE_REG_ID_MASK;
-        self.0 &= !Self::CORE_REG_VAL_MASK;
-        self.0 |= ((core_reg.val() as u32) << Self::CORE_REG_VAL_OFFSET) & Self::CORE_REG_VAL_MASK;
-        self
-    } */
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use bm13xx_asic::register::{CoreRegisterControl, Register};
+    /// use bm13xx_asic::core_register::{ClockDelayCtrl};
+    ///
+    /// assert_eq!(CoreRegisterControl::write_core_reg(0, ClockDelayCtrl(0x74)), 0x8000_8074);
+    pub fn write_core_reg(core_id: u8, core_reg: impl CoreRegister) -> u32 {
+        (Self::DO_CMD_MASK << Self::DO_CMD_OFFSET)
+            | (Self::RD_WR_MASK << Self::RD_WR_OFFSET)
+            | (((core_id as u32) & Self::CORE_ID_MASK) << Self::CORE_ID_OFFSET)
+            | (((core_reg.id() as u32) & Self::CORE_REG_ID_MASK) << Self::CORE_REG_ID_OFFSET)
+            | (((core_reg.val() as u32) & Self::CORE_REG_VAL_MASK) << Self::CORE_REG_VAL_OFFSET)
+    }
 }
 
 impl core::fmt::Display for CoreRegisterControl {
@@ -137,57 +130,6 @@ impl CoreRegisterValue {
     pub const fn core_reg_val(&self) -> u8 {
         ((self.0 >> Self::CORE_REG_VAL_OFFSET) & Self::CORE_REG_VAL_MASK) as u8
     }
-
-    /* TODO
-    /// ## Get the CoreRegister according to the given core_reg_id
-    /// and the current CORE_REG_VAL.
-    ///
-    /// ## Return
-    /// - `Ok(CoreRegisters)` with the corresponding `CoreRegister`.
-    /// - `Err(Error::UnknownCoreRegister(u8))` with the core register id
-    ///    if it do not match a known `CoreRegisters`.
-    ///
-    /// ### Examples
-    /// ```
-    /// use bm13xx_asic::core_register::{ProcessMonitorData, CoreRegisters};
-    /// use bm13xx_asic::Error;
-    /// use bm13xx_asic::register::CoreRegisterValue;
-    ///
-    /// let crv: CoreRegisterValue = CoreRegisterValue(0x0001_0234);
-    /// // ProcessMonitorData
-    /// let resp = crv.core_reg(0x02);
-    /// assert!(resp.is_ok());
-    /// assert_eq!(resp.unwrap(), CoreRegisters::ProcessMonitorData(ProcessMonitorData(0x34)));
-    ///
-    /// // Error::UnknownCoreRegister(0xF0)
-    /// let resp = crv.core_reg(0xF0);
-    /// assert!(resp.is_err());
-    /// assert_eq!(resp.unwrap_err(), Error::UnknownCoreRegister(0xF0));
-    /// ```
-    pub fn core_reg(&self, core_reg_id: u8) -> Result<CoreRegisters, Error> {
-        let core_reg = match core_reg_id {
-            ClockDelayCtrl::ID => {
-                CoreRegisters::ClockDelayCtrl(ClockDelayCtrl(self.core_reg_val()))
-            }
-            ProcessMonitorCtrl::ID => {
-                CoreRegisters::ProcessMonitorCtrl(ProcessMonitorCtrl(self.core_reg_val()))
-            }
-            ProcessMonitorData::ID => {
-                CoreRegisters::ProcessMonitorData(ProcessMonitorData(self.core_reg_val()))
-            }
-            CoreError::ID => CoreRegisters::CoreError(CoreError(self.core_reg_val())),
-            CoreEnable::ID => CoreRegisters::CoreEnable(CoreEnable(self.core_reg_val())),
-            HashClockCtrl::ID => CoreRegisters::HashClockCtrl(HashClockCtrl(self.core_reg_val())),
-            HashClockCounter::ID => {
-                CoreRegisters::HashClockCounter(HashClockCounter(self.core_reg_val()))
-            }
-            SweepClockCtrl::ID => {
-                CoreRegisters::SweepClockCtrl(SweepClockCtrl(self.core_reg_val()))
-            }
-            id => return Err(Error::UnknownCoreRegister(id)),
-        };
-        Ok(core_reg)
-    } */
 }
 
 impl core::fmt::Display for CoreRegisterValue {
