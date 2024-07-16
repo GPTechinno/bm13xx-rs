@@ -1,5 +1,3 @@
-use crate::{Error, Result};
-
 pub trait Register {
     fn addr(&self) -> u8;
     fn val(&self) -> u32;
@@ -67,7 +65,9 @@ pub use clock_order::{
 pub use core_register::{CoreRegisterControl, CoreRegisterValue};
 pub use error_flag::ErrorFlag;
 pub use external_temperature_sensor_read::ExternalTemperatureSensorRead;
-pub use fast_uart_configuration::FastUARTConfiguration;
+pub use fast_uart_configuration::{
+    BaudrateClockSelectV2, FastUARTConfiguration, FastUARTConfigurationV2,
+};
 pub use frequency_sweep_control::FrequencySweepControl1;
 pub use golden_nonce_for_sweep_return::GoldenNonceForSweepReturn;
 pub use hash_counting_number::HashCountingNumber;
@@ -92,154 +92,3 @@ pub use unknown::{
     RegD0, RegD4, RegD8, RegDC, RegE0, RegE4, RegE8, RegEC, RegF0, RegF4, RegF8, RegFC,
 };
 pub use version_rolling::VersionRolling;
-
-#[derive(Debug, PartialEq)]
-pub enum Registers {
-    ChipIdentification(ChipIdentification),       // 0x00
-    HashRate(HashRate),                           // 0x04
-    PLL0Parameter(PLL0Parameter),                 // 0x08
-    ChipNonceOffset(ChipNonceOffset),             // 0x0C
-    HashCountingNumber(HashCountingNumber),       // 0x10
-    TicketMask(TicketMask),                       // 0x14
-    MiscControl(MiscControl),                     // 0x18
-    I2CControl(I2CControl),                       // 0x1C
-    OrderedClockEnable(OrderedClockEnable),       // 0x20
-    Reg24(Reg24),                                 // 0x24
-    FastUARTConfiguration(FastUARTConfiguration), // 0x28
-    UARTRelay(UARTRelay),                         // 0x2C
-    Reg30(Reg30),                                 // 0x30
-    Reg34(Reg34),                                 // 0x34
-    TicketMask2(TicketMask2),
-    CoreRegisterControl(CoreRegisterControl),
-    CoreRegisterValue(CoreRegisterValue),
-    ExternalTemperatureSensorRead(ExternalTemperatureSensorRead),
-    ErrorFlag(ErrorFlag),
-    NonceErrorCounter(NonceErrorCounter),
-    NonceOverflowCounter(NonceOverflowCounter),
-    AnalogMuxControl(AnalogMuxControl),
-    IoDriverStrenghtConfiguration(IoDriverStrenghtConfiguration),
-    TimeOut(TimeOut),
-    PLL1Parameter(PLL1Parameter),
-    PLL2Parameter(PLL2Parameter),
-    PLL3Parameter(PLL3Parameter),
-    OrderedClockMonitor(OrderedClockMonitor),
-    PLL0Divider(PLL0Divider),
-    PLL1Divider(PLL1Divider),
-    PLL2Divider(PLL2Divider),
-    PLL3Divider(PLL3Divider),
-    ClockOrderControl0(ClockOrderControl0),
-    ClockOrderControl1(ClockOrderControl1),
-    ClockOrderStatus(ClockOrderStatus),
-    FrequencySweepControl1(FrequencySweepControl1),
-    GoldenNonceForSweepReturn(GoldenNonceForSweepReturn),
-    ReturnedGroupPatternStatus(ReturnedGroupPatternStatus),
-    NonceReturnedTimeout(NonceReturnedTimeout),
-    ReturnedSinglePatternStatus(ReturnedSinglePatternStatus),
-    VersionRolling(VersionRolling),
-    RegA8(RegA8),
-    RegAC(RegAC),
-    RegB0(RegB0),
-    RegB4(RegB4),
-    RegB8(RegB8),
-    RegBC(RegBC),
-    RegC0(RegC0),
-    RegC4(RegC4),
-    RegC8(RegC8),
-    RegCC(RegCC),
-    RegD0(RegD0),
-    RegD4(RegD4),
-    RegD8(RegD8),
-    RegDC(RegDC),
-    RegE0(RegE0),
-    RegE4(RegE4),
-    RegE8(RegE8),
-    RegEC(RegEC),
-    RegF0(RegF0),
-    RegF4(RegF4),
-    RegF8(RegF8),
-    RegFC(RegFC),
-}
-
-pub fn parse(addr: u8, val: u32) -> Result<Registers> {
-    match addr {
-        ChipIdentification::ADDR => Ok(Registers::ChipIdentification(ChipIdentification(val))),
-        HashRate::ADDR => Ok(Registers::HashRate(HashRate(val))),
-        PLL0Parameter::ADDR => Ok(Registers::PLL0Parameter(PLL0Parameter(val))),
-        ChipNonceOffset::ADDR => Ok(Registers::ChipNonceOffset(ChipNonceOffset(val))),
-        HashCountingNumber::ADDR => Ok(Registers::HashCountingNumber(HashCountingNumber(val))),
-        TicketMask::ADDR => Ok(Registers::TicketMask(TicketMask(val))),
-        MiscControl::ADDR => Ok(Registers::MiscControl(MiscControl(val))),
-        I2CControl::ADDR => Ok(Registers::I2CControl(I2CControl(val))),
-        OrderedClockEnable::ADDR => Ok(Registers::OrderedClockEnable(OrderedClockEnable(val))),
-        FastUARTConfiguration::ADDR => {
-            Ok(Registers::FastUARTConfiguration(FastUARTConfiguration(val)))
-        }
-        UARTRelay::ADDR => Ok(Registers::UARTRelay(UARTRelay(val))),
-        TicketMask2::ADDR => Ok(Registers::TicketMask2(TicketMask2(val))),
-        CoreRegisterControl::ADDR => Ok(Registers::CoreRegisterControl(CoreRegisterControl(val))),
-        CoreRegisterValue::ADDR => Ok(Registers::CoreRegisterValue(CoreRegisterValue(val))),
-        ExternalTemperatureSensorRead::ADDR => Ok(Registers::ExternalTemperatureSensorRead(
-            ExternalTemperatureSensorRead(val),
-        )),
-        ErrorFlag::ADDR => Ok(Registers::ErrorFlag(ErrorFlag(val))),
-        NonceErrorCounter::ADDR => Ok(Registers::NonceErrorCounter(NonceErrorCounter(val))),
-        NonceOverflowCounter::ADDR => {
-            Ok(Registers::NonceOverflowCounter(NonceOverflowCounter(val)))
-        }
-        AnalogMuxControl::ADDR => Ok(Registers::AnalogMuxControl(AnalogMuxControl(val))),
-        IoDriverStrenghtConfiguration::ADDR => Ok(Registers::IoDriverStrenghtConfiguration(
-            IoDriverStrenghtConfiguration(val),
-        )),
-        TimeOut::ADDR => Ok(Registers::TimeOut(TimeOut(val))),
-        PLL1Parameter::ADDR => Ok(Registers::PLL1Parameter(PLL1Parameter(val))),
-        PLL2Parameter::ADDR => Ok(Registers::PLL2Parameter(PLL2Parameter(val))),
-        PLL3Parameter::ADDR => Ok(Registers::PLL3Parameter(PLL3Parameter(val))),
-        OrderedClockMonitor::ADDR => Ok(Registers::OrderedClockMonitor(OrderedClockMonitor(val))),
-        PLL0Divider::ADDR => Ok(Registers::PLL0Divider(PLL0Divider(val))),
-        PLL1Divider::ADDR => Ok(Registers::PLL1Divider(PLL1Divider(val))),
-        PLL2Divider::ADDR => Ok(Registers::PLL2Divider(PLL2Divider(val))),
-        PLL3Divider::ADDR => Ok(Registers::PLL3Divider(PLL3Divider(val))),
-        ClockOrderControl0::ADDR => Ok(Registers::ClockOrderControl0(ClockOrderControl0(val))),
-        ClockOrderControl1::ADDR => Ok(Registers::ClockOrderControl1(ClockOrderControl1(val))),
-        ClockOrderStatus::ADDR => Ok(Registers::ClockOrderStatus(ClockOrderStatus(val))),
-        FrequencySweepControl1::ADDR => Ok(Registers::FrequencySweepControl1(
-            FrequencySweepControl1(val),
-        )),
-        GoldenNonceForSweepReturn::ADDR => Ok(Registers::GoldenNonceForSweepReturn(
-            GoldenNonceForSweepReturn(val),
-        )),
-        ReturnedGroupPatternStatus::ADDR => Ok(Registers::ReturnedGroupPatternStatus(
-            ReturnedGroupPatternStatus(val),
-        )),
-        NonceReturnedTimeout::ADDR => {
-            Ok(Registers::NonceReturnedTimeout(NonceReturnedTimeout(val)))
-        }
-        ReturnedSinglePatternStatus::ADDR => Ok(Registers::ReturnedSinglePatternStatus(
-            ReturnedSinglePatternStatus(val),
-        )),
-        VersionRolling::ADDR => Ok(Registers::VersionRolling(VersionRolling(val))),
-        RegA8::ADDR => Ok(Registers::RegA8(RegA8(val))),
-        RegAC::ADDR => Ok(Registers::RegAC(RegAC(val))),
-        RegB0::ADDR => Ok(Registers::RegB0(RegB0(val))),
-        RegB4::ADDR => Ok(Registers::RegB4(RegB4(val))),
-        RegB8::ADDR => Ok(Registers::RegB8(RegB8(val))),
-        RegBC::ADDR => Ok(Registers::RegBC(RegBC(val))),
-        RegC0::ADDR => Ok(Registers::RegC0(RegC0(val))),
-        RegC4::ADDR => Ok(Registers::RegC4(RegC4(val))),
-        RegC8::ADDR => Ok(Registers::RegC8(RegC8(val))),
-        RegCC::ADDR => Ok(Registers::RegCC(RegCC(val))),
-        RegD0::ADDR => Ok(Registers::RegD0(RegD0(val))),
-        RegD4::ADDR => Ok(Registers::RegD4(RegD4(val))),
-        RegD8::ADDR => Ok(Registers::RegD8(RegD8(val))),
-        RegDC::ADDR => Ok(Registers::RegDC(RegDC(val))),
-        RegE0::ADDR => Ok(Registers::RegE0(RegE0(val))),
-        RegE4::ADDR => Ok(Registers::RegE4(RegE4(val))),
-        RegE8::ADDR => Ok(Registers::RegE8(RegE8(val))),
-        RegEC::ADDR => Ok(Registers::RegEC(RegEC(val))),
-        RegF0::ADDR => Ok(Registers::RegF0(RegF0(val))),
-        RegF4::ADDR => Ok(Registers::RegF4(RegF4(val))),
-        RegF8::ADDR => Ok(Registers::RegF8(RegF8(val))),
-        RegFC::ADDR => Ok(Registers::RegFC(RegFC(val))),
-        addr => Err(Error::UnknownRegister { reg_addr: addr }),
-    }
-}

@@ -43,15 +43,3 @@ pub use core_error::CoreError;
 pub use hash_clock::{HashClockCounter, HashClockCtrl};
 pub use process_monitor::{ProcessMonitorCtrl, ProcessMonitorData, ProcessMonitorSelect};
 pub use sweep_clock::SweepClockCtrl;
-
-#[derive(Debug, PartialEq)]
-pub enum CoreRegisters {
-    ClockDelayCtrl(ClockDelayCtrl),
-    ProcessMonitorCtrl(ProcessMonitorCtrl),
-    ProcessMonitorData(ProcessMonitorData),
-    CoreError(CoreError),
-    CoreEnable(CoreEnable),
-    HashClockCtrl(HashClockCtrl),
-    HashClockCounter(HashClockCounter),
-    SweepClockCtrl(SweepClockCtrl),
-}
