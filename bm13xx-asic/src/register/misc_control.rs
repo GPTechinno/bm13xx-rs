@@ -72,7 +72,7 @@ impl MiscControl {
     // const TFS_MASK: u32 = 0xb111;
     // const HASHRATE_TWS_MASK: u32 = 0xb11;
 
-    /// ## Get the BT8D.
+    /// ## Handle the BT8D field.
     ///
     /// This returns an `u16` with the 9-bits BT8D value.
     ///
@@ -81,12 +81,22 @@ impl MiscControl {
     /// ```
     /// use bm13xx_asic::register::MiscControl;
     ///
-    /// let misc = MiscControl(0x0000_3A01);
-    /// assert_eq!(misc.bt8d(), 0x001A);
+    /// let mut misc = MiscControl(0x0000_3A01);
+    /// assert_eq!(misc.bt8d(), 26);
+    /// assert_eq!(misc.set_bt8d(0).bt8d(), 0); // min value
+    /// assert_eq!(misc.set_bt8d(0x1ff).bt8d(), 511); // max value
+    /// assert_eq!(misc.set_bt8d(0x200).bt8d(), 0); // out of bound value
     /// ```
     pub const fn bt8d(&self) -> u16 {
         ((((self.0 >> Self::BT8D_8_5_OFFSET) & Self::BT8D_8_5_MASK) as u16) << 5)
             | (((self.0 >> Self::BT8D_4_0_OFFSET) & Self::BT8D_4_0_MASK) as u16)
+    }
+    pub fn set_bt8d(&mut self, bt8d: u16) -> &mut Self {
+        self.0 &= !(Self::BT8D_8_5_MASK << Self::BT8D_8_5_OFFSET);
+        self.0 |= ((bt8d >> 5) as u32 & Self::BT8D_8_5_MASK) << Self::BT8D_8_5_OFFSET;
+        self.0 &= !(Self::BT8D_4_0_MASK << Self::BT8D_4_0_OFFSET);
+        self.0 |= (bt8d as u32 & Self::BT8D_4_0_MASK) << Self::BT8D_4_0_OFFSET;
+        self
     }
 
     /// ## Reset the Core.
@@ -105,7 +115,7 @@ impl MiscControl {
         (self.0 >> Self::CORE_SRST_OFFSET) & Self::CORE_SRST_MASK == Self::CORE_SRST_MASK
     }
 
-    /// ## Get the Baudrate Clock Select.
+    /// ## Handle the Baudrate Clock Select field.
     ///
     /// This returns an `BaudrateClockSelect` with the current Baudrate Clock Select.
     ///
@@ -114,14 +124,20 @@ impl MiscControl {
     /// ```
     /// use bm13xx_asic::register::{BaudrateClockSelect, MiscControl};
     ///
-    /// let misc = MiscControl(0x0000_3A01);
+    /// let mut misc = MiscControl(0x0000_3A01);
     /// assert_eq!(misc.bclk_sel(), BaudrateClockSelect::Clki);
+    /// assert_eq!(misc.set_bclk_sel(BaudrateClockSelect::Pll3).bclk_sel(), BaudrateClockSelect::Pll3);
     /// ```
     pub const fn bclk_sel(&self) -> BaudrateClockSelect {
         match (self.0 >> Self::BCK_SEL_OFFSET) & Self::BCK_SEL_MASK == Self::BCK_SEL_MASK {
             true => BaudrateClockSelect::Pll3,
             false => BaudrateClockSelect::Clki,
         }
+    }
+    pub fn set_bclk_sel(&mut self, bclk_sel: BaudrateClockSelect) -> &mut Self {
+        self.0 &= !(Self::BCK_SEL_MASK << Self::BCK_SEL_OFFSET);
+        self.0 |= (bclk_sel as u32) << Self::BCK_SEL_OFFSET;
+        self
     }
 }
 
