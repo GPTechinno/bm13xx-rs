@@ -1,8 +1,7 @@
 use fugit::HertzU32;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct Pll {
-    in_clk_freq: HertzU32,
     enabled: bool,
     locked: bool,
     fb_div: u16,
@@ -13,48 +12,6 @@ pub struct Pll {
 }
 
 impl Pll {
-    pub fn new(in_clk_freq: HertzU32) -> Self {
-        Self {
-            in_clk_freq,
-            enabled: false,
-            locked: false,
-            fb_div: 0,
-            ref_div: 0,
-            post_div_1: 0,
-            post_div_2: 0,
-            out_div: [0; 5],
-        }
-    }
-
-    /// ## Get the Input Clock Frequency.
-    ///
-    /// ### Example
-    /// ```
-    /// use fugit::HertzU32;
-    /// use bm13xx_asic::pll::Pll;
-    ///
-    /// let pll = Pll::new(HertzU32::MHz(25));
-    /// assert_eq!(pll.input_clk_freq(), HertzU32::MHz(25u32));
-    /// ```
-    pub fn input_clk_freq(&self) -> HertzU32 {
-        self.in_clk_freq
-    }
-
-    /// ## Set the Input Clock Frequency.
-    ///
-    /// ### Example
-    /// ```
-    /// use fugit::HertzU32;
-    /// use bm13xx_asic::pll::Pll;
-    ///
-    /// let mut pll = Pll::new(HertzU32::MHz(25));
-    /// pll.set_input_clk_freq(HertzU32::MHz(20));
-    /// assert_eq!(pll.input_clk_freq(), HertzU32::MHz(20u32));
-    /// ```
-    pub fn set_input_clk_freq(&mut self, in_clk_freq: HertzU32) {
-        self.in_clk_freq = in_clk_freq;
-    }
-
     /// ## Set the PLL Parameter.
     ///
     /// ### Example
@@ -62,20 +19,25 @@ impl Pll {
     /// use bm13xx_asic::pll::Pll;
     ///
     /// let mut pll = Pll::default();
-    /// pll.set_parameter(0xC060_0161); // BM1397 PLL0 default parameter
-    /// assert!(pll.enabled());
-    /// assert!(pll.locked());
-    /// pll.set_parameter(0x0064_0111); // BM1397 PLL1 default parameter
-    /// assert!(!pll.enabled());
-    /// assert!(!pll.locked());
+    /// assert_eq!(pll.set_parameter(0xC060_0161).parameter(), 0xC060_0161); // BM1397 PLL0 default parameter
+    /// assert_eq!(pll.set_parameter(0x0064_0111).parameter(), 0x0064_0111); // BM1397 PLL1 default parameter
     /// ```
-    pub fn set_parameter(&mut self, parameter: u32) {
-        self.locked = parameter & 0x4000_0000 != 0;
+    pub const fn parameter(&self) -> u32 {
+        ((self.locked as u32) << 31)
+            | ((self.enabled as u32) << 30)
+            | ((self.fb_div as u32) << 16)
+            | ((self.ref_div as u32) << 8)
+            | ((self.post_div_1 as u32) << 4)
+            | (self.post_div_2 as u32)
+    }
+    pub fn set_parameter(&mut self, parameter: u32) -> &mut Self {
+        self.locked = parameter & 0x8000_0000 != 0;
         self.enabled = parameter & 0x4000_0000 != 0;
         self.fb_div = ((parameter >> 16) & 0xfff) as u16;
         self.ref_div = ((parameter >> 8) & 0x3f) as u8;
         self.post_div_1 = ((parameter >> 4) & 0x7) as u8;
         self.post_div_2 = (parameter & 0x7) as u8;
+        self
     }
 
     /// ## Set the PLL Divider.
@@ -85,14 +47,21 @@ impl Pll {
     /// use bm13xx_asic::pll::Pll;
     ///
     /// let mut pll = Pll::default();
-    /// pll.set_divider(0x0304_0607); // BM1397 PLL0 default divider
-    /// pll.set_divider(0x0304_0506); // BM1397 PLL1 default divider
+    /// assert_eq!(pll.set_divider(0x0304_0607).divider(), 0x0304_0607); // BM1397 PLL0 default divider
+    /// assert_eq!(pll.set_divider(0x0304_0506).divider(), 0x0304_0506); // BM1397 PLL1 default divider
     /// ```
-    pub fn set_divider(&mut self, divider: u32) {
+    pub const fn divider(&self) -> u32 {
+        ((self.out_div[3] as u32) << 24)
+            | ((self.out_div[2] as u32) << 16)
+            | ((self.out_div[1] as u32) << 8)
+            | (self.out_div[0] as u32)
+    }
+    pub fn set_divider(&mut self, divider: u32) -> &mut Self {
         self.out_div[3] = ((divider >> 24) & 0xf) as u8;
         self.out_div[2] = ((divider >> 16) & 0xf) as u8;
         self.out_div[1] = ((divider >> 8) & 0xf) as u8;
         self.out_div[0] = (divider & 0xf) as u8;
+        self
     }
 
     /// ## Set the PLL Divider.
@@ -102,10 +71,23 @@ impl Pll {
     /// use bm13xx_asic::pll::Pll;
     ///
     /// let mut pll = Pll::default();
-    /// pll.set_out_div_4(0); // BM1397 PLL3_DIV4 default value
+    /// assert_eq!(pll.set_out_div(4, 0).out_div(4), 0); // BM1397 PLL3_DIV4 default value
+    /// assert_eq!(pll.set_out_div(3, 15).out_div(3), 15); // max value
+    /// assert_eq!(pll.set_out_div(2, 16).out_div(2), 0); // value out of bound
+    /// assert_eq!(pll.set_out_div(5, 10).out_div(5), 0); // index out of bound
     /// ```
-    pub fn set_out_div_4(&mut self, div4: u8) {
-        self.out_div[4] = div4 & 0xf;
+    pub const fn out_div(&self, out: usize) -> u8 {
+        if out < 5 {
+            self.out_div[out]
+        } else {
+            0
+        }
+    }
+    pub fn set_out_div(&mut self, out: usize, div: u8) -> &mut Self {
+        if out < 5 {
+            self.out_div[out] = div & 0xf;
+        }
+        self
     }
 
     /// ## Get the PLL Frequency for a given output.
@@ -117,14 +99,14 @@ impl Pll {
     ///
     /// let mut pll = Pll::default();
     /// pll.set_parameter(0xC060_0161); // BM1397 PLL0 default values
-    /// assert_eq!(pll.frequency(0), HertzU32::MHz(400u32));
-    /// assert_eq!(pll.frequency(5), HertzU32::MHz(0u32));
+    /// assert_eq!(pll.frequency(HertzU32::MHz(25u32), 0), HertzU32::MHz(400u32));
+    /// assert_eq!(pll.frequency(HertzU32::MHz(25u32), 5), HertzU32::MHz(0u32));
     /// pll.set_parameter(0x0064_0111); // BM1397 PLL1 default values
-    /// assert_eq!(pll.frequency(0), HertzU32::MHz(0u32));
+    /// assert_eq!(pll.frequency(HertzU32::MHz(25u32), 0), HertzU32::MHz(0u32));
     /// ```
-    pub fn frequency(&self, out: usize) -> HertzU32 {
+    pub fn frequency(&self, in_clk_freq: HertzU32, out: usize) -> HertzU32 {
         if self.enabled && self.locked && out < 5 {
-            self.in_clk_freq * (self.fb_div as u32)
+            in_clk_freq * (self.fb_div as u32)
                 / ((self.ref_div as u32)
                     * (self.post_div_1 as u32)
                     * (self.post_div_2 as u32)
@@ -138,63 +120,45 @@ impl Pll {
     ///
     /// ### Example
     /// ```
-    /// use fugit::HertzU32;
     /// use bm13xx_asic::pll::Pll;
     ///
-    /// let pll = Pll::new(HertzU32::MHz(25));
+    /// let mut pll = Pll::default();
     /// assert!(!pll.locked());
+    /// assert!(pll.lock().locked());
+    /// assert!(!pll.unlock().locked());
     /// ```
-    pub fn locked(&self) -> bool {
+    pub const fn locked(&self) -> bool {
         self.locked
+    }
+    pub fn lock(&mut self) -> &mut Self {
+        self.locked = true;
+        self
+    }
+    pub fn unlock(&mut self) -> &mut Self {
+        self.locked = false;
+        self
     }
 
     /// ## Check if the PLL is enabled.
     ///
     /// ### Example
     /// ```
-    /// use fugit::HertzU32;
     /// use bm13xx_asic::pll::Pll;
     ///
-    /// let pll = Pll::new(HertzU32::MHz(25));
+    /// let mut pll = Pll::default();
     /// assert!(!pll.enabled());
+    /// assert!(pll.enable().enabled());
+    /// assert!(!pll.disable().enabled());
     /// ```
-    pub fn enabled(&self) -> bool {
+    pub const fn enabled(&self) -> bool {
         self.enabled
     }
-
-    /// ## Enable the PLL.
-    ///
-    /// ### Example
-    /// ```
-    /// use fugit::HertzU32;
-    /// use bm13xx_asic::pll::Pll;
-    ///
-    /// let mut pll = Pll::new(HertzU32::MHz(25));
-    /// pll.enable();
-    /// assert!(pll.enabled());
-    /// ```
-    pub fn enable(&mut self) {
+    pub fn enable(&mut self) -> &mut Self {
         self.enabled = true;
+        self
     }
-
-    /// ## Disable the PLL.
-    ///
-    /// ### Example
-    /// ```
-    /// use fugit::HertzU32;
-    /// use bm13xx_asic::pll::Pll;
-    ///
-    /// let mut pll = Pll::new(HertzU32::MHz(25));
-    /// pll.disable();
-    /// assert!(!pll.enabled());
-    /// ```
-    pub fn disable(&mut self) {
+    pub fn disable(&mut self) -> &mut Self {
         self.enabled = false;
-    }
-}
-
-impl Default for Pll {
-    fn default() -> Self {
-        Self::new(HertzU32::MHz(25))
+        self
     }
 }
