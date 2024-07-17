@@ -40,14 +40,15 @@ mod frequency_sweep_control;
 mod golden_nonce_for_sweep_return;
 mod hash_counting_number;
 mod hash_rate;
-mod i2c_control;
+mod i2c;
 mod io_driver_strenght_configuration;
-mod misc_control;
+mod misc;
 mod nonce_counter;
 mod nonce_returned_timeout;
 mod ordered_clock_enable;
 mod pll_divider;
 mod pll_parameter;
+mod reg_a8;
 mod return_group_pattern_status;
 mod returned_single_pattern_status;
 mod ticket_mask;
@@ -72,21 +73,22 @@ pub use frequency_sweep_control::FrequencySweepControl1;
 pub use golden_nonce_for_sweep_return::GoldenNonceForSweepReturn;
 pub use hash_counting_number::HashCountingNumber;
 pub use hash_rate::HashRate;
-pub use i2c_control::I2CControl;
+pub use i2c::I2CControl;
 pub use io_driver_strenght_configuration::IoDriverStrenghtConfiguration;
-pub use misc_control::{BaudrateClockSelect, MiscControl};
+pub use misc::{BaudrateClockSelect, MiscControl, MiscControlV2};
 pub use nonce_counter::{NonceErrorCounter, NonceOverflowCounter};
 pub use nonce_returned_timeout::NonceReturnedTimeout;
 pub use ordered_clock_enable::OrderedClockEnable;
 pub use pll_divider::{PLL0Divider, PLL1Divider, PLL2Divider, PLL3Divider};
 pub use pll_parameter::{PLL0Parameter, PLL1Parameter, PLL2Parameter, PLL3Parameter};
+pub use reg_a8::RegA8;
 pub use return_group_pattern_status::ReturnedGroupPatternStatus;
 pub use returned_single_pattern_status::ReturnedSinglePatternStatus;
 pub use ticket_mask::{TicketMask, TicketMask2};
 pub use timeout::TimeOut;
 pub use uart_relay::UARTRelay;
 pub use unknown::{
-    Reg24, Reg30, Reg34, RegA8, RegAC, RegB0, RegB4, RegB8, RegBC, RegC0, RegC4, RegC8, RegCC,
-    RegD0, RegD4, RegD8, RegDC, RegE0, RegE4, RegE8, RegEC, RegF0, RegF4, RegF8, RegFC,
+    Reg24, Reg30, Reg34, RegAC, RegB0, RegB4, RegB8, RegBC, RegC0, RegC4, RegC8, RegCC, RegD0,
+    RegD4, RegD8, RegDC, RegE0, RegE4, RegE8, RegEC, RegF0, RegF4, RegF8, RegFC,
 };
 pub use version_rolling::VersionRolling;

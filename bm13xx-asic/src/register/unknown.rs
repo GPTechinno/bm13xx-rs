@@ -29,7 +29,6 @@ macro_rules! unknown {
 unknown!(Reg24, 0x24);
 unknown!(Reg30, 0x30);
 unknown!(Reg34, 0x34);
-unknown!(RegA8, 0xA8);
 unknown!(RegAC, 0xAC);
 unknown!(RegB0, 0xB0);
 unknown!(RegB4, 0xB4);
