@@ -33,6 +33,7 @@ macro_rules! impl_boilerplate_for_core_reg {
 mod clock_delay;
 mod core_enable;
 mod core_error;
+mod core_reg2;
 mod core_reg22;
 mod core_reg8;
 mod hash_clock;
@@ -42,6 +43,7 @@ mod sweep_clock;
 pub use clock_delay::{ClockDelayCtrl, ClockDelayCtrlV2};
 pub use core_enable::CoreEnable;
 pub use core_error::CoreError;
+pub use core_reg2::CoreReg2;
 pub use core_reg22::CoreReg22;
 pub use core_reg8::CoreReg8;
 pub use hash_clock::{HashClockCounter, HashClockCtrl};
