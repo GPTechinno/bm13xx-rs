@@ -5,6 +5,7 @@ use heapless::Vec;
 use crate::crc::{crc16, crc5};
 
 /// Some command can be send to All chip in the chain or to a specific one
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Destination {
     All,
     Chip(u8),

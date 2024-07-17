@@ -1,7 +1,7 @@
 #![no_std]
 //! BM1397 ASIC implementation.
 
-use bm13xx_asic::{core_register::ClockDelayCtrl, register::*};
+use bm13xx_asic::{core_register::*, register::*};
 use bm13xx_protocol::{
     command::{Command, Destination},
     Bm13xxProtocol, CmdDelay,
@@ -42,6 +42,7 @@ pub struct BM1397 {
     pub plls: [bm13xx_asic::pll::Pll; BM1397_PLL_CNT],
     pub chip_addr: u8,
     pub registers: FnvIndexMap<u8, u32, 64>,
+    pub core_registers: FnvIndexMap<u8, u8, 16>,
 }
 
 impl BM1397 {
@@ -176,6 +177,7 @@ impl Default for BM1397 {
             plls: [bm13xx_asic::pll::Pll::default(); BM1397_PLL_CNT],
             chip_addr: 0,
             registers: FnvIndexMap::<_, _, 64>::new(),
+            core_registers: FnvIndexMap::<_, _, 16>::new(),
         };
         // Default PLLs Parameter
         bm1397.plls[0].set_parameter(0xC060_0161);
@@ -333,6 +335,39 @@ impl Default for BM1397 {
             .registers
             .insert(ReturnedSinglePatternStatus::ADDR, 0x0000_0000)
             .unwrap();
+        // Default Core Registers Value
+        bm1397
+            .core_registers
+            .insert(ClockDelayCtrl::ID, 0x00) // TODO: add the correct value from chip actual reading
+            .unwrap();
+        bm1397
+            .core_registers
+            .insert(ProcessMonitorCtrl::ID, 0x00) // TODO: add the correct value from chip actual reading
+            .unwrap();
+        bm1397
+            .core_registers
+            .insert(ProcessMonitorData::ID, 0x00) // TODO: add the correct value from chip actual reading
+            .unwrap();
+        bm1397
+            .core_registers
+            .insert(CoreError::ID, 0x00) // TODO: add the correct value from chip actual reading
+            .unwrap();
+        bm1397
+            .core_registers
+            .insert(CoreEnable::ID, 0x00) // TODO: add the correct value from chip actual reading
+            .unwrap();
+        bm1397
+            .core_registers
+            .insert(HashClockCtrl::ID, 0x00) // TODO: add the correct value from chip actual reading
+            .unwrap();
+        bm1397
+            .core_registers
+            .insert(HashClockCounter::ID, 0x00) // TODO: add the correct value from chip actual reading
+            .unwrap();
+        bm1397
+            .core_registers
+            .insert(SweepClockCtrl::ID, 0x00) // TODO: add the correct value from chip actual reading
+            .unwrap();
         bm1397
     }
 }
@@ -343,7 +378,7 @@ impl Bm13xxProtocol for BM1397 {
     /// ### Example
     /// ```
     /// use bm1397::BM1397;
-    /// use bm13xx_asic::register::*;
+    /// use bm13xx_asic::{core_register::*, register::*};
     /// use bm13xx_protocol::Bm13xxProtocol;
     ///
     /// let mut bm1397 = BM1397::default();
@@ -357,11 +392,11 @@ impl Bm13xxProtocol for BM1397 {
     /// assert_eq!(bm1397.registers.get(&ClockOrderControl0::ADDR).unwrap(), &0x0000_0000);
     /// assert_eq!(bm1397.registers.get(&ClockOrderControl1::ADDR).unwrap(), &0x0000_0000);
     /// assert_eq!(bm1397.registers.get(&OrderedClockEnable::ADDR).unwrap(), &0x0000_0001);
-    // assert_eq!(bm1397.core_registers.get(&ClockDelayCtrl::ID).unwrap(), &0x74);
+    /// assert_eq!(bm1397.core_registers.get(&ClockDelayCtrl::ID).unwrap(), &0x74);
     /// assert_eq!(bm1397.registers.get(&TicketMask::ADDR).unwrap(), &0x0000_00ff);
     /// ```
     ///
-    fn init(&mut self, initial_diffculty: u32) -> Vec<CmdDelay, 20> {
+    fn init(&mut self, initial_diffculty: u32) -> Vec<CmdDelay, 5> {
         let mut init_seq = Vec::new();
         // let clk_ord_ctrl = ClockOrderControl0(
         //     *self.registers.get(&ClockOrderControl0::ADDR).unwrap(),
@@ -403,25 +438,24 @@ impl Bm13xxProtocol for BM1397 {
         self.registers
             .insert(OrderedClockEnable::ADDR, clk_ord_en)
             .unwrap();
-        // let clk_dly_ctrl = ClockDelayCtrl(
-        //     *self.core_registers.get(&ClockDelayCtrl::ID).unwrap(),
-        // )
-        // .set_ccdly_sel(1)
-        // .set_pwth_sel(3)
-        // .enable_multi_midstate()
-        // .val();
-        let clk_dly_ctrl = 0x74;
+        let clk_dly_ctrl = ClockDelayCtrl(*self.core_registers.get(&ClockDelayCtrl::ID).unwrap())
+            .set_ccdly(1)
+            .set_pwth(3)
+            .enable_multi_midstate()
+            .val();
         init_seq
             .push(CmdDelay {
                 cmd: Command::write_reg(
                     CoreRegisterControl::ADDR,
-                    CoreRegisterControl::write_core_reg(0, ClockDelayCtrl(clk_dly_ctrl)), // CCDLY_SEL=1 PWTH_SEL=3 HASH_CLKEN=0 MMEN=1 SWPF_MODE=0
+                    CoreRegisterControl::write_core_reg(0, ClockDelayCtrl(clk_dly_ctrl)),
                     Destination::All,
                 ),
                 delay: Duration::from_millis(0),
             })
             .unwrap();
-        // self.core_registers.insert(ClockDelayCtrl::ID, clk_dly_ctrl).unwrap();
+        self.core_registers
+            .insert(ClockDelayCtrl::ID, clk_dly_ctrl)
+            .unwrap();
         let tck_mask = TicketMask::from_difficulty(initial_diffculty).val();
         init_seq
             .push(CmdDelay {
@@ -431,6 +465,22 @@ impl Bm13xxProtocol for BM1397 {
             .unwrap();
         self.registers.insert(TicketMask::ADDR, tck_mask).unwrap();
         init_seq
+    }
+
+    /// ## Reset the Chip Cores
+    ///
+    /// ### Example
+    /// ```
+    /// use bm1397::BM1397;
+    /// use bm13xx_asic::{core_register::*, register::*};
+    /// use bm13xx_protocol::{Bm13xxProtocol, command::Destination};
+    ///
+    /// let mut bm1397 = BM1397::default();
+    /// let mut reset_seq = bm1397.reset_core(Destination::All);
+    /// assert_eq!(reset_seq.len(), 0);
+    /// ```
+    fn reset_core(&mut self, _dest: Destination) -> Vec<CmdDelay, 6> {
+        Vec::new() // TODO
     }
 
     /// ## Set Baudrate
@@ -487,10 +537,17 @@ impl Bm13xxProtocol for BM1397 {
                 .unwrap();
         } else {
             let pll3_div4 = 6;
-            // self.plls[BM1397_PLL_ID_UART].enable().set_fbdiv(112).set_refdiv(1).set_postdiv1(1).set_postdiv2(1).set_out_div(BM1397_PLL_OUT_UART, pll3_div4);
             self.plls[BM1397_PLL_ID_UART]
-                .set_parameter(0xC070_0111)
+                .lock()
+                .enable()
+                .set_fb_div(112)
+                .set_ref_div(1)
+                .set_post1_div(1)
+                .set_post2_div(1)
                 .set_out_div(BM1397_PLL_OUT_UART, pll3_div4);
+            // self.plls[BM1397_PLL_ID_UART]
+            //     .set_parameter(0xC070_0111)
+            //     .set_out_div(BM1397_PLL_OUT_UART, pll3_div4);
             let fbase = self.plls[BM1397_PLL_ID_UART]
                 .frequency(self.input_clock_freq, BM1397_PLL_OUT_UART)
                 .raw();
