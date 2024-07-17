@@ -9,41 +9,57 @@ impl VersionRolling {
     pub const ADDR: u8 = 0xA4;
 
     const EN_OFFSET: u8 = 31;
-    const VERS_MASK_OFFSET: u8 = 0;
+    const MASK_OFFSET: u8 = 0;
 
     const EN_MASK: u32 = 0x1;
-    const VERS_MASK_MASK: u32 = 0xffff;
+    const MASK_MASK: u32 = 0xffff;
 
-    /// ## Get the Version Rolling enabled state.
+    /// ## Handle the enable field.
     ///
-    /// This returns an `bool` with the Version Rolling enabled state.
+    /// Get and set the enabled state.
     ///
     /// ### Example
     ///
     /// ```
     /// use bm13xx_asic::register::VersionRolling;
     ///
-    /// let vers_roll = VersionRolling(0x0000_FFFF);
-    // assert!(!vers_roll.enabled());
+    /// let mut vers_roll = VersionRolling(0x0000_FFFF);
+    /// assert!(!vers_roll.enabled());
+    /// assert!(vers_roll.enable().enabled());
+    /// assert!(!vers_roll.disable().enabled());
     /// ```
-    pub fn enabled(&self) -> bool {
+    pub const fn enabled(&self) -> bool {
         (self.0 >> Self::EN_OFFSET) & Self::EN_MASK == Self::EN_MASK
     }
+    pub fn enable(&mut self) -> &mut Self {
+        self.0 |= Self::EN_MASK << Self::EN_OFFSET;
+        self
+    }
+    pub fn disable(&mut self) -> &mut Self {
+        self.0 &= !(Self::EN_MASK << Self::EN_OFFSET);
+        self
+    }
 
-    /// ## Get the chip identifier.
+    /// ## Handle the mask field.
     ///
-    /// This returns an `u32` with the Version Rolling Mask value.
+    /// Get and set the mask value.
     ///
     /// ### Example
     ///
     /// ```
     /// use bm13xx_asic::register::VersionRolling;
     ///
-    /// let vers_roll = VersionRolling(0x0000_FFFF);
+    /// let mut vers_roll = VersionRolling(0x0000_FFFF);
     /// assert_eq!(vers_roll.mask(), 0x1fff_e000);
+    /// assert_eq!(vers_roll.set_mask(0x1fff_e000).mask(), 0x1fff_e000);
     /// ```
     pub const fn mask(&self) -> u32 {
-        ((self.0 >> Self::VERS_MASK_OFFSET) & Self::VERS_MASK_MASK) << 13
+        ((self.0 >> Self::MASK_OFFSET) & Self::MASK_MASK) << 13
+    }
+    pub fn set_mask(&mut self, mask: u32) -> &mut Self {
+        self.0 &= !(Self::MASK_MASK << Self::MASK_OFFSET);
+        self.0 |= ((mask >> 13) & Self::MASK_MASK) << Self::MASK_OFFSET;
+        self
     }
 }
 
