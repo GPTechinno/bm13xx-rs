@@ -6,7 +6,7 @@ pub struct CoreEnable(pub u8);
 impl_boilerplate_for_core_reg!(CoreEnable);
 
 impl CoreEnable {
-    pub const ID: u8 = 0x04;
+    pub const ID: u8 = 4;
 
     // const CORE_EN_I_OFFSET: u8 = 0;
 

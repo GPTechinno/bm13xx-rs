@@ -6,7 +6,7 @@ pub struct SweepClockCtrl(pub u8);
 impl_boilerplate_for_core_reg!(SweepClockCtrl);
 
 impl SweepClockCtrl {
-    pub const ID: u8 = 0x07;
+    pub const ID: u8 = 7;
 
     // const SWPF_MODE_OFFSET: u8 = 7;
     // const CLK_SEL_OFFSET: u8 = 0;

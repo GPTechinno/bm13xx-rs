@@ -6,7 +6,7 @@ pub struct CoreError(pub u8);
 impl_boilerplate_for_core_reg!(CoreError);
 
 impl CoreError {
-    pub const ID: u8 = 0x03;
+    pub const ID: u8 = 3;
 
     const INI_NONCE_ERR_OFFSET: u8 = 4;
     const CMD_ERR_CNT_OFFSET: u8 = 0;

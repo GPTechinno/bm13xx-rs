@@ -56,9 +56,9 @@ mod uart_relay;
 mod unknown;
 mod version_rolling;
 
-pub use analog_mux_control::AnalogMuxControl;
+pub use analog_mux_control::{AnalogMuxControl, AnalogMuxControlV2};
 pub use chip_identification::ChipIdentification;
-pub use chip_nonce_offset::ChipNonceOffset;
+pub use chip_nonce_offset::{ChipNonceOffset, ChipNonceOffsetV2};
 pub use clock_order::{
     ClockOrderControl0, ClockOrderControl1, ClockOrderStatus, ClockSelect, OrderedClockMonitor,
 };
@@ -79,9 +79,7 @@ pub use nonce_counter::{NonceErrorCounter, NonceOverflowCounter};
 pub use nonce_returned_timeout::NonceReturnedTimeout;
 pub use ordered_clock_enable::OrderedClockEnable;
 pub use pll_divider::{PLL0Divider, PLL1Divider, PLL2Divider, PLL3Divider};
-pub use pll_parameter::{
-    PLL0Parameter, PLL1Parameter, PLL2Parameter, PLL3Parameter, PLLParameterRegister,
-};
+pub use pll_parameter::{PLL0Parameter, PLL1Parameter, PLL2Parameter, PLL3Parameter};
 pub use return_group_pattern_status::ReturnedGroupPatternStatus;
 pub use returned_single_pattern_status::ReturnedSinglePatternStatus;
 pub use ticket_mask::{TicketMask, TicketMask2};

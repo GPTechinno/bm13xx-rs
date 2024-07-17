@@ -16,6 +16,10 @@ name = "reg_probe"
 path = "examples/reg_probe.rs"
 
 [[example]]
+name = "core_reg_probe"
+path = "examples/core_reg_probe.rs"
+
+[[example]]
 name = "version_rolling"
 path = "examples/version_rolling.rs"
 

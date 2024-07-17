@@ -4,15 +4,32 @@ use fugit::HertzU32;
 pub struct Pll {
     enabled: bool,
     locked: bool,
+    vco_high_freq: bool,
     fb_div: u16,
     ref_div: u8,
-    post_div_1: u8,
-    post_div_2: u8,
+    post1_div: u8,
+    post2_div: u8,
     out_div: [u8; 5],
 }
 
 impl Pll {
-    /// ## Set the PLL Parameter.
+    const LOCKED_OFFSET: u8 = 31;
+    const PLLEN_OFFSET: u8 = 30;
+    const VCO_HIGH_FREQ_OFFSET: u8 = 28;
+    const FBDIV_OFFSET: u8 = 16;
+    const REFDIV_OFFSET: u8 = 8;
+    const POSTDIV1_OFFSET: u8 = 4;
+    const POSTDIV2_OFFSET: u8 = 0;
+
+    const LOCKED_MASK: u32 = 0x1;
+    const PLLEN_MASK: u32 = 0x1;
+    const VCO_HIGH_FREQ_MASK: u32 = 0x1;
+    const FBDIV_MASK: u32 = 0xfff;
+    const REFDIV_MASK: u32 = 0x3f;
+    const POSTDIV1_MASK: u32 = 0x7;
+    const POSTDIV2_MASK: u32 = 0x7;
+
+    /// ## Handle the PLL Parameter.
     ///
     /// ### Example
     /// ```
@@ -23,20 +40,23 @@ impl Pll {
     /// assert_eq!(pll.set_parameter(0x0064_0111).parameter(), 0x0064_0111); // BM1397 PLL1 default parameter
     /// ```
     pub const fn parameter(&self) -> u32 {
-        ((self.locked as u32) << 31)
-            | ((self.enabled as u32) << 30)
-            | ((self.fb_div as u32) << 16)
-            | ((self.ref_div as u32) << 8)
-            | ((self.post_div_1 as u32) << 4)
-            | (self.post_div_2 as u32)
+        ((self.locked as u32) << Self::LOCKED_OFFSET)
+            | ((self.enabled as u32) << Self::PLLEN_OFFSET)
+            | ((self.vco_high_freq as u32) << Self::VCO_HIGH_FREQ_OFFSET)
+            | ((self.fb_div as u32) << Self::FBDIV_OFFSET)
+            | ((self.ref_div as u32) << Self::REFDIV_OFFSET)
+            | ((self.post1_div as u32) << Self::POSTDIV1_OFFSET)
+            | ((self.post2_div as u32) << Self::POSTDIV2_OFFSET)
     }
     pub fn set_parameter(&mut self, parameter: u32) -> &mut Self {
-        self.locked = parameter & 0x8000_0000 != 0;
-        self.enabled = parameter & 0x4000_0000 != 0;
-        self.fb_div = ((parameter >> 16) & 0xfff) as u16;
-        self.ref_div = ((parameter >> 8) & 0x3f) as u8;
-        self.post_div_1 = ((parameter >> 4) & 0x7) as u8;
-        self.post_div_2 = (parameter & 0x7) as u8;
+        self.locked = (parameter >> Self::LOCKED_OFFSET) & Self::LOCKED_MASK != 0;
+        self.enabled = (parameter >> Self::PLLEN_OFFSET) & Self::PLLEN_MASK != 0;
+        self.vco_high_freq =
+            (parameter >> Self::VCO_HIGH_FREQ_OFFSET) & Self::VCO_HIGH_FREQ_MASK != 0;
+        self.fb_div = ((parameter >> Self::FBDIV_OFFSET) & Self::FBDIV_MASK) as u16;
+        self.ref_div = ((parameter >> Self::REFDIV_OFFSET) & Self::REFDIV_MASK) as u8;
+        self.post1_div = ((parameter >> Self::POSTDIV1_OFFSET) & Self::POSTDIV1_MASK) as u8;
+        self.post2_div = ((parameter >> Self::POSTDIV2_OFFSET) & Self::POSTDIV2_MASK) as u8;
         self
     }
 
@@ -90,6 +110,27 @@ impl Pll {
         self
     }
 
+    /// ## Get the PLL VCO Frequency.
+    ///
+    /// ### Example
+    /// ```
+    /// use fugit::HertzU32;
+    /// use bm13xx_asic::pll::Pll;
+    ///
+    /// let mut pll = Pll::default();
+    /// pll.set_parameter(0xC060_0161); // BM1397 PLL0 default value
+    /// assert_eq!(pll.vco_freq(HertzU32::MHz(25u32)), HertzU32::MHz(2400u32));
+    /// pll.set_parameter(0x0064_0111); // BM1397 PLL1 default value
+    /// assert_eq!(pll.vco_freq(HertzU32::MHz(25u32)), HertzU32::MHz(0u32));
+    /// ```
+    pub fn vco_freq(&self, in_clk_freq: HertzU32) -> HertzU32 {
+        if self.enabled && self.locked {
+            in_clk_freq * (self.fb_div as u32) / (self.ref_div as u32)
+        } else {
+            HertzU32::MHz(0)
+        }
+    }
+
     /// ## Get the PLL Frequency for a given output.
     ///
     /// ### Example
@@ -98,25 +139,24 @@ impl Pll {
     /// use bm13xx_asic::pll::Pll;
     ///
     /// let mut pll = Pll::default();
-    /// pll.set_parameter(0xC060_0161); // BM1397 PLL0 default values
+    /// pll.set_parameter(0xC060_0161); // BM1397 PLL0 default value
     /// assert_eq!(pll.frequency(HertzU32::MHz(25u32), 0), HertzU32::MHz(400u32));
     /// assert_eq!(pll.frequency(HertzU32::MHz(25u32), 5), HertzU32::MHz(0u32));
-    /// pll.set_parameter(0x0064_0111); // BM1397 PLL1 default values
+    /// pll.set_parameter(0x0064_0111); // BM1397 PLL1 default value
     /// assert_eq!(pll.frequency(HertzU32::MHz(25u32), 0), HertzU32::MHz(0u32));
     /// ```
     pub fn frequency(&self, in_clk_freq: HertzU32, out: usize) -> HertzU32 {
-        if self.enabled && self.locked && out < 5 {
-            in_clk_freq * (self.fb_div as u32)
-                / ((self.ref_div as u32)
-                    * (self.post_div_1 as u32)
-                    * (self.post_div_2 as u32)
+        if out < 5 {
+            self.vco_freq(in_clk_freq)
+                / ((self.post1_div as u32)
+                    * (self.post2_div as u32)
                     * (self.out_div[out] as u32 + 1))
         } else {
             HertzU32::MHz(0)
         }
     }
 
-    /// ## Check if the PLL is enabled.
+    /// ## Handle the PLL locked field.
     ///
     /// ### Example
     /// ```
@@ -139,7 +179,7 @@ impl Pll {
         self
     }
 
-    /// ## Check if the PLL is enabled.
+    /// ## Handle the PLL enabled field.
     ///
     /// ### Example
     /// ```
@@ -159,6 +199,125 @@ impl Pll {
     }
     pub fn disable(&mut self) -> &mut Self {
         self.enabled = false;
+        self
+    }
+
+    /// ## Handle the PLL vco_high_freq field.
+    ///
+    /// ### Example
+    /// ```
+    /// use bm13xx_asic::pll::Pll;
+    ///
+    /// let mut pll = Pll::default();
+    /// assert!(!pll.vco_high_freq());
+    /// assert!(pll.set_vco_high_freq().vco_high_freq());
+    /// assert!(!pll.set_vco_low_freq().vco_high_freq());
+    /// ```
+    pub const fn vco_high_freq(&self) -> bool {
+        self.vco_high_freq
+    }
+    pub fn set_vco_high_freq(&mut self) -> &mut Self {
+        self.vco_high_freq = true;
+        self
+    }
+    pub fn set_vco_low_freq(&mut self) -> &mut Self {
+        self.vco_high_freq = false;
+        self
+    }
+
+    /// ## Handle the PLL FB Divider field.
+    ///
+    /// Get and set the PLL FB Divider value.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use bm13xx_asic::pll::Pll;
+    ///
+    /// let mut pll = Pll::default();
+    /// pll.set_parameter(0xC060_0161); // BM1397 PLL0 default value
+    /// assert_eq!(pll.fb_div(), 96);
+    /// assert!(pll.set_fb_div(0).fb_div() == 0); // min value
+    /// assert!(pll.set_fb_div(0xfff).fb_div() == 0xfff); // max value
+    /// assert!(pll.set_fb_div(0x1000).fb_div() == 0); // out of bound value
+    /// ```
+    pub const fn fb_div(&self) -> u16 {
+        self.fb_div
+    }
+    pub fn set_fb_div(&mut self, fb_div: u16) -> &mut Self {
+        self.fb_div = fb_div & Self::FBDIV_MASK as u16;
+        self
+    }
+
+    /// ## Handle the PLL REF Divider field.
+    ///
+    /// Get and set the PLL REF Divider value.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use bm13xx_asic::pll::Pll;
+    ///
+    /// let mut pll = Pll::default();
+    /// pll.set_parameter(0xC060_0161); // BM1397 PLL0 default value
+    /// assert_eq!(pll.ref_div(), 1);
+    /// assert!(pll.set_ref_div(0).ref_div() == 0); // min value
+    /// assert!(pll.set_ref_div(0x3f).ref_div() == 0x3f); // max value
+    /// assert!(pll.set_ref_div(0x40).ref_div() == 0); // out of bound value
+    /// ```
+    pub const fn ref_div(&self) -> u8 {
+        self.ref_div
+    }
+    pub fn set_ref_div(&mut self, ref_div: u8) -> &mut Self {
+        self.ref_div = ref_div & Self::REFDIV_MASK as u8;
+        self
+    }
+
+    /// ## Handle the PLL POST Divider 1 field.
+    ///
+    /// Get and set the PLL POST Divider 1 value.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use bm13xx_asic::pll::Pll;
+    ///
+    /// let mut pll = Pll::default();
+    /// pll.set_parameter(0xC060_0161); // BM1397 PLL0 default value
+    /// assert_eq!(pll.post1_div(), 6);
+    /// assert!(pll.set_post1_div(0).post1_div() == 0); // min value
+    /// assert!(pll.set_post1_div(0x7).post1_div() == 0x7); // max value
+    /// assert!(pll.set_post1_div(0x8).post1_div() == 0); // out of bound value
+    /// ```
+    pub const fn post1_div(&self) -> u8 {
+        self.post1_div
+    }
+    pub fn set_post1_div(&mut self, post1_div: u8) -> &mut Self {
+        self.post1_div = post1_div & Self::POSTDIV1_MASK as u8;
+        self
+    }
+
+    /// ## Handle the PLL POST Divider 2 field.
+    ///
+    /// Get and set the PLL POST Divider 2 value.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use bm13xx_asic::pll::Pll;
+    ///
+    /// let mut pll = Pll::default();
+    /// pll.set_parameter(0xC060_0161); // BM1397 PLL0 default value
+    /// assert_eq!(pll.post2_div(), 1);
+    /// assert!(pll.set_post2_div(0).post2_div() == 0); // min value
+    /// assert!(pll.set_post2_div(0x7).post2_div() == 0x7); // max value
+    /// assert!(pll.set_post2_div(0x8).post2_div() == 0); // out of bound value
+    /// ```
+    pub const fn post2_div(&self) -> u8 {
+        self.post2_div
+    }
+    pub fn set_post2_div(&mut self, post2_div: u8) -> &mut Self {
+        self.post2_div = post2_div & Self::POSTDIV2_MASK as u8;
         self
     }
 }

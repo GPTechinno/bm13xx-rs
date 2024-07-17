@@ -1,10 +1,7 @@
 #![no_std]
 //! BM1366 ASIC implementation.
 
-use bm13xx_asic::{
-    core_register::{ClockDelayCtrl, HashClockCtrl},
-    register::*,
-};
+use bm13xx_asic::{core_register::*, register::*};
 use bm13xx_protocol::{
     command::{Command, Destination},
     Bm13xxProtocol, CmdDelay,
@@ -45,6 +42,7 @@ pub struct BM1366 {
     pub plls: [bm13xx_asic::pll::Pll; BM1366_PLL_CNT],
     pub chip_addr: u8,
     pub registers: FnvIndexMap<u8, u32, 64>,
+    pub core_registers: FnvIndexMap<u8, u8, 16>,
     pub version_rolling_enabled: bool,
     pub version_mask: u32,
 }
@@ -261,6 +259,7 @@ impl Default for BM1366 {
             plls: [bm13xx_asic::pll::Pll::default(); BM1366_PLL_CNT],
             chip_addr: 0,
             registers: FnvIndexMap::<_, _, 64>::new(),
+            core_registers: FnvIndexMap::<_, _, 16>::new(),
             version_rolling_enabled: false,
             version_mask: 0x1fffe000,
         };
@@ -285,7 +284,7 @@ impl Default for BM1366 {
             .unwrap();
         bm1366
             .registers
-            .insert(ChipNonceOffset::ADDR, 0x0000_0000)
+            .insert(ChipNonceOffsetV2::ADDR, 0x0000_0000)
             .unwrap();
         bm1366
             .registers
@@ -348,7 +347,7 @@ impl Default for BM1366 {
             .unwrap();
         bm1366
             .registers
-            .insert(AnalogMuxControl::ADDR, 0x0000_0000)
+            .insert(AnalogMuxControlV2::ADDR, 0x0000_0000)
             .unwrap();
         bm1366
             .registers
@@ -359,8 +358,6 @@ impl Default for BM1366 {
             .registers
             .insert(PLL1Parameter::ADDR, 0x2050_0174)
             .unwrap();
-        // bm1366.registers.insert(PLL2Parameter::ADDR, 0x0000_0000).unwrap();
-        // bm1366.registers.insert(PLL3Parameter::ADDR, 0x0000_0000).unwrap();
         bm1366
             .registers
             .insert(OrderedClockMonitor::ADDR, 0x0001_0200)
@@ -373,8 +370,6 @@ impl Default for BM1366 {
             .registers
             .insert(PLL1Divider::ADDR, 0x0000_0000)
             .unwrap();
-        // bm1366.registers.insert(PLL2Divider::ADDR, 0x0000_0000).unwrap();
-        // bm1366.registers.insert(PLL3Divider::ADDR, 0x0000_0000).unwrap();
         bm1366
             .registers
             .insert(ClockOrderControl0::ADDR, 0x0000_0000)
@@ -433,6 +428,28 @@ impl Default for BM1366 {
         bm1366.registers.insert(RegF4::ADDR, 0x0000_0000).unwrap();
         bm1366.registers.insert(RegF8::ADDR, 0x0000_0000).unwrap();
         bm1366.registers.insert(RegFC::ADDR, 0x0000_0000).unwrap();
+        // Default Core Registers Value
+        bm1366
+            .core_registers
+            .insert(ClockDelayCtrlV2::ID, 0x98)
+            .unwrap();
+        // bm1366.core_registers.insert(1, 0x00).unwrap(); // not used anywhere in official FW
+        bm1366.core_registers.insert(2, 0x55).unwrap();
+        bm1366.core_registers.insert(3, 0x00).unwrap();
+        bm1366.core_registers.insert(4, 0x00).unwrap();
+        bm1366
+            .core_registers
+            .insert(HashClockCtrl::ID, 0x40)
+            .unwrap();
+        bm1366
+            .core_registers
+            .insert(HashClockCounter::ID, 0x08)
+            .unwrap();
+        bm1366.core_registers.insert(7, 0x11).unwrap();
+        bm1366.core_registers.insert(CoreReg8::ID, 0x00).unwrap();
+        bm1366.core_registers.insert(15, 0x00).unwrap();
+        bm1366.core_registers.insert(16, 0x00).unwrap();
+        bm1366.core_registers.insert(CoreReg22::ID, 0x00).unwrap();
         bm1366
     }
 }
@@ -443,33 +460,30 @@ impl Bm13xxProtocol for BM1366 {
     /// ### Example
     /// ```
     /// use bm1366::BM1366;
-    /// use bm13xx_asic::register::*;
+    /// use bm13xx_asic::{core_register::*, register::*};
     /// use bm13xx_protocol::Bm13xxProtocol;
     ///
     /// let mut bm1366 = BM1366::default();
     /// let mut init_seq = bm1366.init(256);
     /// assert_eq!(init_seq.len(), 5);
-    // assert_eq!(init_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x41, 0x09, 0x00, 0x2c, 0x00, 0x7c, 0x00, 0x03, 0x03]);
     /// assert_eq!(init_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x58, 0x02, 0x11, 0x11, 0x11, 0x06]);
     /// assert_eq!(init_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x54, 0x00, 0x00, 0x00, 0x03, 0x1d]);
     /// assert_eq!(init_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x14, 0x00, 0x00, 0x00, 0xff, 0x08]);
     /// assert_eq!(init_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x3c, 0x80, 0x00, 0x80, 0x20, 0x19]);
     /// assert_eq!(init_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x3c, 0x80, 0x00, 0x85, 0x40, 0x0c]);
-    // assert_eq!(bm1366.core_registers.get(&HashClockCtrl::ID).unwrap(), &0x40);
-    // assert_eq!(bm1366.core_registers.get(&ClockDelayCtrl::ID).unwrap(), &0x20);
+    /// assert_eq!(bm1366.core_registers.get(&HashClockCtrl::ID).unwrap(), &0x40);
+    /// assert_eq!(bm1366.core_registers.get(&ClockDelayCtrlV2::ID).unwrap(), &0x20);
     /// assert_eq!(bm1366.registers.get(&TicketMask::ADDR).unwrap(), &0x0000_00ff);
-    /// assert_eq!(bm1366.registers.get(&AnalogMuxControl::ADDR).unwrap(), &0x0000_0003);
+    /// assert_eq!(bm1366.registers.get(&AnalogMuxControlV2::ADDR).unwrap(), &0x0000_0003);
     /// assert_eq!(bm1366.registers.get(&IoDriverStrenghtConfiguration::ADDR).unwrap(), &0x0211_1111);
     /// ```
     ///
     fn init(&mut self, initial_diffculty: u32) -> Vec<CmdDelay, 20> {
         let mut init_seq = Vec::new();
-        // let hash_clk_ctrl = HashClockCtrl(
-        //     *self.core_registers.get(&HashClockCtrl::ID).unwrap(),
-        // )
-        // .set_clock_ctrl(64)
-        // .val();
-        let hash_clk_ctrl = 64;
+        let hash_clk_ctrl = HashClockCtrl(*self.core_registers.get(&HashClockCtrl::ID).unwrap())
+            .enable()
+            .set_pll_source(0)
+            .val();
         init_seq
             .push(CmdDelay {
                 cmd: Command::write_reg(
@@ -480,25 +494,28 @@ impl Bm13xxProtocol for BM1366 {
                 delay: Duration::from_millis(0),
             })
             .unwrap();
-        // self.core_registers.insert(HashClockCtrl::ID, hash_clk_ctrl).unwrap();
-        // let clk_dly_ctrl = ClockDelayCtrl(
-        //     *self.core_registers.get(&ClockDelayCtrl::ID).unwrap(),
-        // )
-        // .set_ccdly_sel(0)
-        // .set_pwth_sel(2)
-        // .val();
-        let clk_dly_ctrl = 0x20;
+        self.core_registers
+            .insert(HashClockCtrl::ID, hash_clk_ctrl)
+            .unwrap();
+        let clk_dly_ctrl =
+            ClockDelayCtrlV2(*self.core_registers.get(&ClockDelayCtrlV2::ID).unwrap())
+                .set_ccdly(0)
+                .set_pwth(4)
+                .disable_sweep_frequency_mode()
+                .val();
         init_seq
             .push(CmdDelay {
                 cmd: Command::write_reg(
                     CoreRegisterControl::ADDR,
-                    CoreRegisterControl::write_core_reg(0, ClockDelayCtrl(clk_dly_ctrl)), // CCDLY_SEL=0 PWTH_SEL=2 HASH_CLKEN=0 MMEN=0 SWPF_MODE=0
+                    CoreRegisterControl::write_core_reg(0, ClockDelayCtrlV2(clk_dly_ctrl)),
                     Destination::All,
                 ),
                 delay: Duration::from_millis(0),
             })
             .unwrap();
-        // self.core_registers.insert(ClockDelayCtrl::ID, clk_dly_ctrl).unwrap();
+        self.core_registers
+            .insert(ClockDelayCtrlV2::ID, clk_dly_ctrl)
+            .unwrap();
         let tck_mask = TicketMask::from_difficulty(initial_diffculty).val();
         init_seq
             .push(CmdDelay {
@@ -507,20 +524,20 @@ impl Bm13xxProtocol for BM1366 {
             })
             .unwrap();
         self.registers.insert(TicketMask::ADDR, tck_mask).unwrap();
-        // let ana_mux_ctrl = AnalogMuxControl(
-        //     *self.registers.get(&AnalogMuxControl::ADDR).unwrap(),
+        // let ana_mux_ctrl = AnalogMuxControlV2(
+        //     *self.registers.get(&AnalogMuxControlV2::ADDR).unwrap(),
         // )
         // .set_diode_vdd_mux_sel(3)
         // .val();
         let ana_mux_ctrl = 0x0000_0003;
         init_seq
             .push(CmdDelay {
-                cmd: Command::write_reg(AnalogMuxControl::ADDR, ana_mux_ctrl, Destination::All), // DIODE_VDD_MUX_SEL=3
+                cmd: Command::write_reg(AnalogMuxControlV2::ADDR, ana_mux_ctrl, Destination::All), // DIODE_VDD_MUX_SEL=3
                 delay: Duration::from_millis(0),
             })
             .unwrap();
         self.registers
-            .insert(AnalogMuxControl::ADDR, ana_mux_ctrl)
+            .insert(AnalogMuxControlV2::ADDR, ana_mux_ctrl)
             .unwrap();
         // let io_drv_st_cfg = IoDriverStrenghtConfiguration(
         //     *self.registers.get(&IoDriverStrenghtConfiguration::ADDR).unwrap(),

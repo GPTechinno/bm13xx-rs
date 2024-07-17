@@ -79,7 +79,7 @@ pub struct ProcessMonitorCtrl(pub u8);
 impl_boilerplate_for_core_reg!(ProcessMonitorCtrl);
 
 impl ProcessMonitorCtrl {
-    pub const ID: u8 = 0x01;
+    pub const ID: u8 = 1;
 
     const PM_START_OFFSET: u8 = 2;
     const PM_SEL_OFFSET: u8 = 0;
@@ -87,9 +87,9 @@ impl ProcessMonitorCtrl {
     const PM_START_MASK: u8 = 0b1;
     const PM_SEL_MASK: u8 = 0b11;
 
-    /// ## Get the Started state.
+    /// ## Handle the Started field.
     ///
-    /// This returns an `bool` with the Started state.
+    /// Get and set the Started state.
     ///
     /// ### Example
     ///
@@ -103,12 +103,11 @@ impl ProcessMonitorCtrl {
     pub const fn started(&self) -> bool {
         (self.0 >> Self::PM_START_OFFSET) & Self::PM_START_MASK == Self::PM_START_MASK
     }
-    pub fn pm_sel(&self) -> ProcessMonitorSelect {
-        ProcessMonitorSelect::try_from((self.0 & Self::PM_SEL_MASK) >> Self::PM_SEL_OFFSET).unwrap()
-    }
-    /// ## Start Process Monitor on pm_sel.
     pub const fn start(pm_sel: ProcessMonitorSelect) -> u8 {
         (Self::PM_START_MASK << Self::PM_START_OFFSET) | ((pm_sel as u8) << Self::PM_SEL_OFFSET)
+    }
+    pub fn pm_sel(&self) -> ProcessMonitorSelect {
+        ProcessMonitorSelect::try_from((self.0 & Self::PM_SEL_MASK) >> Self::PM_SEL_OFFSET).unwrap()
     }
 }
 
@@ -139,7 +138,7 @@ pub struct ProcessMonitorData(pub u8);
 impl_boilerplate_for_core_reg!(ProcessMonitorData);
 
 impl ProcessMonitorData {
-    pub const ID: u8 = 0x02;
+    pub const ID: u8 = 2;
 
     const DATA_OFFSET: u8 = 0;
 
