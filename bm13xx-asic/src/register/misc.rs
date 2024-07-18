@@ -208,9 +208,9 @@ impl MiscControlV2 {
         self
     }
 
-    /// ## Handle the B[27:26] field.
+    /// ## Handle the B\[27:26\] field.
     ///
-    /// Get and set the B[27:26] value.
+    /// Get and set the B\[27:26\] value.
     ///
     /// ### Example
     ///
@@ -231,9 +231,9 @@ impl MiscControlV2 {
         self
     }
 
-    /// ## Handle the B[25:24] field.
+    /// ## Handle the B\[25:24\] field.
     ///
-    /// Get and set the B[25:24] value.
+    /// Get and set the B\[25:24\] value.
     ///
     /// ### Example
     ///
@@ -254,9 +254,9 @@ impl MiscControlV2 {
         self
     }
 
-    /// ## Handle the B[19:16] field.
+    /// ## Handle the B\[19:16\] field.
     ///
-    /// Get and set the B[19:16] value.
+    /// Get and set the B\[19:16\] value.
     ///
     /// ### Example
     ///

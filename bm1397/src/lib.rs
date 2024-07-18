@@ -398,37 +398,52 @@ impl Bm13xxProtocol for BM1397 {
     ///
     fn init(&mut self, initial_diffculty: u32) -> Vec<CmdDelay, 5> {
         let mut init_seq = Vec::new();
-        // let clk_ord_ctrl = ClockOrderControl0(
-        //     *self.registers.get(&ClockOrderControl0::ADDR).unwrap(),
-        // )
-        // .set_clk_sel(0)
-        // .val();
-        let clk_ord_ctrl = 0x0000_0000;
+        let clk_ord_ctrl0 =
+            ClockOrderControl0(*self.registers.get(&ClockOrderControl0::ADDR).unwrap())
+                .set_clock(ClockSelect::CLK0, 0)
+                .set_clock(ClockSelect::CLK1, 0)
+                .set_clock(ClockSelect::CLK2, 0)
+                .set_clock(ClockSelect::CLK3, 0)
+                .set_clock(ClockSelect::CLK4, 0)
+                .set_clock(ClockSelect::CLK5, 0)
+                .set_clock(ClockSelect::CLK6, 0)
+                .set_clock(ClockSelect::CLK7, 0)
+                .set_clock(ClockSelect::CLK8, 0)
+                .val();
         init_seq
             .push(CmdDelay {
-                cmd: Command::write_reg(ClockOrderControl0::ADDR, clk_ord_ctrl, Destination::All), // all CLK_SELx = 0b0000
+                cmd: Command::write_reg(ClockOrderControl0::ADDR, clk_ord_ctrl0, Destination::All), // all CLK_SELx = 0b0000
                 delay: Duration::from_millis(0),
             })
             .unwrap();
         self.registers
-            .insert(ClockOrderControl0::ADDR, clk_ord_ctrl)
+            .insert(ClockOrderControl0::ADDR, clk_ord_ctrl0)
             .unwrap();
+        let clk_ord_ctrl1 =
+            ClockOrderControl1(*self.registers.get(&ClockOrderControl1::ADDR).unwrap())
+                .set_clock(ClockSelect::CLK8, 0)
+                .set_clock(ClockSelect::CLK9, 0)
+                .set_clock(ClockSelect::CLK10, 0)
+                .set_clock(ClockSelect::CLK11, 0)
+                .set_clock(ClockSelect::CLK12, 0)
+                .set_clock(ClockSelect::CLK13, 0)
+                .set_clock(ClockSelect::CLK14, 0)
+                .set_clock(ClockSelect::CLK15, 0)
+                .val();
         init_seq
             .push(CmdDelay {
-                cmd: Command::write_reg(ClockOrderControl1::ADDR, clk_ord_ctrl, Destination::All), // all CLK_SELx = 0b0000
+                cmd: Command::write_reg(ClockOrderControl1::ADDR, clk_ord_ctrl1, Destination::All), // all CLK_SELx = 0b0000
                 delay: Duration::from_millis(0),
             })
             .unwrap();
         self.registers
-            .insert(ClockOrderControl1::ADDR, clk_ord_ctrl)
+            .insert(ClockOrderControl1::ADDR, clk_ord_ctrl1)
             .unwrap();
-        // let clk_ord_en = OrderedClockEnable(
-        //     *self.registers.get(&OrderedClockEnable::ADDR).unwrap(),
-        // )
-        // .disable_all()
-        // .enable(0)
-        // .val();
-        let clk_ord_en = 0x0000_0001;
+        let clk_ord_en =
+            OrderedClockEnable(*self.registers.get(&OrderedClockEnable::ADDR).unwrap())
+                .disable_all()
+                .enable(ClockSelect::CLK0)
+                .val();
         init_seq
             .push(CmdDelay {
                 cmd: Command::write_reg(OrderedClockEnable::ADDR, clk_ord_en, Destination::All), // Only enable the first one
@@ -480,7 +495,7 @@ impl Bm13xxProtocol for BM1397 {
     /// assert_eq!(reset_seq.len(), 0);
     /// ```
     fn reset_core(&mut self, _dest: Destination) -> Vec<CmdDelay, 6> {
-        Vec::new() // TODO
+        Vec::new() // TODO impl
     }
 
     /// ## Set Baudrate

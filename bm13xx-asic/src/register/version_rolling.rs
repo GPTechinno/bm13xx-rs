@@ -14,7 +14,7 @@ impl VersionRolling {
     const EN_MASK: u32 = 0x1;
     const MASK_MASK: u32 = 0xffff;
 
-    /// ## Handle the enable field.
+    /// ## Handle the enabled field.
     ///
     /// Get and set the enabled state.
     ///

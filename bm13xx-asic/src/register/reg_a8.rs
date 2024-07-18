@@ -70,9 +70,9 @@ impl RegA8 {
         self
     }
 
-    /// ## Handle the B[7:4] field.
+    /// ## Handle the B\[7:4\] field.
     ///
-    /// Get and set the B[7:4] value.
+    /// Get and set the B\[7:4\] value.
     ///
     /// ### Example
     ///
@@ -93,9 +93,9 @@ impl RegA8 {
         self
     }
 
-    /// ## Handle the B[3:0] field.
+    /// ## Handle the B\[3:0\] field.
     ///
-    /// Get and set the B[3:0] value.
+    /// Get and set the B\[3:0\] value.
     ///
     /// ### Example
     ///

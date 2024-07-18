@@ -265,7 +265,7 @@ impl Default for BM1366 {
         };
         // Default PLLs Parameter
         bm1366.plls[0].set_parameter(0xC054_0165);
-        bm1366.plls[1].set_parameter(0x2050_0174); /* TODO: understand what is the 2 in MSB */
+        bm1366.plls[1].set_parameter(0x2050_0174);
         // Default PLLs Divider
         bm1366.plls[0].set_divider(0x0000_0000);
         bm1366.plls[1].set_divider(0x0000_0000);
@@ -524,27 +524,36 @@ impl Bm13xxProtocol for BM1366 {
             })
             .unwrap();
         self.registers.insert(TicketMask::ADDR, tck_mask).unwrap();
-        // let ana_mux_ctrl = AnalogMuxControlV2(
-        //     *self.registers.get(&AnalogMuxControlV2::ADDR).unwrap(),
-        // )
-        // .set_diode_vdd_mux_sel(3)
-        // .val();
-        let ana_mux_ctrl = 0x0000_0003;
+        let ana_mux_ctrl =
+            AnalogMuxControlV2(*self.registers.get(&AnalogMuxControlV2::ADDR).unwrap())
+                .set_diode_vdd_mux_sel(3)
+                .val();
         init_seq
             .push(CmdDelay {
-                cmd: Command::write_reg(AnalogMuxControlV2::ADDR, ana_mux_ctrl, Destination::All), // DIODE_VDD_MUX_SEL=3
+                cmd: Command::write_reg(AnalogMuxControlV2::ADDR, ana_mux_ctrl, Destination::All),
                 delay: Duration::from_millis(0),
             })
             .unwrap();
         self.registers
             .insert(AnalogMuxControlV2::ADDR, ana_mux_ctrl)
             .unwrap();
-        // let io_drv_st_cfg = IoDriverStrenghtConfiguration(
-        //     *self.registers.get(&IoDriverStrenghtConfiguration::ADDR).unwrap(),
-        // )
-        // .set_io_drv_strength(BO_DS, 0x11)
-        // .val();
-        let io_drv_st_cfg = 0x0211_1111;
+        let io_drv_st_cfg = IoDriverStrenghtConfiguration(
+            *self
+                .registers
+                .get(&IoDriverStrenghtConfiguration::ADDR)
+                .unwrap(),
+        )
+        .set_strenght(DriverSelect::RF, 2)
+        .set_strenght(DriverSelect::R0, 1)
+        .set_strenght(DriverSelect::CLKO, 1)
+        .set_strenght(DriverSelect::NRSTO, 1)
+        .set_strenght(DriverSelect::BO, 1)
+        .set_strenght(DriverSelect::CO, 1)
+        .enable(DriverRSelect::D0R)
+        .disable(DriverRSelect::D1R)
+        .disable(DriverRSelect::D2R)
+        .disable(DriverRSelect::D3R)
+        .val();
         init_seq
             .push(CmdDelay {
                 cmd: Command::write_reg(
@@ -558,6 +567,8 @@ impl Bm13xxProtocol for BM1366 {
         self.registers
             .insert(IoDriverStrenghtConfiguration::ADDR, io_drv_st_cfg)
             .unwrap();
+        // TODO: last chip of each voltage domain should have IoDriverStrenghtConfiguration set to 0x0211_f111 (iterating voltage domain in decreasing chip address order)
+        // TODO: first and last chip of each voltage domain should have UARTRelay with GAP_CNT=domain_asic_num*(chain_domain_num-domain_i)+14 and RO_REL_EN=CO_REL_EN=1 (iterating voltage domain in decreasing chip address order)
         init_seq
     }
 
