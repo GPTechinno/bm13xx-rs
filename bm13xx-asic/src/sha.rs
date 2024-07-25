@@ -37,15 +37,15 @@ impl<const SC: usize> Default for Core<SC> {
 
 /// # ASIC
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
-pub struct Asic<const C: usize, const SC: usize, const CSC: usize, const D: usize> {
+pub struct Sha<const C: usize, const SC: usize, const CSC: usize, const D: usize> {
     cores: [Core<CSC>; C],
     small_cores_cnt: usize,
     domain_cnt: usize,
 }
 
-impl<const C: usize, const SC: usize, const CSC: usize, const D: usize> Asic<C, SC, CSC, D> {
+impl<const C: usize, const SC: usize, const CSC: usize, const D: usize> Sha<C, SC, CSC, D> {
     pub fn new() -> Self {
-        Asic {
+        Sha {
             cores: [Core::<CSC>::new(); C],
             small_cores_cnt: SC,
             domain_cnt: D,
@@ -56,9 +56,9 @@ impl<const C: usize, const SC: usize, const CSC: usize, const D: usize> Asic<C, 
     ///
     /// ### Example
     /// ```
-    /// use bm13xx_asic::sha::Asic;
+    /// use bm13xx_asic::sha::Sha;
     ///
-    /// let asic = Asic::<168, 672, 4, 4>::new(); // BM1397
+    /// let asic = Sha::<168, 672, 4, 4>::new(); // BM1397
     /// assert_eq!(asic.core_count(), 168);
     /// ```
     pub fn core_count(&self) -> usize {
@@ -69,9 +69,9 @@ impl<const C: usize, const SC: usize, const CSC: usize, const D: usize> Asic<C, 
     ///
     /// ### Example
     /// ```
-    /// use bm13xx_asic::sha::Asic;
+    /// use bm13xx_asic::sha::Sha;
     ///
-    /// let asic = Asic::<168, 672, 4, 4>::new(); // BM1397
+    /// let asic = Sha::<168, 672, 4, 4>::new(); // BM1397
     /// assert_eq!(asic.small_core_count(), 672);
     /// ```
     pub fn small_core_count(&self) -> usize {
@@ -82,9 +82,9 @@ impl<const C: usize, const SC: usize, const CSC: usize, const D: usize> Asic<C, 
     ///
     /// ### Example
     /// ```
-    /// use bm13xx_asic::sha::Asic;
+    /// use bm13xx_asic::sha::Sha;
     ///
-    /// let asic = Asic::<168, 672, 4, 4>::new(); // BM1397
+    /// let asic = Sha::<168, 672, 4, 4>::new(); // BM1397
     /// assert_eq!(asic.domain_count(), 4);
     /// ```
     pub fn domain_count(&self) -> usize {
@@ -93,7 +93,7 @@ impl<const C: usize, const SC: usize, const CSC: usize, const D: usize> Asic<C, 
 }
 
 impl<const C: usize, const SC: usize, const CSC: usize, const D: usize> Default
-    for Asic<C, SC, CSC, D>
+    for Sha<C, SC, CSC, D>
 {
     fn default() -> Self {
         Self::new()

@@ -8,3 +8,7 @@ pub mod register;
 pub mod sha;
 
 pub use self::error::{Error, Result};
+
+pub trait Asic {
+    //TODO: Add more methods
+}

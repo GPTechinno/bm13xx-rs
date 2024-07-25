@@ -32,7 +32,7 @@ const CHIP_ADDR_MASK: u32 = 0b1111_1111;
 /// # BM1397
 #[derive(Debug)]
 pub struct BM1397 {
-    pub sha: bm13xx_asic::sha::Asic<
+    pub sha: bm13xx_asic::sha::Sha<
         BM1397_CORE_CNT,
         BM1397_SMALL_CORE_CNT,
         BM1397_CORE_SMALL_CORE_CNT,
@@ -172,7 +172,7 @@ impl BM1397 {
 impl Default for BM1397 {
     fn default() -> Self {
         let mut bm1397 = Self {
-            sha: bm13xx_asic::sha::Asic::default(),
+            sha: bm13xx_asic::sha::Sha::default(),
             input_clock_freq: HertzU32::MHz(25),
             plls: [bm13xx_asic::pll::Pll::default(); BM1397_PLL_CNT],
             chip_addr: 0,
