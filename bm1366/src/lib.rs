@@ -170,6 +170,7 @@ impl BM1366 {
     ///
     /// let bm1366 = BM1366::default();
     /// assert_eq!(bm1366.nonce2core_id(0x12345678), 0x09);
+    /// assert_eq!(bm1366.nonce2core_id(0x906732c8), 72); // first Bitaxe Block 853742
     /// ```
     pub fn nonce2core_id(&self, nonce: u32) -> usize {
         ((nonce >> (NONCE_BITS - BM1366_NONCE_CORES_BITS)) & BM1366_NONCE_CORES_MASK) as usize
@@ -217,6 +218,7 @@ impl BM1366 {
     /// assert_eq!(bm1366.version2small_core_id(0x1fffa000), 5);
     /// assert_eq!(bm1366.version2small_core_id(0x1fffd000), 6);
     /// assert_eq!(bm1366.version2small_core_id(0x1fffe000), 7);
+    /// assert_eq!(bm1366.version2small_core_id(0x00f94000), 2); // first Bitaxe Block 853742
     /// ```
     pub fn version2small_core_id(&self, version: u32) -> usize {
         ((version >> self.version_mask.trailing_zeros()) & BM1366_NONCE_SMALL_CORES_MASK) as usize
