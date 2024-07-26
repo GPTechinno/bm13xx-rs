@@ -1,7 +1,7 @@
 #![no_std]
 //! BM1366 ASIC implementation.
 
-use bm13xx_asic::{core_register::*, register::*};
+use bm13xx_asic::{core_register::*, register::*, Asic};
 use bm13xx_protocol::{
     command::{Command, Destination},
     Bm13xxProtocol, CmdDelay,
@@ -11,6 +11,7 @@ use core::time::Duration;
 use fugit::HertzU32;
 use heapless::{FnvIndexMap, Vec};
 
+pub const BM1366_CHIP_ID: u16 = 0x1366;
 pub const BM1366_CORE_CNT: usize = 112;
 pub const BM1366_SMALL_CORE_CNT: usize = 894;
 pub const BM1366_CORE_SMALL_CORE_CNT: usize = 8;
@@ -127,6 +128,7 @@ impl BM1366 {
     /// - Nonce\[31:25\] is used to hardcode the Core ID.
     /// - Nonce\[24:22\] is used to hardcode the Small Core ID.
     /// - Nonce\[21:14\] is used to hardcode the Chip Address.
+    ///
     /// So only the Nonce\[13:0\] are rolled for each Chip Address.
     ///
     /// If Hardware Version Rolling is enabled, BM1366 roll the Nonce Space (32 bits) and
@@ -134,6 +136,7 @@ impl BM1366 {
     /// - Nonce\[31:25\] is used to hardcode the Core ID.
     /// - Nonce\[24:17\] is used to hardcode the Chip Address.
     /// - Version\[15:13\] is used to hardcode the Small Core ID (assuming the Version Mask is 0x1fffe000).
+    ///
     /// So only the Nonce\[16:0\] and Version\[28:16\] are rolled for each Chip Address.
     ///
     /// ### Example
@@ -836,5 +839,11 @@ impl Bm13xxProtocol for BM1366 {
                 .unwrap();
         }
         baud_seq
+    }
+}
+
+impl Asic for BM1366 {
+    fn chip_id(&self) -> u16 {
+        BM1366_CHIP_ID
     }
 }

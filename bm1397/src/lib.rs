@@ -1,7 +1,7 @@
 #![no_std]
 //! BM1397 ASIC implementation.
 
-use bm13xx_asic::{core_register::*, register::*};
+use bm13xx_asic::{core_register::*, register::*, Asic};
 use bm13xx_protocol::{
     command::{Command, Destination},
     Bm13xxProtocol, CmdDelay,
@@ -11,6 +11,7 @@ use core::time::Duration;
 use fugit::HertzU32;
 use heapless::{FnvIndexMap, Vec};
 
+pub const BM1397_CHIP_ID: u16 = 0x1397;
 pub const BM1397_CORE_CNT: usize = 168;
 pub const BM1397_SMALL_CORE_CNT: usize = 672;
 pub const BM1397_CORE_SMALL_CORE_CNT: usize = 4;
@@ -101,6 +102,7 @@ impl BM1397 {
     /// - Nonce\[31:24\] is used to hardcode the Core ID.
     /// - Nonce\[23:22\] is used to hardcode the Small Core ID.
     /// - Nonce\[21:14\] is used to hardcode the Chip Address.
+    ///
     /// So only the Nonce\[13:0\] are rolled for each Chip Address.
     ///
     /// ### Example
@@ -607,5 +609,11 @@ impl Bm13xxProtocol for BM1397 {
             self.registers.insert(MiscControl::ADDR, misc_ctrl).unwrap();
         }
         baud_seq
+    }
+}
+
+impl Asic for BM1397 {
+    fn chip_id(&self) -> u16 {
+        BM1397_CHIP_ID
     }
 }

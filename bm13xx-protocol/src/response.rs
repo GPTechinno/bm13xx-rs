@@ -3,7 +3,7 @@
 use crate::crc::{crc5, crc5_bits};
 use crate::{Error, Result};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct RegisterResponse {
     pub chip_addr: u8,
     pub reg_addr: u8,

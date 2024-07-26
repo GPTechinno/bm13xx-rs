@@ -4,5 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+defmt = { version = "0.3", optional = true }
+derive_more = { version = "1.0.0-beta", default-features = false, features = ["from"] }
 fugit = "0.3"
-derive_more = { version = "1.0.0-beta",  features = ["from"] }
+
+[features]
+defmt = ["dep:defmt", "fugit/defmt"]

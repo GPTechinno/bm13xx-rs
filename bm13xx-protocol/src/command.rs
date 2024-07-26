@@ -58,7 +58,7 @@ impl Command {
     /// This logical `ChipAddress` have 2 utilities :
     /// - sending command to a specific chip on the chain, using `Destination::Chip(ChipAddress)`.
     /// - when mining, the nonce space (u32) will be divided evenly according to `ChipAddress` :
-    /// each chip will add it's own `ChipAddress` near by the MSB of the starting nonce for a job.
+    ///   each chip will add it's own `ChipAddress` near by the MSB of the starting nonce for a job.
     ///
     /// ## Example
     /// ```

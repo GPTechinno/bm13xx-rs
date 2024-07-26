@@ -8,6 +8,10 @@ on:
     branches:
       - main
 
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-Dwarnings"
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -15,10 +19,16 @@ jobs:
     steps:
       - name: Set up Rust
         uses: actions/checkout@v4
+      - uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: libudev-dev
+          version: 1.0
       - name: Build
         run: cargo build --verbose
       - name: Test
         run: cargo test --verbose
+      - name: Format
+        run: cargo fmt --check
       - name: Clippy
         run: cargo clippy --verbose -- -D warnings
       - name: Audit
