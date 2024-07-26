@@ -13,6 +13,7 @@ embedded-io-async = "0.6"
 
 [dev-dependencies]
 bm1366 = { path = "../bm1366" }
+embedded-io = "0.6"
 embedded-io-adapters = { version = "0.6", features = ["std", "tokio-1"] }
 inquire = "0.7"
 # serialport = "4.4"

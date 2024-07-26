@@ -2,7 +2,7 @@ use bm1366::BM1366;
 use bm13xx_chain::Chain;
 
 use embedded_hal_async::delay::DelayNs;
-use embedded_io_adapters::tokio_1::FromTokio;
+use tokio_1::FromTokio;
 // use embedded_io_adapters::std::FromStd;
 use inquire::Select;
 // use serialport::ClearBuffer;
@@ -49,17 +49,96 @@ async fn main() -> Result<(), Box<dyn Error>> {
     chain.enumerate().await?;
     println!("Enumerated {} asics", chain.asic_cnt);
     println!("Interval: {}", chain.asic_addr_interval);
-
+    chain.init(256).await?;
+    chain.set_baudrate(1_000_000).await?;
+    chain.enumerate().await?;
+    println!("Enumerated {} asics", chain.asic_cnt);
+    println!("Interval: {}", chain.asic_addr_interval);
     Ok(())
 }
 
-// impl embedded_io_async::Error for ConnectError {
-//     fn kind(&self) -> embedded_io_async::ErrorKind {
-//         match self {
-//             ConnectError::ConnectionReset => embedded_io_async::ErrorKind::ConnectionReset,
-//             ConnectError::TimedOut => embedded_io_async::ErrorKind::TimedOut,
-//             ConnectError::NoRoute => embedded_io_async::ErrorKind::NotConnected,
-//             ConnectError::InvalidState => embedded_io_async::ErrorKind::Other,
-//         }
-//     }
-// }
+mod tokio_1 {
+    //! Adapters to/from `tokio::io` traits.
+
+    use core::future::poll_fn;
+    use core::pin::Pin;
+    use core::task::Poll;
+
+    /// Adapter from `tokio::io` traits.
+    #[derive(Clone)]
+    pub struct FromTokio<T: ?Sized> {
+        inner: T,
+    }
+
+    impl<T> FromTokio<T> {
+        /// Create a new adapter.
+        pub fn new(inner: T) -> Self {
+            Self { inner }
+        }
+
+        /// Consume the adapter, returning the inner object.
+        pub fn into_inner(self) -> T {
+            self.inner
+        }
+    }
+
+    impl<T: ?Sized> FromTokio<T> {
+        /// Borrow the inner object.
+        pub fn inner(&self) -> &T {
+            &self.inner
+        }
+
+        /// Mutably borrow the inner object.
+        pub fn inner_mut(&mut self) -> &mut T {
+            &mut self.inner
+        }
+    }
+
+    impl<T: ?Sized> embedded_io::ErrorType for FromTokio<T> {
+        type Error = std::io::Error;
+    }
+
+    impl<T: tokio::io::AsyncRead + Unpin + ?Sized> embedded_io_async::Read for FromTokio<T> {
+        async fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
+            // The current tokio implementation (https://github.com/tokio-rs/tokio/blob/tokio-1.33.0/tokio/src/io/poll_evented.rs#L165)
+            // does not consider the case of buf.is_empty() as a special case,
+            // which can cause Poll::Pending to be returned at the end of the stream when called with an empty buffer.
+            // This poll will, however, never become ready, as no more bytes will be received.
+            if buf.is_empty() {
+                return Ok(0);
+            }
+
+            poll_fn(|cx| {
+                let mut buf = tokio::io::ReadBuf::new(buf);
+                match Pin::new(&mut self.inner).poll_read(cx, &mut buf) {
+                    Poll::Ready(r) => match r {
+                        Ok(()) => Poll::Ready(Ok(buf.filled().len())),
+                        Err(e) => Poll::Ready(Err(e)),
+                    },
+                    Poll::Pending => Poll::Pending,
+                }
+            })
+            .await
+        }
+    }
+
+    impl<T: tokio::io::AsyncWrite + Unpin + ?Sized> embedded_io_async::Write for FromTokio<T> {
+        async fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
+            match poll_fn(|cx| Pin::new(&mut self.inner).poll_write(cx, buf)).await {
+                Ok(0) if !buf.is_empty() => Err(std::io::ErrorKind::WriteZero.into()),
+                Ok(n) => Ok(n),
+                Err(e) => Err(e),
+            }
+        }
+
+        async fn flush(&mut self) -> Result<(), Self::Error> {
+            poll_fn(|cx| Pin::new(&mut self.inner).poll_flush(cx)).await
+        }
+    }
+
+    impl<T: tokio_serial::SerialPort> bm13xx_chain::Baud for FromTokio<T> {
+        fn set_baudrate(&mut self, baudrate: u32) {
+            self.inner_mut().set_baud_rate(baudrate).unwrap()
+        }
+    }
+}

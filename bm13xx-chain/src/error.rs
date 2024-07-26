@@ -14,23 +14,17 @@ pub enum Error<E> {
     UnexpectedAsic { chip_ident: ChipIdentification },
     /// We enumerated an incorrect number of asics
     UnexpectedAsicCount {
-        expected_asic_cnt: usize,
-        actual_asic_cnt: usize,
+        expected_asic_cnt: u8,
+        actual_asic_cnt: u8,
     },
     /// The BM13xx protocol returned an error
     #[from]
     Protocol(bm13xx_protocol::Error),
     /// The serial interface returned an error
     Io(E),
-    /// The serial interface returned an error while reading
-    ReadExactError,
+    /// The serial interface returned an error while setting baudrate
+    SetBaudrate,
 }
-
-// impl<E> From<E> for Error<E> {
-//     fn from(e: E) -> Self {
-//         Error::Io(e)
-//     }
-// }
 
 impl<E: core::fmt::Debug> core::fmt::Display for Error<E> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::result::Result<(), core::fmt::Error> {
@@ -63,7 +57,7 @@ impl<E: core::fmt::Debug> core::fmt::Debug for Error<E> {
                 .finish(),
             Error::Protocol(protocol_err) => f.debug_tuple("Protocol").field(protocol_err).finish(),
             Error::Io(io_err) => f.debug_tuple("Io").field(io_err).finish(),
-            Error::ReadExactError => f.debug_struct("ReadExactError").finish(),
+            Error::SetBaudrate => f.debug_struct("SetBaudrate").finish(),
         }
     }
 }

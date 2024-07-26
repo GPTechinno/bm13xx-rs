@@ -1,11 +1,8 @@
 #![no_std]
 //! BM1366 ASIC implementation.
 
-use bm13xx_asic::{core_register::*, register::*, Asic};
-use bm13xx_protocol::{
-    command::{Command, Destination},
-    Bm13xxProtocol, CmdDelay,
-};
+use bm13xx_asic::{core_register::*, register::*, Asic, CmdDelay};
+use bm13xx_protocol::command::{Command, Destination};
 
 use core::time::Duration;
 use fugit::HertzU32;
@@ -459,18 +456,34 @@ impl Default for BM1366 {
     }
 }
 
-impl Bm13xxProtocol for BM1366 {
+impl Asic for BM1366 {
+    /// ## Get the Chip ID
+    ///
+    /// ### Example
+    /// ```
+    /// use bm1366::BM1366;
+    /// use bm13xx_asic::Asic;
+    ///
+    /// let bm1366 = BM1366::default();
+    /// assert_eq!(bm1366.chip_id(), 0x1366);
+    /// ```
+    fn chip_id(&self) -> u16 {
+        BM1366_CHIP_ID
+    }
+
     /// ## Init the Chip
     ///
     /// ### Example
     /// ```
     /// use bm1366::BM1366;
-    /// use bm13xx_asic::{core_register::*, register::*};
-    /// use bm13xx_protocol::Bm13xxProtocol;
+    /// use bm13xx_asic::{core_register::*, register::*, Asic};
     ///
     /// let mut bm1366 = BM1366::default();
-    /// let mut init_seq = bm1366.init(256);
-    /// assert_eq!(init_seq.len(), 5);
+    /// let mut init_seq = bm1366.init(256, 1, 10, 2);
+    /// assert_eq!(init_seq.len(), 8);
+    /// assert_eq!(init_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x41, 0x09, 0x12, 0x2c, 0x00, 0x18, 0x00, 0x03, 0x0c]);
+    /// assert_eq!(init_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x41, 0x09, 0x00, 0x2c, 0x00, 0x18, 0x00, 0x03, 0x10]);
+    /// assert_eq!(init_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x41, 0x09, 0x12, 0x58, 0x02, 0x11, 0xf1, 0x11, 0x1b]);
     /// assert_eq!(init_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x58, 0x02, 0x11, 0x11, 0x11, 0x06]);
     /// assert_eq!(init_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x54, 0x00, 0x00, 0x00, 0x03, 0x1d]);
     /// assert_eq!(init_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x14, 0x00, 0x00, 0x00, 0xff, 0x08]);
@@ -483,7 +496,13 @@ impl Bm13xxProtocol for BM1366 {
     /// assert_eq!(bm1366.registers.get(&IoDriverStrenghtConfiguration::ADDR).unwrap(), &0x0211_1111);
     /// ```
     ///
-    fn init(&mut self, initial_diffculty: u32) -> Vec<CmdDelay, 5> {
+    fn init(
+        &mut self,
+        initial_diffculty: u32,
+        chain_domain_cnt: u8,
+        domain_asic_cnt: u8,
+        asic_addr_interval: u16,
+    ) -> Vec<CmdDelay, 14> {
         let mut init_seq = Vec::new();
         let hash_clk_ctrl = HashClockCtrl(*self.core_registers.get(&HashClockCtrl::ID).unwrap())
             .enable()
@@ -496,7 +515,7 @@ impl Bm13xxProtocol for BM1366 {
                     CoreRegisterControl::write_core_reg(0, HashClockCtrl(hash_clk_ctrl)), // CLOCK_CTRL=64
                     Destination::All,
                 ),
-                delay: Duration::from_millis(10),
+                delay_ms: 10,
             })
             .unwrap();
         self.core_registers
@@ -515,7 +534,7 @@ impl Bm13xxProtocol for BM1366 {
                     CoreRegisterControl::write_core_reg(0, ClockDelayCtrlV2(clk_dly_ctrl)),
                     Destination::All,
                 ),
-                delay: Duration::from_millis(10),
+                delay_ms: 10,
             })
             .unwrap();
         self.core_registers
@@ -525,7 +544,7 @@ impl Bm13xxProtocol for BM1366 {
         init_seq
             .push(CmdDelay {
                 cmd: Command::write_reg(TicketMask::ADDR, tck_mask, Destination::All),
-                delay: Duration::from_millis(10),
+                delay_ms: 10,
             })
             .unwrap();
         self.registers.insert(TicketMask::ADDR, tck_mask).unwrap();
@@ -536,7 +555,7 @@ impl Bm13xxProtocol for BM1366 {
         init_seq
             .push(CmdDelay {
                 cmd: Command::write_reg(AnalogMuxControlV2::ADDR, ana_mux_ctrl, Destination::All),
-                delay: Duration::from_millis(0),
+                delay_ms: 0,
             })
             .unwrap();
         self.registers
@@ -566,14 +585,61 @@ impl Bm13xxProtocol for BM1366 {
                     io_drv_st_cfg,
                     Destination::All,
                 ),
-                delay: Duration::from_millis(0),
+                delay_ms: 0,
             })
             .unwrap();
         self.registers
             .insert(IoDriverStrenghtConfiguration::ADDR, io_drv_st_cfg)
             .unwrap();
-        // TODO: last chip of each voltage domain should have IoDriverStrenghtConfiguration set to 0x0211_f111 (iterating voltage domain in decreasing chip address order)
-        // TODO: first and last chip of each voltage domain should have UARTRelay with GAP_CNT=domain_asic_num*(chain_domain_num-domain_i)+14 and RO_REL_EN=CO_REL_EN=1 (iterating voltage domain in decreasing chip address order)
+        // last chip of each voltage domain should have IoDriverStrenghtConfiguration set to 0x0211_f111
+        // (iterating voltage domain in decreasing chip address order)
+        for dom in (0..chain_domain_cnt).rev() {
+            init_seq
+                .push(CmdDelay {
+                    cmd: Command::write_reg(
+                        IoDriverStrenghtConfiguration::ADDR,
+                        0x0211_f111,
+                        Destination::Chip((dom + domain_asic_cnt - 1) * asic_addr_interval as u8),
+                    ),
+                    delay_ms: 0,
+                })
+                .unwrap();
+        }
+        // first and last chip of each voltage domain should have UARTRelay with GAP_CNT=domain_asic_num*(chain_domain_num-domain_i)+14 and RO_REL_EN=CO_REL_EN=1
+        // (iterating voltage domain in decreasing chip address order)
+        for dom in (0..chain_domain_cnt).rev() {
+            let uart_delay = UARTRelay(*self.registers.get(&UARTRelay::ADDR).unwrap())
+                .set_gap_cnt(
+                    (domain_asic_cnt as u16) * ((chain_domain_cnt as u16) - (dom as u16)) + 14,
+                )
+                .enable_ro_relay()
+                .enable_co_relay()
+                .val();
+            init_seq
+                .push(CmdDelay {
+                    cmd: Command::write_reg(
+                        UARTRelay::ADDR,
+                        uart_delay,
+                        Destination::Chip(dom * asic_addr_interval as u8),
+                    ),
+                    delay_ms: 0,
+                })
+                .unwrap();
+            if domain_asic_cnt > 1 {
+                init_seq
+                    .push(CmdDelay {
+                        cmd: Command::write_reg(
+                            UARTRelay::ADDR,
+                            uart_delay,
+                            Destination::Chip(
+                                (dom + domain_asic_cnt - 1) * asic_addr_interval as u8,
+                            ),
+                        ),
+                        delay_ms: 0,
+                    })
+                    .unwrap();
+            }
+        }
         init_seq
     }
 
@@ -582,8 +648,8 @@ impl Bm13xxProtocol for BM1366 {
     /// ### Example
     /// ```
     /// use bm1366::BM1366;
-    /// use bm13xx_asic::{core_register::*, register::*};
-    /// use bm13xx_protocol::{Bm13xxProtocol, command::Destination};
+    /// use bm13xx_asic::{core_register::*, register::*, Asic};
+    /// use bm13xx_protocol::command::Destination;
     ///
     /// let mut bm1366 = BM1366::default();
     /// let mut reset_seq = bm1366.reset_core(Destination::All);
@@ -612,7 +678,7 @@ impl Bm13xxProtocol for BM1366 {
             reset_seq
                 .push(CmdDelay {
                     cmd: Command::write_reg(RegA8::ADDR, reg_a8, dest),
-                    delay: Duration::from_millis(0),
+                    delay_ms: 0,
                 })
                 .unwrap();
             self.registers.insert(RegA8::ADDR, reg_a8).unwrap();
@@ -625,7 +691,7 @@ impl Bm13xxProtocol for BM1366 {
             reset_seq
                 .push(CmdDelay {
                     cmd: Command::write_reg(MiscControlV2::ADDR, misc, dest),
-                    delay: Duration::from_millis(10),
+                    delay_ms: 10,
                 })
                 .unwrap();
             self.registers.insert(MiscControlV2::ADDR, misc).unwrap();
@@ -636,7 +702,7 @@ impl Bm13xxProtocol for BM1366 {
             reset_seq
                 .push(CmdDelay {
                     cmd: Command::write_reg(RegA8::ADDR, reg_a8, dest),
-                    delay: Duration::from_millis(0),
+                    delay_ms: 0,
                 })
                 .unwrap();
             self.registers.insert(RegA8::ADDR, reg_a8).unwrap();
@@ -649,7 +715,7 @@ impl Bm13xxProtocol for BM1366 {
             reset_seq
                 .push(CmdDelay {
                     cmd: Command::write_reg(MiscControlV2::ADDR, misc, dest),
-                    delay: Duration::from_millis(10),
+                    delay_ms: 10,
                 })
                 .unwrap();
             self.registers.insert(MiscControlV2::ADDR, misc).unwrap();
@@ -661,7 +727,7 @@ impl Bm13xxProtocol for BM1366 {
             reset_seq
                 .push(CmdDelay {
                     cmd: Command::write_reg(RegA8::ADDR, reg_a8, dest),
-                    delay: Duration::from_millis(10),
+                    delay_ms: 10,
                 })
                 .unwrap();
             self.registers.insert(RegA8::ADDR, reg_a8).unwrap();
@@ -674,7 +740,7 @@ impl Bm13xxProtocol for BM1366 {
             reset_seq
                 .push(CmdDelay {
                     cmd: Command::write_reg(MiscControlV2::ADDR, misc, dest),
-                    delay: Duration::from_millis(10),
+                    delay_ms: 10,
                 })
                 .unwrap();
             self.registers.insert(MiscControlV2::ADDR, misc).unwrap();
@@ -690,7 +756,7 @@ impl Bm13xxProtocol for BM1366 {
                     CoreRegisterControl::write_core_reg(0, HashClockCtrl(hash_clk_ctrl)), // CLOCK_CTRL=64
                     dest,
                 ),
-                delay: Duration::from_millis(10),
+                delay_ms: 10,
             })
             .unwrap();
         self.core_registers
@@ -709,7 +775,7 @@ impl Bm13xxProtocol for BM1366 {
                     CoreRegisterControl::write_core_reg(0, ClockDelayCtrlV2(clk_dly_ctrl)),
                     dest,
                 ),
-                delay: Duration::from_millis(10),
+                delay_ms: 10,
             })
             .unwrap();
         self.core_registers
@@ -724,7 +790,7 @@ impl Bm13xxProtocol for BM1366 {
                         CoreRegisterControl::write_core_reg(0, CoreReg2(core_reg2)),
                         dest,
                     ),
-                    delay: Duration::from_millis(10),
+                    delay_ms: 10,
                 })
                 .unwrap();
             self.core_registers.insert(CoreReg2::ID, core_reg2).unwrap();
@@ -737,8 +803,7 @@ impl Bm13xxProtocol for BM1366 {
     /// ### Example
     /// ```
     /// use bm1366::{BM1366, BM1366_PLL_ID_UART};
-    /// use bm13xx_asic::register::*;
-    /// use bm13xx_protocol::Bm13xxProtocol;
+    /// use bm13xx_asic::{register::*, Asic};
     ///
     /// let mut bm1366 = BM1366::default();
     /// let mut baud_seq = bm1366.set_baudrate(6_250_000);
@@ -774,7 +839,7 @@ impl Bm13xxProtocol for BM1366 {
                         fast_uart_cfg,
                         Destination::All,
                     ),
-                    delay: Duration::from_millis(0),
+                    delay_ms: 0,
                 })
                 .unwrap();
             self.registers
@@ -784,7 +849,7 @@ impl Bm13xxProtocol for BM1366 {
             baud_seq
                 .push(CmdDelay {
                     cmd: Command::write_reg(PLL1Parameter::ADDR, pll1_param, Destination::All),
-                    delay: Duration::from_millis(0),
+                    delay_ms: 0,
                 })
                 .unwrap();
             self.registers
@@ -810,7 +875,7 @@ impl Bm13xxProtocol for BM1366 {
             baud_seq
                 .push(CmdDelay {
                     cmd: Command::write_reg(PLL1Parameter::ADDR, pll1_param, Destination::All),
-                    delay: Duration::from_millis(0),
+                    delay_ms: 0,
                 })
                 .unwrap();
             self.registers
@@ -831,7 +896,7 @@ impl Bm13xxProtocol for BM1366 {
                         fast_uart_cfg,
                         Destination::All,
                     ),
-                    delay: Duration::from_millis(0),
+                    delay_ms: 0,
                 })
                 .unwrap();
             self.registers
@@ -839,11 +904,5 @@ impl Bm13xxProtocol for BM1366 {
                 .unwrap();
         }
         baud_seq
-    }
-}
-
-impl Asic for BM1366 {
-    fn chip_id(&self) -> u16 {
-        BM1366_CHIP_ID
     }
 }
