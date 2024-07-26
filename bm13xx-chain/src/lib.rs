@@ -1,4 +1,74 @@
-//! BM13xx Chain representation.
+//! BM13xx Chain representation based on
+//! [`embedded-hal`](https://github.com/rust-embedded/embedded-hal).
+//! Thanks to this abstraction layer, it can be used on full-fledged operating
+//! systems as well as embedded devices.
+//!
+//! By default, this library exposes an async API.
+//!
+//! # Examples
+//! The crate ships with a CLI example that utilize the library from your host computer:
+//! * [`bm13xx-cli.rs`](examples/cli.rs) uses the asynchronous interface (embedded-io-async).
+//!
+//! The example below demonstrates how to use it with an ESP32,
+//! showcasing the strength of the embedded-hal abstractions.
+//!
+//! ```ignore
+//! #![no_std]
+//! #![no_main]
+//!
+//! use embassy_executor::Spawner;
+//! use embassy_time::{Duration, Timer, Delay};
+//! use esp_backtrace as _;
+//! use esp_hal::{
+//!     clock::ClockControl,
+//!     gpio::Io,
+//!     peripherals::Peripherals,
+//!     prelude::*,
+//!     system::SystemControl,
+//!     timer::timg::TimerGroup,
+//!     uart::{config::Config, TxRxPins, Uart},
+//! };
+//! use esp_println::println;
+//! use bm1366::BM1366;
+//! use bm13xx_chain::{Baud, Chain};
+//!
+//! #[main]
+//! async fn main(_s: Spawner) -> ! {
+//!     let peripherals = Peripherals::take();
+//!     let system = SystemControl::new(peripherals.SYSTEM);
+//!     let clocks = ClockControl::max(system.clock_control).freeze();
+//!
+//!     let timg0 = TimerGroup::new_async(peripherals.TIMG0, &clocks);
+//!     esp_hal_embassy::init(&clocks, timg0);
+//!
+//!     let io = Io::new(peripherals.GPIO, peripherals.IO_MUX);
+//!     let pins = TxRxPins::new_tx_rx(io.pins.gpio17, io.pins.gpio16);
+//!
+//!     let mut uart0 = Uart::new_async_with_config(
+//!         peripherals.UART0,
+//!         Config::default().baudrate(115_200),
+//!         Some(pins),
+//!         &clocks,
+//!     );
+//!     uart0
+//!         .set_rx_fifo_full_threshold(bm13xx_protocol::READ_BUF_SIZE as u16)
+//!         .unwrap();
+//!
+//!     let bm1366 = BM1366::default();
+//!     let mut chain = Chain::new(1, bm1366, 1, &mut uart0, Delay);
+//!     chain.enumerate().await.unwrap();
+//!     println!("Enumerated {} asics", chain.asic_cnt);
+//!     println!("Interval: {}", chain.asic_addr_interval);
+//!     chain.init(256).await.unwrap();
+//!     chain.set_baudrate(1_000_000).await.unwrap();
+//!
+//!     loop {
+//!
+//!         Timer::after(Duration::from_millis(30)).await;
+//!     }
+//! }
+//! ```
+
 #![no_std]
 // #![feature(error_in_core)]
 // #![allow(stable_features, reason = "remove this once rust 1.81 is stable")]
