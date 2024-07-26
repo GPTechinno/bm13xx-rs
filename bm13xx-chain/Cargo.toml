@@ -1,0 +1,24 @@
+[package]
+name = "bm13xx-chain"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bm13xx-asic = { path = "../bm13xx-asic" }
+bm13xx-protocol = { path = "../bm13xx-protocol" }
+
+derive_more = { version = "1.0.0-beta",  default-features = false, features = ["from"] }
+embedded-hal-async = "1.0"
+embedded-io-async = "0.6"
+
+[dev-dependencies]
+bm1366 = { path = "../bm1366" }
+embedded-io-adapters = { version = "0.6", features = ["std", "tokio-1"] }
+inquire = "0.7"
+# serialport = "4.4"
+tokio-serial = "5.4"
+tokio = { version = "1.38", features = ["macros", "time", "rt-multi-thread"] }
+
+[[example]]
+name = "bm13xx-cli"
+path = "examples/cli.rs"

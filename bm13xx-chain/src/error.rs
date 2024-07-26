@@ -1,0 +1,71 @@
+use bm13xx_asic::register::ChipIdentification;
+use bm13xx_protocol::response::RegisterResponse;
+use derive_more::From;
+
+pub type Result<T, E> = core::result::Result<T, Error<E>>;
+
+#[derive(PartialEq, From)]
+pub enum Error<E> {
+    /// We received a response from ASIC which does not correspond to the command sent
+    UnexpectedResponse { resp: [u8; 9] },
+    /// We received a register response which does not correspond to the register read command
+    BadRegisterResponse { reg_resp: RegisterResponse },
+    /// We enumerated an ASIC which does not correspond to the chip we are looking for
+    UnexpectedAsic { chip_ident: ChipIdentification },
+    /// We enumerated an incorrect number of asics
+    UnexpectedAsicCount {
+        expected_asic_cnt: usize,
+        actual_asic_cnt: usize,
+    },
+    /// The BM13xx protocol returned an error
+    #[from]
+    Protocol(bm13xx_protocol::Error),
+    /// The serial interface returned an error
+    Io(E),
+    /// The serial interface returned an error while reading
+    ReadExactError,
+}
+
+// impl<E> From<E> for Error<E> {
+//     fn from(e: E) -> Self {
+//         Error::Io(e)
+//     }
+// }
+
+impl<E: core::fmt::Debug> core::fmt::Display for Error<E> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::result::Result<(), core::fmt::Error> {
+        write!(f, "{self:?}")
+    }
+}
+
+impl<E: core::fmt::Debug> core::fmt::Debug for Error<E> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Error::UnexpectedResponse { resp } => f
+                .debug_struct("UnexpectedResponse")
+                .field("resp", &format_args!("{:x?}", resp))
+                .finish(),
+            Error::BadRegisterResponse { reg_resp } => f
+                .debug_struct("BadRegisterResponse")
+                .field("reg_resp", &format_args!("{:x?}", reg_resp))
+                .finish(),
+            Error::UnexpectedAsic { chip_ident } => f
+                .debug_struct("UnexpectedAsic")
+                .field("chip_ident", &format_args!("{:x?}", chip_ident))
+                .finish(),
+            Error::UnexpectedAsicCount {
+                expected_asic_cnt,
+                actual_asic_cnt,
+            } => f
+                .debug_struct("UnexpectedAsicCount")
+                .field("expected_asic_cnt", &expected_asic_cnt)
+                .field("actual_asic_cnt", &actual_asic_cnt)
+                .finish(),
+            Error::Protocol(protocol_err) => f.debug_tuple("Protocol").field(protocol_err).finish(),
+            Error::Io(io_err) => f.debug_tuple("Io").field(io_err).finish(),
+            Error::ReadExactError => f.debug_struct("ReadExactError").finish(),
+        }
+    }
+}
+
+impl<E: core::fmt::Debug> core::error::Error for Error<E> {}

@@ -4,8 +4,9 @@ members = [
   "bm1397",
   "bm1366",
   "bm13xx-asic",
+  "bm13xx-chain",
   "bm13xx-protocol",
 ]
 
 [workspace.dependencies]
-fugit = "0.3.7"
+fugit = "0.3"
