@@ -34,4 +34,3 @@ impl_boilerplate_for!(PLL3Parameter);
 impl PLL3Parameter {
     pub const ADDR: u8 = 0x68;
 }
-
