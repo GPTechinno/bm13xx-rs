@@ -5,7 +5,7 @@ use bm13xx_asic::{core_register::*, register::*, Asic, CmdDelay};
 use bm13xx_protocol::command::{Command, Destination};
 
 use core::time::Duration;
-use fugit::HertzU32;
+use fugit::HertzU64;
 use heapless::{FnvIndexMap, Vec};
 
 pub const BM1397_CHIP_ID: u16 = 0x1397;
@@ -36,7 +36,7 @@ pub struct BM1397 {
         BM1397_CORE_SMALL_CORE_CNT,
         BM1397_DOMAIN_CNT,
     >,
-    pub input_clock_freq: HertzU32,
+    pub input_clock_freq: HertzU64,
     pub plls: [bm13xx_asic::pll::Pll; BM1397_PLL_CNT],
     pub chip_addr: u8,
     pub registers: FnvIndexMap<u8, u32, 64>,
@@ -44,7 +44,7 @@ pub struct BM1397 {
 }
 
 impl BM1397 {
-    pub fn new_with_clk(clk: HertzU32) -> Self {
+    pub fn new_with_clk(clk: HertzU64) -> Self {
         BM1397 {
             input_clock_freq: clk,
             ..Default::default()
@@ -70,13 +70,22 @@ impl BM1397 {
     /// ### Example
     /// ```
     /// use bm1397::BM1397;
-    /// use fugit::HertzU32;
+    /// use fugit::HertzU64;
     ///
-    /// let bm1397 = BM1397::default();
-    /// assert_eq!(bm1397.hash_freq(), HertzU32::MHz(50u32));
+    /// let mut bm1397 = BM1397::default();
+    /// assert_eq!(bm1397.hash_freq(), HertzU64::Hz(21428571));
+    /// assert_eq!(bm1397.set_hash_freq(HertzU64::MHz(425)).hash_freq(), HertzU64::MHz(425));
     /// ```
-    pub fn hash_freq(&self) -> HertzU32 {
+    pub fn hash_freq(&self) -> HertzU64 {
         self.plls[BM1397_PLL_ID_HASH].frequency(self.input_clock_freq, BM1397_PLL_OUT_HASH)
+    }
+    pub fn set_hash_freq(&mut self, freq: HertzU64) -> &mut Self {
+        self.plls[BM1397_PLL_ID_HASH].set_frequency(
+            self.input_clock_freq,
+            BM1397_PLL_OUT_HASH,
+            freq,
+        );
+        self
     }
 
     /// ## Get the theoretical Hashrate in GH/s
@@ -84,10 +93,10 @@ impl BM1397 {
     /// ### Example
     /// ```
     /// use bm1397::BM1397;
-    /// use fugit::HertzU32;
+    /// use fugit::HertzU64;
     ///
     /// let bm1397 = BM1397::default();
-    /// assert_eq!(bm1397.theoretical_hashrate_ghs(), 33.6);
+    /// assert_eq!(bm1397.theoretical_hashrate_ghs(), 14.4);
     /// ```
     pub fn theoretical_hashrate_ghs(&self) -> f32 {
         self.hash_freq().raw() as f32 * self.sha.small_core_count() as f32 / 1_000_000_000.0
@@ -108,7 +117,7 @@ impl BM1397 {
     /// use core::time::Duration;
     ///
     /// let bm1397 = BM1397::default();
-    /// assert_eq!(bm1397.rolling_duration(), Duration::from_secs_f32(0.00032768));
+    /// assert_eq!(bm1397.rolling_duration(), Duration::from_secs_f32(0.000764587));
     /// ```
     pub fn rolling_duration(&self) -> Duration {
         let space = (1
@@ -172,7 +181,7 @@ impl Default for BM1397 {
     fn default() -> Self {
         let mut bm1397 = Self {
             sha: bm13xx_asic::sha::Sha::default(),
-            input_clock_freq: HertzU32::MHz(25),
+            input_clock_freq: HertzU64::MHz(25),
             plls: [bm13xx_asic::pll::Pll::default(); BM1397_PLL_CNT],
             chip_addr: 0,
             registers: FnvIndexMap::<_, _, 64>::new(),
@@ -386,7 +395,7 @@ impl Asic for BM1397 {
         BM1397_CHIP_ID
     }
 
-    /// ## Init the Chip
+    /// ## Init the Chip command list
     ///
     /// ### Example
     /// ```
@@ -394,7 +403,7 @@ impl Asic for BM1397 {
     /// use bm13xx_asic::{core_register::*, register::*, Asic};
     ///
     /// let mut bm1397 = BM1397::default();
-    /// let mut init_seq = bm1397.init(256, 1, 1, 256);
+    /// let mut init_seq = bm1397.send_init(256, 1, 1, 256);
     /// assert_eq!(init_seq.len(), 5);
     /// assert_eq!(init_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x14, 0x00, 0x00, 0x00, 0xff, 0x08]);
     /// assert_eq!(init_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x3c, 0x80, 0x00, 0x80, 0x74, 0x10]);
@@ -408,7 +417,7 @@ impl Asic for BM1397 {
     /// assert_eq!(bm1397.registers.get(&TicketMask::ADDR).unwrap(), &0x0000_00ff);
     /// ```
     ///
-    fn init(
+    fn send_init(
         &mut self,
         initial_diffculty: u32,
         _chain_domain_cnt: u8,
@@ -500,23 +509,7 @@ impl Asic for BM1397 {
         init_seq
     }
 
-    /// ## Reset the Chip Cores
-    ///
-    /// ### Example
-    /// ```
-    /// use bm1397::BM1397;
-    /// use bm13xx_asic::{core_register::*, register::*, Asic};
-    /// use bm13xx_protocol::command::Destination;
-    ///
-    /// let mut bm1397 = BM1397::default();
-    /// let mut reset_seq = bm1397.reset_core(Destination::All);
-    /// assert_eq!(reset_seq.len(), 0);
-    /// ```
-    fn reset_core(&mut self, _dest: Destination) -> Vec<CmdDelay, 6> {
-        Vec::new() // TODO impl
-    }
-
-    /// ## Set Baudrate
+    /// ## Set Baudrate command list
     ///
     /// ### Example
     /// ```
@@ -524,7 +517,7 @@ impl Asic for BM1397 {
     /// use bm13xx_asic::{register::*, Asic};
     ///
     /// let mut bm1397 = BM1397::default();
-    /// let mut baud_seq = bm1397.set_baudrate(6_250_000);
+    /// let mut baud_seq = bm1397.send_baudrate(6_250_000);
     /// assert_eq!(baud_seq.len(), 3);
     /// assert_eq!(baud_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x18, 0x00, 0x01, 0x27, 0x01, 11]);
     /// assert_eq!(baud_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x28, 0x06, 0x00, 0x00, 0x0f, 24]);
@@ -533,7 +526,7 @@ impl Asic for BM1397 {
     /// assert_eq!(bm1397.registers.get(&MiscControl::ADDR).unwrap(), &0x0001_2701);
     /// assert_eq!(bm1397.registers.get(&PLL3Parameter::ADDR).unwrap(), &0xC070_0111);
     /// assert_eq!(bm1397.registers.get(&FastUARTConfiguration::ADDR).unwrap(), &0x0600_000F);
-    /// let mut baud_seq = bm1397.set_baudrate(115_740);
+    /// let mut baud_seq = bm1397.send_baudrate(115_740);
     /// assert_eq!(baud_seq.len(), 2);
     /// assert_eq!(baud_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x68, 0x00, 0x70, 0x01, 0x11, 21]);
     /// assert_eq!(baud_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x18, 0x00, 0x00, 0x3a, 0x01, 24]);
@@ -541,10 +534,10 @@ impl Asic for BM1397 {
     /// assert_eq!(bm1397.registers.get(&MiscControl::ADDR).unwrap(), &0x0000_3A01);
     /// assert_eq!(bm1397.registers.get(&PLL3Parameter::ADDR).unwrap(), &0x0070_0111);
     /// ```
-    fn set_baudrate(&mut self, baudrate: u32) -> Vec<CmdDelay, 3> {
+    fn send_baudrate(&mut self, baudrate: u32) -> Vec<CmdDelay, 3> {
         let mut baud_seq = Vec::new();
-        if baudrate <= self.input_clock_freq.raw() / 8 {
-            let fbase = self.input_clock_freq.raw();
+        if baudrate <= self.input_clock_freq.raw() as u32 / 8 {
+            let fbase = self.input_clock_freq.raw() as u32;
             let bt8d = (fbase / (8 * baudrate)) - 1;
             let misc_ctrl = MiscControl(*self.registers.get(&MiscControl::ADDR).unwrap())
                 .set_bclk_sel(BaudrateClockSelect::Clki)
@@ -610,7 +603,7 @@ impl Asic for BM1397 {
             self.registers
                 .insert(FastUARTConfiguration::ADDR, fast_uart_cfg)
                 .unwrap();
-            let bt8d = (fbase / (8 * baudrate)) - 1;
+            let bt8d = (fbase as u32 / (2 * baudrate)) - 1;
             let misc_ctrl = MiscControl(*self.registers.get(&MiscControl::ADDR).unwrap())
                 .set_bclk_sel(BaudrateClockSelect::Pll3)
                 .set_bt8d(bt8d as u16)
@@ -624,5 +617,68 @@ impl Asic for BM1397 {
             self.registers.insert(MiscControl::ADDR, misc_ctrl).unwrap();
         }
         baud_seq
+    }
+
+    /// ## Reset the Chip Cores command list
+    ///
+    /// ### Example
+    /// ```
+    /// use bm1397::BM1397;
+    /// use bm13xx_asic::{core_register::*, register::*, Asic};
+    /// use bm13xx_protocol::command::Destination;
+    ///
+    /// let mut bm1397 = BM1397::default();
+    /// let mut reset_seq = bm1397.send_reset_core(Destination::All);
+    /// assert_eq!(reset_seq.len(), 0);
+    /// ```
+    fn send_reset_core(&mut self, _dest: Destination) -> Vec<CmdDelay, 6> {
+        Vec::new() // TODO impl
+    }
+
+    /// ## Send Hash Frequency command list
+    ///
+    /// ### Example
+    /// ```
+    /// use bm1397::{BM1397, BM1397_PLL_ID_HASH};
+    /// use bm13xx_asic::{register::*, Asic};
+    /// use fugit::HertzU64;
+    ///
+    /// let mut bm1397 = BM1397::default();
+    /// let mut hash_freq_seq = bm1397.send_hash_freq(HertzU64::MHz(500));
+    /// assert_eq!(hash_freq_seq.len(), 2);
+    /// assert_eq!(hash_freq_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x08, 0xd0, 0xc8, 0x02, 0x40, 18]);
+    /// assert_eq!(hash_freq_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x70, 0x03, 0x04, 0x06, 0x00, 14]);
+    /// assert_eq!(bm1397.plls[BM1397_PLL_ID_HASH].parameter(), 0xd0c8_0240);
+    /// ```
+    fn send_hash_freq(&mut self, freq: HertzU64) -> Vec<CmdDelay, 2> {
+        let mut hash_freq_seq = Vec::new();
+        self.set_hash_freq(freq);
+        hash_freq_seq
+            .push(CmdDelay {
+                cmd: Command::write_reg(
+                    PLL0Divider::ADDR,
+                    self.plls[BM1397_PLL_ID_HASH].divider(),
+                    Destination::All,
+                ),
+                delay_ms: 0,
+            })
+            .unwrap();
+        self.registers
+            .insert(
+                PLL0Parameter::ADDR,
+                self.plls[BM1397_PLL_ID_HASH].parameter(),
+            )
+            .unwrap();
+        hash_freq_seq
+            .push(CmdDelay {
+                cmd: Command::write_reg(
+                    PLL0Parameter::ADDR,
+                    self.plls[BM1397_PLL_ID_HASH].parameter(),
+                    Destination::All,
+                ),
+                delay_ms: 0,
+            })
+            .unwrap();
+        hash_freq_seq
     }
 }

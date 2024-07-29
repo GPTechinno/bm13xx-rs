@@ -2,6 +2,7 @@ use bm1366::BM1366;
 use bm13xx_chain::Chain;
 
 use embedded_hal_async::delay::DelayNs;
+use fugit::HertzU64;
 use tokio_1::FromTokio;
 // use embedded_io_adapters::std::FromStd;
 use inquire::Select;
@@ -51,9 +52,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
     println!("Interval: {}", chain.asic_addr_interval);
     chain.init(256).await?;
     chain.set_baudrate(1_000_000).await?;
-    chain.enumerate().await?;
-    println!("Enumerated {} asics", chain.asic_cnt);
-    println!("Interval: {}", chain.asic_addr_interval);
+    // chain.enumerate().await?; // just to be sure the new baudrate is well setup
+    // println!("Enumerated {} asics", chain.asic_cnt);
+    // println!("Interval: {}", chain.asic_addr_interval);
+    chain.reset_core().await?;
+    // chain.ramp_hash_freq().await?;
+    chain.set_hash_freq(HertzU64::MHz(525)).await?;
     Ok(())
 }
 

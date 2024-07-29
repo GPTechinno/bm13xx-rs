@@ -87,6 +87,7 @@ use bm13xx_protocol::{
 
 use embedded_hal_async::delay::DelayNs;
 use embedded_io_async::{Read, Write};
+use fugit::HertzU64;
 
 pub trait Baud {
     fn set_baudrate(&mut self, baudrate: u32);
@@ -181,21 +182,40 @@ impl<A: Asic, P: Read + Write + Baud, D: DelayNs> Chain<A, P, D> {
         Ok(())
     }
 
-    pub async fn set_baudrate(&mut self, baudrate: u32) -> Result<(), P::Error> {
-        let steps = self.asic.set_baudrate(baudrate);
-        self.send(steps.iter()).await?;
-        self.delay.delay_ms(50).await;
-        self.port.set_baudrate(baudrate);
-        Ok(())
-    }
-
     pub async fn init(&mut self, initial_diffculty: u32) -> Result<(), P::Error> {
-        let steps = self.asic.init(
+        let steps = self.asic.send_init(
             initial_diffculty,
             self.domain_cnt,
             self.asic_cnt / self.domain_cnt,
             self.asic_addr_interval,
         );
+        self.send(steps.iter()).await?;
+        self.delay.delay_ms(100).await;
+        Ok(())
+    }
+
+    pub async fn set_baudrate(&mut self, baudrate: u32) -> Result<(), P::Error> {
+        let steps = self.asic.send_baudrate(baudrate);
+        self.send(steps.iter()).await?;
+        self.delay.delay_ms(50).await;
+        self.port.set_baudrate(baudrate);
+        self.delay.delay_ms(50).await;
+        Ok(())
+    }
+
+    pub async fn reset_core(&mut self) -> Result<(), P::Error> {
+        for asic_i in 0..self.asic_cnt {
+            let steps = self
+                .asic
+                .send_reset_core(Destination::Chip(asic_i * self.asic_addr_interval as u8));
+            self.send(steps.iter()).await?;
+        }
+        self.delay.delay_ms(100).await;
+        Ok(())
+    }
+
+    pub async fn set_hash_freq(&mut self, freq: HertzU64) -> Result<(), P::Error> {
+        let steps = self.asic.send_hash_freq(freq);
         self.send(steps.iter()).await?;
         self.delay.delay_ms(100).await;
         Ok(())

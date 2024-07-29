@@ -5,7 +5,7 @@ use bm13xx_asic::{core_register::*, register::*, Asic, CmdDelay};
 use bm13xx_protocol::command::{Command, Destination};
 
 use core::time::Duration;
-use fugit::HertzU32;
+use fugit::HertzU64;
 use heapless::{FnvIndexMap, Vec};
 
 pub const BM1366_CHIP_ID: u16 = 0x1366;
@@ -36,7 +36,7 @@ pub struct BM1366 {
         BM1366_CORE_SMALL_CORE_CNT,
         BM1366_DOMAIN_CNT,
     >,
-    pub input_clock_freq: HertzU32,
+    pub input_clock_freq: HertzU64,
     pub plls: [bm13xx_asic::pll::Pll; BM1366_PLL_CNT],
     pub chip_addr: u8,
     pub registers: FnvIndexMap<u8, u32, 64>,
@@ -46,7 +46,7 @@ pub struct BM1366 {
 }
 
 impl BM1366 {
-    pub fn new_with_clk(clk: HertzU32) -> Self {
+    pub fn new_with_clk(clk: HertzU64) -> Self {
         BM1366 {
             input_clock_freq: clk,
             ..Default::default()
@@ -91,16 +91,23 @@ impl BM1366 {
     ///
     /// ### Example
     /// ```
-    /// use bm1366::BM1366;
-    /// use fugit::HertzU32;
+    /// use bm1366::{BM1366, BM1366_PLL_ID_HASH};
+    /// use fugit::HertzU64;
     ///
     /// let mut bm1366 = BM1366::default();
-    /// assert_eq!(bm1366.hash_freq(), HertzU32::MHz(70u32));
-    // bm1366.plls[0].set_parameter(0x40A0_0241); // from Bitaxe default freq
-    // assert_eq!(bm1366.hash_freq(), HertzU32::MHz(200u32));
+    /// assert_eq!(bm1366.hash_freq(), HertzU64::MHz(50));
+    /// assert_eq!(bm1366.set_hash_freq(HertzU64::MHz(200)).hash_freq(), HertzU64::MHz(200));
     /// ```
-    pub fn hash_freq(&self) -> HertzU32 {
+    pub fn hash_freq(&self) -> HertzU64 {
         self.plls[BM1366_PLL_ID_HASH].frequency(self.input_clock_freq, BM1366_PLL_OUT_HASH)
+    }
+    pub fn set_hash_freq(&mut self, freq: HertzU64) -> &mut Self {
+        self.plls[BM1366_PLL_ID_HASH].set_frequency(
+            self.input_clock_freq,
+            BM1366_PLL_OUT_HASH,
+            freq,
+        );
+        self
     }
 
     /// ## Get the theoretical Hashrate in GH/s
@@ -108,10 +115,10 @@ impl BM1366 {
     /// ### Example
     /// ```
     /// use bm1366::BM1366;
-    /// use fugit::HertzU32;
+    /// use fugit::HertzU64;
     ///
     /// let bm1366 = BM1366::default();
-    /// assert_eq!(bm1366.theoretical_hashrate_ghs(), 62.579998);
+    /// assert_eq!(bm1366.theoretical_hashrate_ghs(), 44.7);
     /// ```
     pub fn theoretical_hashrate_ghs(&self) -> f32 {
         self.hash_freq().raw() as f32 * self.sha.small_core_count() as f32 / 1_000_000_000.0
@@ -142,9 +149,9 @@ impl BM1366 {
     /// use core::time::Duration;
     ///
     /// let mut bm1366 = BM1366::default();
-    /// assert_eq!(bm1366.rolling_duration(), Duration::from_secs_f32(0.000234057));
+    /// assert_eq!(bm1366.rolling_duration(), Duration::from_secs_f32(0.00032768));
     /// bm1366.enable_version_rolling(0x1fffe000);
-    /// assert_eq!(bm1366.rolling_duration(), Duration::from_secs_f32(15.339168549));
+    /// assert_eq!(bm1366.rolling_duration(), Duration::from_secs_f32(21.474836349));
     /// ```
     pub fn rolling_duration(&self) -> Duration {
         let space = if self.version_rolling_enabled {
@@ -257,7 +264,7 @@ impl Default for BM1366 {
     fn default() -> Self {
         let mut bm1366 = Self {
             sha: bm13xx_asic::sha::Sha::default(),
-            input_clock_freq: HertzU32::MHz(25),
+            input_clock_freq: HertzU64::MHz(25),
             plls: [bm13xx_asic::pll::Pll::default(); BM1366_PLL_CNT],
             chip_addr: 0,
             registers: FnvIndexMap::<_, _, 64>::new(),
@@ -471,7 +478,7 @@ impl Asic for BM1366 {
         BM1366_CHIP_ID
     }
 
-    /// ## Init the Chip
+    /// ## Init the Chip command list
     ///
     /// ### Example
     /// ```
@@ -479,7 +486,7 @@ impl Asic for BM1366 {
     /// use bm13xx_asic::{core_register::*, register::*, Asic};
     ///
     /// let mut bm1366 = BM1366::default();
-    /// let mut init_seq = bm1366.init(256, 1, 10, 2);
+    /// let mut init_seq = bm1366.send_init(256, 1, 10, 2);
     /// assert_eq!(init_seq.len(), 8);
     /// assert_eq!(init_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x41, 0x09, 0x12, 0x2c, 0x00, 0x18, 0x00, 0x03, 0x0c]);
     /// assert_eq!(init_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x41, 0x09, 0x00, 0x2c, 0x00, 0x18, 0x00, 0x03, 0x10]);
@@ -496,7 +503,7 @@ impl Asic for BM1366 {
     /// assert_eq!(bm1366.registers.get(&IoDriverStrenghtConfiguration::ADDR).unwrap(), &0x0211_1111);
     /// ```
     ///
-    fn init(
+    fn send_init(
         &mut self,
         initial_diffculty: u32,
         chain_domain_cnt: u8,
@@ -643,7 +650,115 @@ impl Asic for BM1366 {
         init_seq
     }
 
-    /// ## Reset the Chip Cores
+    /// ## Send Baudrate command list
+    ///
+    /// ### Example
+    /// ```
+    /// use bm1366::{BM1366, BM1366_PLL_ID_UART};
+    /// use bm13xx_asic::{register::*, Asic};
+    ///
+    /// let mut bm1366 = BM1366::default();
+    /// let mut baud_seq = bm1366.send_baudrate(6_250_000);
+    /// assert_eq!(baud_seq.len(), 2);
+    /// assert_eq!(baud_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x28, 0x05, 0x60, 0x07, 0x00, 23]);
+    /// assert_eq!(baud_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x60, 0xc0, 0x70, 0x01, 0x11, 26]);
+    /// assert!(bm1366.plls[BM1366_PLL_ID_UART].enabled());
+    /// assert_eq!(bm1366.registers.get(&PLL1Parameter::ADDR).unwrap(), &0xC070_0111);
+    /// assert_eq!(bm1366.registers.get(&FastUARTConfigurationV2::ADDR).unwrap(), &0x0560_0700);
+    /// let mut baud_seq = bm1366.send_baudrate(1_000_000);
+    /// assert_eq!(baud_seq.len(), 2);
+    /// assert_eq!(baud_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x60, 0x00, 0x70, 0x01, 0x11, 15]);
+    /// assert_eq!(baud_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x28, 0x01, 0x60, 0x02, 0x00, 21]);
+    /// assert!(!bm1366.plls[BM1366_PLL_ID_UART].enabled());
+    /// assert_eq!(bm1366.registers.get(&FastUARTConfigurationV2::ADDR).unwrap(), &0x0160_0200);
+    /// assert_eq!(bm1366.registers.get(&PLL1Parameter::ADDR).unwrap(), &0x0070_0111);
+    /// ```
+    fn send_baudrate(&mut self, baudrate: u32) -> Vec<CmdDelay, 3> {
+        let mut baud_seq = Vec::new();
+        if baudrate <= self.input_clock_freq.raw() as u32 / 8 {
+            let fbase = self.input_clock_freq.raw() as u32;
+            let bt8d = (fbase / (8 * baudrate)) - 1;
+            let fast_uart_cfg = FastUARTConfigurationV2(
+                *self.registers.get(&FastUARTConfigurationV2::ADDR).unwrap(),
+            )
+            .set_bclk_sel(BaudrateClockSelectV2::Clki)
+            .set_bt8d(bt8d as u8)
+            .val();
+            baud_seq
+                .push(CmdDelay {
+                    cmd: Command::write_reg(
+                        FastUARTConfigurationV2::ADDR,
+                        fast_uart_cfg,
+                        Destination::All,
+                    ),
+                    delay_ms: 0,
+                })
+                .unwrap();
+            self.registers
+                .insert(FastUARTConfigurationV2::ADDR, fast_uart_cfg)
+                .unwrap();
+            let pll1_param = self.plls[BM1366_PLL_ID_UART].disable().unlock().parameter();
+            baud_seq
+                .push(CmdDelay {
+                    cmd: Command::write_reg(PLL1Parameter::ADDR, pll1_param, Destination::All),
+                    delay_ms: 0,
+                })
+                .unwrap();
+            self.registers
+                .insert(PLL1Parameter::ADDR, pll1_param)
+                .unwrap();
+        } else {
+            let pll1_div4 = 6;
+            self.plls[BM1366_PLL_ID_UART]
+                .lock()
+                .enable()
+                .set_fb_div(112)
+                .set_ref_div(1)
+                .set_post1_div(1)
+                .set_post2_div(1)
+                .set_out_div(BM1366_PLL_OUT_UART, pll1_div4);
+            // self.plls[BM1366_PLL_ID_UART]
+            //     .set_parameter(0xC070_0111)
+            //     .set_out_div(BM1366_PLL_OUT_UART, pll1_div4);
+            let fbase = self.plls[BM1366_PLL_ID_UART]
+                .frequency(self.input_clock_freq, BM1366_PLL_OUT_UART)
+                .raw();
+            let pll1_param = self.plls[BM1366_PLL_ID_UART].parameter();
+            baud_seq
+                .push(CmdDelay {
+                    cmd: Command::write_reg(PLL1Parameter::ADDR, pll1_param, Destination::All),
+                    delay_ms: 0,
+                })
+                .unwrap();
+            self.registers
+                .insert(PLL1Parameter::ADDR, pll1_param)
+                .unwrap();
+            let bt8d = (fbase as u32 / (2 * baudrate)) - 1;
+            let fast_uart_cfg = FastUARTConfigurationV2(
+                *self.registers.get(&FastUARTConfigurationV2::ADDR).unwrap(),
+            )
+            .set_pll1_div4(pll1_div4)
+            .set_bclk_sel(BaudrateClockSelectV2::Pll1)
+            .set_bt8d(bt8d as u8)
+            .val();
+            baud_seq
+                .push(CmdDelay {
+                    cmd: Command::write_reg(
+                        FastUARTConfigurationV2::ADDR,
+                        fast_uart_cfg,
+                        Destination::All,
+                    ),
+                    delay_ms: 0,
+                })
+                .unwrap();
+            self.registers
+                .insert(FastUARTConfigurationV2::ADDR, fast_uart_cfg)
+                .unwrap();
+        }
+        baud_seq
+    }
+
+    /// ## Reset the Chip Cores command list
     ///
     /// ### Example
     /// ```
@@ -652,7 +767,7 @@ impl Asic for BM1366 {
     /// use bm13xx_protocol::command::Destination;
     ///
     /// let mut bm1366 = BM1366::default();
-    /// let mut reset_seq = bm1366.reset_core(Destination::All);
+    /// let mut reset_seq = bm1366.send_reset_core(Destination::All);
     /// assert_eq!(reset_seq.len(), 6);
     /// assert_eq!(reset_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x3c, 0x80, 0x00, 0x80, 0x20, 0x19]);
     /// assert_eq!(reset_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x3c, 0x80, 0x00, 0x85, 0x40, 0x0c]);
@@ -661,7 +776,7 @@ impl Asic for BM1366 {
     /// assert_eq!(reset_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x18, 0x00, 0x00, 0xc1, 0x00, 29]);
     /// assert_eq!(reset_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0xa8, 0x00, 0x07, 0x00, 0x0f, 21]);
     /// let mut bm1366 = BM1366::default();
-    /// let mut reset_seq = bm1366.reset_core(Destination::Chip(0));
+    /// let mut reset_seq = bm1366.send_reset_core(Destination::Chip(0));
     /// assert_eq!(reset_seq.len(), 5);
     /// assert_eq!(reset_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x41, 0x09, 0x00, 0x3c, 0x80, 0x00, 0x82, 0xaa, 0x05]);
     /// assert_eq!(reset_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x41, 0x09, 0x00, 0x3c, 0x80, 0x00, 0x80, 0x20, 0x11]);
@@ -669,7 +784,7 @@ impl Asic for BM1366 {
     /// assert_eq!(reset_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x41, 0x09, 0x00, 0x18, 0xf0, 0x00, 0xc1, 0x00, 0x0c]);
     /// assert_eq!(reset_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x41, 0x09, 0x00, 0xa8, 0x00, 0x07, 0x01, 0xf0, 0x15]);
     /// ```
-    fn reset_core(&mut self, dest: Destination) -> Vec<CmdDelay, 6> {
+    fn send_reset_core(&mut self, dest: Destination) -> Vec<CmdDelay, 6> {
         let mut reset_seq = Vec::new();
         if dest == Destination::All {
             let reg_a8 = RegA8(*self.registers.get(&RegA8::ADDR).unwrap())
@@ -678,7 +793,7 @@ impl Asic for BM1366 {
             reset_seq
                 .push(CmdDelay {
                     cmd: Command::write_reg(RegA8::ADDR, reg_a8, dest),
-                    delay_ms: 0,
+                    delay_ms: 10,
                 })
                 .unwrap();
             self.registers.insert(RegA8::ADDR, reg_a8).unwrap();
@@ -702,7 +817,7 @@ impl Asic for BM1366 {
             reset_seq
                 .push(CmdDelay {
                     cmd: Command::write_reg(RegA8::ADDR, reg_a8, dest),
-                    delay_ms: 0,
+                    delay_ms: 10,
                 })
                 .unwrap();
             self.registers.insert(RegA8::ADDR, reg_a8).unwrap();
@@ -798,111 +913,50 @@ impl Asic for BM1366 {
         reset_seq
     }
 
-    /// ## Set Baudrate
+    /// ## Send Hash Frequency command list
     ///
     /// ### Example
     /// ```
-    /// use bm1366::{BM1366, BM1366_PLL_ID_UART};
+    /// use bm1366::{BM1366, BM1366_PLL_ID_HASH};
     /// use bm13xx_asic::{register::*, Asic};
+    /// use fugit::HertzU64;
     ///
     /// let mut bm1366 = BM1366::default();
-    /// let mut baud_seq = bm1366.set_baudrate(6_250_000);
-    /// assert_eq!(baud_seq.len(), 2);
-    /// assert_eq!(baud_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x28, 0x05, 0x60, 0x07, 0x00, 23]);
-    /// assert_eq!(baud_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x60, 0xc0, 0x70, 0x01, 0x11, 26]);
-    /// assert!(bm1366.plls[BM1366_PLL_ID_UART].enabled());
-    /// assert_eq!(bm1366.registers.get(&PLL1Parameter::ADDR).unwrap(), &0xC070_0111);
-    /// assert_eq!(bm1366.registers.get(&FastUARTConfigurationV2::ADDR).unwrap(), &0x0560_0700);
-    /// let mut baud_seq = bm1366.set_baudrate(1_000_000);
-    /// assert_eq!(baud_seq.len(), 2);
-    /// assert_eq!(baud_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x60, 0x00, 0x70, 0x01, 0x11, 15]);
-    /// assert_eq!(baud_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x28, 0x01, 0x60, 0x02, 0x00, 21]);
-    /// assert!(!bm1366.plls[BM1366_PLL_ID_UART].enabled());
-    /// assert_eq!(bm1366.registers.get(&FastUARTConfigurationV2::ADDR).unwrap(), &0x0160_0200);
-    /// assert_eq!(bm1366.registers.get(&PLL1Parameter::ADDR).unwrap(), &0x0070_0111);
+    /// let mut hash_freq_seq = bm1366.send_hash_freq(HertzU64::MHz(545));
+    /// assert_eq!(hash_freq_seq.len(), 2);
+    /// assert_eq!(hash_freq_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x08, 0xd0, 0xda, 0x02, 0x40, 30]);
+    /// assert_eq!(hash_freq_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x70, 0x00, 0x00, 0x00, 0x00, 24]);
+    /// assert_eq!(bm1366.plls[BM1366_PLL_ID_HASH].parameter(), 0xd0da_0240);
     /// ```
-    fn set_baudrate(&mut self, baudrate: u32) -> Vec<CmdDelay, 3> {
-        let mut baud_seq = Vec::new();
-        if baudrate <= self.input_clock_freq.raw() / 8 {
-            let fbase = self.input_clock_freq.raw();
-            let bt8d = (fbase / (8 * baudrate)) - 1;
-            let fast_uart_cfg = FastUARTConfigurationV2(
-                *self.registers.get(&FastUARTConfigurationV2::ADDR).unwrap(),
+    fn send_hash_freq(&mut self, freq: HertzU64) -> Vec<CmdDelay, 2> {
+        let mut hash_freq_seq = Vec::new();
+        self.set_hash_freq(freq);
+        hash_freq_seq
+            .push(CmdDelay {
+                cmd: Command::write_reg(
+                    PLL0Divider::ADDR,
+                    self.plls[BM1366_PLL_ID_HASH].divider(),
+                    Destination::All,
+                ),
+                delay_ms: 0,
+            })
+            .unwrap();
+        self.registers
+            .insert(
+                PLL0Parameter::ADDR,
+                self.plls[BM1366_PLL_ID_HASH].parameter(),
             )
-            .set_bclk_sel(BaudrateClockSelectV2::Clki)
-            .set_bt8d(bt8d as u8)
-            .val();
-            baud_seq
-                .push(CmdDelay {
-                    cmd: Command::write_reg(
-                        FastUARTConfigurationV2::ADDR,
-                        fast_uart_cfg,
-                        Destination::All,
-                    ),
-                    delay_ms: 0,
-                })
-                .unwrap();
-            self.registers
-                .insert(FastUARTConfigurationV2::ADDR, fast_uart_cfg)
-                .unwrap();
-            let pll1_param = self.plls[BM1366_PLL_ID_UART].disable().unlock().parameter();
-            baud_seq
-                .push(CmdDelay {
-                    cmd: Command::write_reg(PLL1Parameter::ADDR, pll1_param, Destination::All),
-                    delay_ms: 0,
-                })
-                .unwrap();
-            self.registers
-                .insert(PLL1Parameter::ADDR, pll1_param)
-                .unwrap();
-        } else {
-            let pll1_div4 = 6;
-            self.plls[BM1366_PLL_ID_UART]
-                .lock()
-                .enable()
-                .set_fb_div(112)
-                .set_ref_div(1)
-                .set_post1_div(1)
-                .set_post2_div(1)
-                .set_out_div(BM1366_PLL_OUT_UART, pll1_div4);
-            // self.plls[BM1366_PLL_ID_UART]
-            //     .set_parameter(0xC070_0111)
-            //     .set_out_div(BM1366_PLL_OUT_UART, pll1_div4);
-            let fbase = self.plls[BM1366_PLL_ID_UART]
-                .frequency(self.input_clock_freq, BM1366_PLL_OUT_UART)
-                .raw();
-            let pll1_param = self.plls[BM1366_PLL_ID_UART].parameter();
-            baud_seq
-                .push(CmdDelay {
-                    cmd: Command::write_reg(PLL1Parameter::ADDR, pll1_param, Destination::All),
-                    delay_ms: 0,
-                })
-                .unwrap();
-            self.registers
-                .insert(PLL1Parameter::ADDR, pll1_param)
-                .unwrap();
-            let bt8d = (fbase / (8 * baudrate)) - 1;
-            let fast_uart_cfg = FastUARTConfigurationV2(
-                *self.registers.get(&FastUARTConfigurationV2::ADDR).unwrap(),
-            )
-            .set_pll1_div4(pll1_div4)
-            .set_bclk_sel(BaudrateClockSelectV2::Pll1)
-            .set_bt8d(bt8d as u8)
-            .val();
-            baud_seq
-                .push(CmdDelay {
-                    cmd: Command::write_reg(
-                        FastUARTConfigurationV2::ADDR,
-                        fast_uart_cfg,
-                        Destination::All,
-                    ),
-                    delay_ms: 0,
-                })
-                .unwrap();
-            self.registers
-                .insert(FastUARTConfigurationV2::ADDR, fast_uart_cfg)
-                .unwrap();
-        }
-        baud_seq
+            .unwrap();
+        hash_freq_seq
+            .push(CmdDelay {
+                cmd: Command::write_reg(
+                    PLL0Parameter::ADDR,
+                    self.plls[BM1366_PLL_ID_HASH].parameter(),
+                    Destination::All,
+                ),
+                delay_ms: 0,
+            })
+            .unwrap();
+        hash_freq_seq
     }
 }

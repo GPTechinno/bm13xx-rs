@@ -10,6 +10,7 @@ bm13xx-protocol = { path = "../bm13xx-protocol" }
 derive_more = { version = "1.0.0-beta",  default-features = false, features = ["from"] }
 embedded-hal-async = "1.0"
 embedded-io-async = "0.6"
+fugit = "0.3"
 
 [dev-dependencies]
 bm1366 = { path = "../bm1366" }

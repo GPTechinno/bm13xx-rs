@@ -1,4 +1,11 @@
-use fugit::HertzU32;
+use core::f64;
+
+use fugit::HertzU64;
+
+pub const PLL_OUT_MAX: usize = 5;
+const PLL_VCO_FREQ_MAX: HertzU64 = HertzU64::MHz(3200);
+const PLL_VCO_FREQ_HIGH: HertzU64 = HertzU64::MHz(2400);
+const PLL_VCO_FREQ_MIN: HertzU64 = HertzU64::MHz(2000);
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Pll {
@@ -9,7 +16,7 @@ pub struct Pll {
     ref_div: u8,
     post1_div: u8,
     post2_div: u8,
-    out_div: [u8; 5],
+    out_div: [u8; PLL_OUT_MAX],
 }
 
 impl Pll {
@@ -97,14 +104,14 @@ impl Pll {
     /// assert_eq!(pll.set_out_div(5, 10).out_div(5), 0); // index out of bound
     /// ```
     pub const fn out_div(&self, out: usize) -> u8 {
-        if out < 5 {
+        if out < PLL_OUT_MAX {
             self.out_div[out]
         } else {
             0
         }
     }
     pub fn set_out_div(&mut self, out: usize, div: u8) -> &mut Self {
-        if out < 5 {
+        if out < PLL_OUT_MAX {
             self.out_div[out] = div & 0xf;
         }
         self
@@ -114,20 +121,20 @@ impl Pll {
     ///
     /// ### Example
     /// ```
-    /// use fugit::HertzU32;
+    /// use fugit::HertzU64;
     /// use bm13xx_asic::pll::Pll;
     ///
     /// let mut pll = Pll::default();
     /// pll.set_parameter(0xC060_0161); // BM1397 PLL0 default value
-    /// assert_eq!(pll.vco_freq(HertzU32::MHz(25u32)), HertzU32::MHz(2400u32));
+    /// assert_eq!(pll.vco_freq(HertzU64::MHz(25)), HertzU64::MHz(2400));
     /// pll.set_parameter(0x0064_0111); // BM1397 PLL1 default value
-    /// assert_eq!(pll.vco_freq(HertzU32::MHz(25u32)), HertzU32::MHz(0u32));
+    /// assert_eq!(pll.vco_freq(HertzU64::MHz(25)), HertzU64::MHz(0));
     /// ```
-    pub fn vco_freq(&self, in_clk_freq: HertzU32) -> HertzU32 {
+    pub fn vco_freq(&self, in_clk_freq: HertzU64) -> HertzU64 {
         if self.enabled && self.locked {
             in_clk_freq * (self.fb_div as u32) / (self.ref_div as u32)
         } else {
-            HertzU32::MHz(0)
+            HertzU64::MHz(0)
         }
     }
 
@@ -135,25 +142,76 @@ impl Pll {
     ///
     /// ### Example
     /// ```
-    /// use fugit::HertzU32;
+    /// use fugit::HertzU64;
     /// use bm13xx_asic::pll::Pll;
     ///
+    /// let clki = HertzU64::MHz(25);
     /// let mut pll = Pll::default();
     /// pll.set_parameter(0xC060_0161); // BM1397 PLL0 default value
-    /// assert_eq!(pll.frequency(HertzU32::MHz(25u32), 0), HertzU32::MHz(400u32));
-    /// assert_eq!(pll.frequency(HertzU32::MHz(25u32), 5), HertzU32::MHz(0u32));
+    /// pll.set_divider(0x0304_0607); // BM1397 PLL0 default divider
+    /// assert_eq!(pll.frequency(clki, 0), HertzU64::Hz(21428571));
+    /// assert_eq!(pll.frequency(clki, 5), HertzU64::MHz(0));
+    /// assert_eq!(pll.set_frequency(clki, 0, HertzU64::MHz(425)).frequency(clki, 0), HertzU64::MHz(425));
     /// pll.set_parameter(0x0064_0111); // BM1397 PLL1 default value
-    /// assert_eq!(pll.frequency(HertzU32::MHz(25u32), 0), HertzU32::MHz(0u32));
+    /// pll.set_divider(0x0304_0506); // BM1397 PLL1 default divider
+    /// assert_eq!(pll.frequency(clki, 0), HertzU64::MHz(0));
     /// ```
-    pub fn frequency(&self, in_clk_freq: HertzU32, out: usize) -> HertzU32 {
-        if out < 5 {
+    pub fn frequency(&self, in_clk_freq: HertzU64, out: usize) -> HertzU64 {
+        if out < PLL_OUT_MAX {
             self.vco_freq(in_clk_freq)
-                / ((self.post1_div as u32)
-                    * (self.post2_div as u32)
+                / ((self.post1_div as u32 + 1)
+                    * (self.post2_div as u32 + 1)
                     * (self.out_div[out] as u32 + 1))
         } else {
-            HertzU32::MHz(0)
+            HertzU64::MHz(0)
         }
+    }
+    pub fn set_frequency(
+        &mut self,
+        in_clk_freq: HertzU64,
+        out: usize,
+        target_freq: HertzU64,
+    ) -> &mut Self {
+        if out < PLL_OUT_MAX {
+            let mut pll = *self;
+            pll.out_div[out] = 0;
+            for ref_div in (1..=2).rev() {
+                pll.ref_div = ref_div;
+                for post2_div in 0..=7 {
+                    pll.post2_div = post2_div;
+                    for post1_div in post2_div..=7 {
+                        pll.post1_div = post1_div;
+                        let fb_div = (((post1_div + 1) as f64
+                            * (post2_div + 1) as f64
+                            * target_freq.raw() as f64
+                            * ref_div as f64
+                            / in_clk_freq.raw() as f64)
+                            + 0.5) as u16;
+                        if fb_div < 251 {
+                            pll.fb_div = fb_div;
+                            pll.enable().lock();
+                            let vco_freq = pll.vco_freq(in_clk_freq);
+                            pll.vco_high_freq = vco_freq > PLL_VCO_FREQ_HIGH;
+                            if (pll.ref_div > 1 || vco_freq <= HertzU64::MHz(3125))
+                                && (vco_freq <= PLL_VCO_FREQ_MAX)
+                                && (vco_freq > PLL_VCO_FREQ_MIN)
+                            {
+                                let freq_diff = if target_freq > pll.frequency(in_clk_freq, out) {
+                                    target_freq - pll.frequency(in_clk_freq, out)
+                                } else {
+                                    pll.frequency(in_clk_freq, out) - target_freq
+                                };
+                                if freq_diff < HertzU64::MHz(1) {
+                                    *self = pll;
+                                    return self;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        self
     }
 
     /// ## Handle the PLL locked field.
