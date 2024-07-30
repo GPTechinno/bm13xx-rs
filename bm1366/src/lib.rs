@@ -922,41 +922,65 @@ impl Asic for BM1366 {
     /// use fugit::HertzU64;
     ///
     /// let mut bm1366 = BM1366::default();
-    /// let mut hash_freq_seq = bm1366.send_hash_freq(HertzU64::MHz(545));
-    /// assert_eq!(hash_freq_seq.len(), 2);
-    /// assert_eq!(hash_freq_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x08, 0xd0, 0xda, 0x02, 0x40, 30]);
-    /// assert_eq!(hash_freq_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x70, 0x00, 0x00, 0x00, 0x00, 24]);
-    /// assert_eq!(bm1366.plls[BM1366_PLL_ID_HASH].parameter(), 0xd0da_0240);
+    /// let mut hash_freq_seq = bm1366.send_hash_freq(HertzU64::MHz(75));
+    /// assert_eq!(hash_freq_seq.len(), 4);
+    /// assert_eq!(hash_freq_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x08, 0xc0, 0xa8, 0x02, 0x63, 0x14]);
+    // assert_eq!(hash_freq_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x08, 0xc0, 0xa5, 0x02, 0x54, 0x09]); // seen on S19XP, but equivalent
+    /// assert_eq!(hash_freq_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x08, 0xc0, 0xb0, 0x02, 0x73, 9]);
+    /// assert_eq!(hash_freq_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x08, 0xc0, 0xaf, 0x02, 0x64, 0x0d]);
+    // assert_eq!(hash_freq_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x08, 0xc0, 0xa2, 0x02, 0x55, 0x30]); // seen on S19XP, but equivalent
+    /// assert_eq!(hash_freq_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x08, 0xc0, 0xb4, 0x02, 0x74, 29]);
+    /// assert_eq!(bm1366.plls[BM1366_PLL_ID_HASH].parameter(), 0xc0a8_0263);
     /// ```
-    fn send_hash_freq(&mut self, freq: HertzU64) -> Vec<CmdDelay, 2> {
+    fn send_hash_freq(&mut self, target_freq: HertzU64) -> Vec<CmdDelay, 80> {
         let mut hash_freq_seq = Vec::new();
-        self.set_hash_freq(freq);
-        hash_freq_seq
-            .push(CmdDelay {
-                cmd: Command::write_reg(
-                    PLL0Divider::ADDR,
-                    self.plls[BM1366_PLL_ID_HASH].divider(),
-                    Destination::All,
-                ),
-                delay_ms: 0,
-            })
-            .unwrap();
-        self.registers
-            .insert(
-                PLL0Parameter::ADDR,
-                self.plls[BM1366_PLL_ID_HASH].parameter(),
-            )
-            .unwrap();
-        hash_freq_seq
-            .push(CmdDelay {
-                cmd: Command::write_reg(
+        if self.plls[BM1366_PLL_ID_HASH].out_div(BM1366_PLL_OUT_HASH) != 0 {
+            self.plls[BM1366_PLL_ID_HASH].set_out_div(BM1366_PLL_OUT_HASH, 0);
+            hash_freq_seq
+                .push(CmdDelay {
+                    cmd: Command::write_reg(
+                        PLL0Divider::ADDR,
+                        self.plls[BM1366_PLL_ID_HASH].divider(),
+                        Destination::All,
+                    ),
+                    delay_ms: 2,
+                })
+                .unwrap();
+            self.registers
+                .insert(PLL0Divider::ADDR, self.plls[BM1366_PLL_ID_HASH].divider())
+                .unwrap();
+        }
+        let mut freq = self.hash_freq();
+        let mut long_delay = false;
+        loop {
+            freq += HertzU64::kHz(6250);
+            if freq > target_freq {
+                freq = target_freq;
+            }
+            self.set_hash_freq(freq);
+            if freq > HertzU64::MHz(380) {
+                long_delay = !long_delay;
+            }
+            hash_freq_seq
+                .push(CmdDelay {
+                    cmd: Command::write_reg(
+                        PLL0Parameter::ADDR,
+                        self.plls[BM1366_PLL_ID_HASH].parameter(),
+                        Destination::All,
+                    ),
+                    delay_ms: if long_delay { 2300 } else { 400 },
+                })
+                .unwrap();
+            self.registers
+                .insert(
                     PLL0Parameter::ADDR,
                     self.plls[BM1366_PLL_ID_HASH].parameter(),
-                    Destination::All,
-                ),
-                delay_ms: 0,
-            })
-            .unwrap();
+                )
+                .unwrap();
+            if freq == target_freq {
+                break;
+            }
+        }
         hash_freq_seq
     }
 }

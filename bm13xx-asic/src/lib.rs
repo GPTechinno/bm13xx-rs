@@ -31,5 +31,5 @@ pub trait Asic {
     ) -> Vec<CmdDelay, 14>;
     fn send_baudrate(&mut self, baudrate: u32) -> Vec<CmdDelay, 3>;
     fn send_reset_core(&mut self, dest: Destination) -> Vec<CmdDelay, 6>;
-    fn send_hash_freq(&mut self, freq: HertzU64) -> Vec<CmdDelay, 2>;
+    fn send_hash_freq(&mut self, target_freq: HertzU64) -> Vec<CmdDelay, 80>;
 }

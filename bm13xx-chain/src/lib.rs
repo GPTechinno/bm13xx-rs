@@ -70,8 +70,8 @@
 //! ```
 
 #![no_std]
-// #![feature(error_in_core)]
-// #![allow(stable_features, reason = "remove this once rust 1.81 is stable")]
+#![allow(stable_features)] // remove this once rust 1.81 is stable
+#![feature(error_in_core)]
 // #![warn(clippy::pedantic)]
 // #![warn(clippy::cargo)]
 
