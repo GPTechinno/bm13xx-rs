@@ -478,6 +478,20 @@ impl Asic for BM1366 {
         BM1366_CHIP_ID
     }
 
+    /// ## Has Version Rolling in chip
+    ///
+    /// ### Example
+    /// ```
+    /// use bm1366::BM1366;
+    /// use bm13xx_asic::Asic;
+    ///
+    /// let bm1366 = BM1366::default();
+    /// assert!(bm1366.has_version_rolling());
+    /// ```
+    fn has_version_rolling(&self) -> bool {
+        true
+    }
+
     /// ## Init the Chip command list
     ///
     /// ### Example
@@ -982,5 +996,47 @@ impl Asic for BM1366 {
             }
         }
         hash_freq_seq
+    }
+
+    /// ## Send Enable Version Rolling command list
+    ///
+    /// ### Example
+    /// ```
+    /// use bm1366::BM1366;
+    /// use bm13xx_asic::Asic;
+    ///
+    /// let mut bm1366 = BM1366::default();
+    /// let mut vers_roll_seq = bm1366.send_version_rolling(0x1fff_e000);
+    /// assert_eq!(vers_roll_seq.len(), 2);
+    /// assert_eq!(vers_roll_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0xa4, 0x90, 0x00, 0xff, 0xff, 0x1c]);
+    /// assert_eq!(vers_roll_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x10, 0x00, 0x00, 0x15, 0x1c, 0x02]);
+    /// ```
+    fn send_version_rolling(&mut self, mask: u32) -> Vec<CmdDelay, 2> {
+        let mut vers_roll_seq = Vec::new();
+        let hcn = 0x0000_151c;
+        vers_roll_seq
+            .push(CmdDelay {
+                cmd: Command::write_reg(HashCountingNumber::ADDR, hcn, Destination::All),
+                delay_ms: 1,
+            })
+            .unwrap();
+        self.registers
+            .insert(HashCountingNumber::ADDR, hcn)
+            .unwrap();
+        let vers_roll = VersionRolling(*self.registers.get(&VersionRolling::ADDR).unwrap())
+            .enable()
+            .set_mask(mask)
+            .val();
+        vers_roll_seq
+            .push(CmdDelay {
+                cmd: Command::write_reg(VersionRolling::ADDR, vers_roll, Destination::All),
+                delay_ms: 1,
+            })
+            .unwrap();
+        self.registers
+            .insert(VersionRolling::ADDR, vers_roll)
+            .unwrap();
+        self.enable_version_rolling(mask);
+        vers_roll_seq
     }
 }

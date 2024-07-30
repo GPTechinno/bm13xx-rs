@@ -220,4 +220,13 @@ impl<A: Asic, P: Read + Write + Baud, D: DelayNs> Chain<A, P, D> {
         self.delay.delay_ms(100).await;
         Ok(())
     }
+
+    pub async fn set_version_rolling(&mut self, mask: u32) -> Result<(), P::Error> {
+        if self.asic.has_version_rolling() {
+            let steps = self.asic.send_version_rolling(mask);
+            self.send(steps.iter()).await?;
+            self.delay.delay_ms(100).await;
+        }
+        Ok(())
+    }
 }

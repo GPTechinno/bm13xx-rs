@@ -395,6 +395,20 @@ impl Asic for BM1397 {
         BM1397_CHIP_ID
     }
 
+    /// ## Has Version Rolling in chip
+    ///
+    /// ### Example
+    /// ```
+    /// use bm1397::BM1397;
+    /// use bm13xx_asic::Asic;
+    ///
+    /// let bm1397 = BM1397::default();
+    /// assert!(!bm1397.has_version_rolling());
+    /// ```
+    fn has_version_rolling(&self) -> bool {
+        false
+    }
+
     /// ## Init the Chip command list
     ///
     /// ### Example
@@ -743,7 +757,22 @@ impl Asic for BM1397 {
                 }
             }
         }
-        // self.set_hash_freq(target_freq); // TODO: finish with the closest value
+        // self.set_hash_freq(target_freq); // TODO: finish with ffzzethe closest value
         hash_freq_seq
+    }
+
+    /// ## Send Enable Version Rolling command list
+    ///
+    /// ### Example
+    /// ```
+    /// use bm1397::BM1397;
+    /// use bm13xx_asic::Asic;
+    ///
+    /// let mut bm1397 = BM1397::default();
+    /// let vers_roll_seq = bm1397.send_version_rolling(0x1fff_e000);
+    /// assert_eq!(vers_roll_seq.len(), 0);
+    /// ```
+    fn send_version_rolling(&mut self, _mask: u32) -> Vec<CmdDelay, 2> {
+        Vec::new()
     }
 }

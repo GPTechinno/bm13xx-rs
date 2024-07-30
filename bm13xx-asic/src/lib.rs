@@ -22,6 +22,7 @@ pub struct CmdDelay {
 
 pub trait Asic {
     fn chip_id(&self) -> u16;
+    fn has_version_rolling(&self) -> bool;
     fn send_init(
         &mut self,
         initial_diffculty: u32,
@@ -32,4 +33,5 @@ pub trait Asic {
     fn send_baudrate(&mut self, baudrate: u32) -> Vec<CmdDelay, 3>;
     fn send_reset_core(&mut self, dest: Destination) -> Vec<CmdDelay, 6>;
     fn send_hash_freq(&mut self, target_freq: HertzU64) -> Vec<CmdDelay, 80>;
+    fn send_version_rolling(&mut self, mask: u32) -> Vec<CmdDelay, 2>;
 }

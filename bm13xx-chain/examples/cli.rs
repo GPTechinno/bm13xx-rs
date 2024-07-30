@@ -56,8 +56,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // println!("Enumerated {} asics", chain.asic_cnt);
     // println!("Interval: {}", chain.asic_addr_interval);
     chain.reset_core().await?;
-    // chain.ramp_hash_freq().await?;
     chain.set_hash_freq(HertzU64::MHz(525)).await?;
+    chain.set_version_rolling(0x1fff_e000).await?;
     Ok(())
 }
 

@@ -9,6 +9,7 @@ impl VersionRolling {
     pub const ADDR: u8 = 0xA4;
 
     const EN_OFFSET: u8 = 31;
+    const EN2_OFFSET: u8 = 28;
     const MASK_OFFSET: u8 = 0;
 
     const EN_MASK: u32 = 0x1;
@@ -29,14 +30,17 @@ impl VersionRolling {
     /// assert!(!vers_roll.disable().enabled());
     /// ```
     pub const fn enabled(&self) -> bool {
-        (self.0 >> Self::EN_OFFSET) & Self::EN_MASK == Self::EN_MASK
+        ((self.0 >> Self::EN_OFFSET) & Self::EN_MASK == Self::EN_MASK)
+            && ((self.0 >> Self::EN2_OFFSET) & Self::EN_MASK == Self::EN_MASK)
     }
     pub fn enable(&mut self) -> &mut Self {
         self.0 |= Self::EN_MASK << Self::EN_OFFSET;
+        self.0 |= Self::EN_MASK << Self::EN2_OFFSET;
         self
     }
     pub fn disable(&mut self) -> &mut Self {
         self.0 &= !(Self::EN_MASK << Self::EN_OFFSET);
+        self.0 &= !(Self::EN_MASK << Self::EN2_OFFSET);
         self
     }
 
