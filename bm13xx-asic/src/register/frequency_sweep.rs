@@ -19,7 +19,7 @@ impl core::fmt::Display for FrequencySweepControl1 {
     }
 }
 
-#[cfg(feature = "defmt")]
+#[cfg(feature = "defmt-03")]
 impl defmt::Format for FrequencySweepControl1 {
     fn format(&self, fmt: defmt::Formatter) {
         defmt::write!(fmt, "FrequencySweepControl1 {{  }}",);
@@ -45,7 +45,7 @@ impl core::fmt::Display for GoldenNonceForSweepReturn {
     }
 }
 
-#[cfg(feature = "defmt")]
+#[cfg(feature = "defmt-03")]
 impl defmt::Format for GoldenNonceForSweepReturn {
     fn format(&self, fmt: defmt::Formatter) {
         defmt::write!(fmt, "GoldenNonceForSweepReturn {{  }}",);

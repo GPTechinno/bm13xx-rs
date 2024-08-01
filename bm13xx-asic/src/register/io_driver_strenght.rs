@@ -7,7 +7,7 @@ use crate::register::Register;
 /// [`IoDriverStrenghtConfiguration::strenght`]: crate::register::IoDriverStrenghtConfiguration::strenght
 // [`IoDriverStrenghtConfiguration::set_strenght`]: crate::register::IoDriverStrenghtConfiguration::set_strenght
 #[derive(Copy, Clone, Eq, PartialEq, Debug, PartialOrd, Ord, Hash)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 pub enum DriverSelect {
     RF,
     R0,
@@ -24,7 +24,7 @@ pub enum DriverSelect {
 /// [`IoDriverStrenghtConfiguration::strenght`]: crate::register::IoDriverStrenghtConfiguration::strenght
 // [`IoDriverStrenghtConfiguration::set_strenght`]: crate::register::IoDriverStrenghtConfiguration::set_strenght
 #[derive(Copy, Clone, Eq, PartialEq, Debug, PartialOrd, Ord, Hash)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 pub enum DriverRSelect {
     D0R,
     D1R,
@@ -202,7 +202,7 @@ impl core::fmt::Display for IoDriverStrenghtConfiguration {
     }
 }
 
-#[cfg(feature = "defmt")]
+#[cfg(feature = "defmt-03")]
 impl defmt::Format for IoDriverStrenghtConfiguration {
     fn format(&self, fmt: defmt::Formatter) {
         defmt::write!(

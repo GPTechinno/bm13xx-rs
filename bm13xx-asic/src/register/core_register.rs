@@ -60,7 +60,7 @@ impl core::fmt::Display for CoreRegisterControl {
     }
 }
 
-#[cfg(feature = "defmt")]
+#[cfg(feature = "defmt-03")]
 impl defmt::Format for CoreRegisterControl {
     fn format(&self, fmt: defmt::Formatter) {
         defmt::write!(fmt, "CoreRegisterControl {{  }}",);
@@ -138,7 +138,7 @@ impl core::fmt::Display for CoreRegisterValue {
     }
 }
 
-#[cfg(feature = "defmt")]
+#[cfg(feature = "defmt-03")]
 impl defmt::Format for CoreRegisterValue {
     fn format(&self, fmt: defmt::Formatter) {
         defmt::write!(fmt, "CoreRegisterValue {{  }}",);

@@ -21,7 +21,7 @@ impl core::fmt::Display for ChipNonceOffset {
     }
 }
 
-#[cfg(feature = "defmt")]
+#[cfg(feature = "defmt-03")]
 impl defmt::Format for ChipNonceOffset {
     fn format(&self, fmt: defmt::Formatter) {
         defmt::write!(fmt, "ChipNonceOffset {{  }}",);
@@ -49,7 +49,7 @@ impl core::fmt::Display for ChipNonceOffsetV2 {
     }
 }
 
-#[cfg(feature = "defmt")]
+#[cfg(feature = "defmt-03")]
 impl defmt::Format for ChipNonceOffsetV2 {
     fn format(&self, fmt: defmt::Formatter) {
         defmt::write!(fmt, "ChipNonceOffsetV2 {{  }}",);

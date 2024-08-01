@@ -55,7 +55,7 @@ impl core::fmt::Display for dyn PLLDividerRegister {
     }
 }
 
-#[cfg(feature = "defmt")]
+#[cfg(feature = "defmt-03")]
 impl defmt::Format for dyn PLLDividerRegister {
     fn format(&self, fmt: defmt::Formatter) {
         defmt::write!(fmt, "PLLDivider {{  }}",);

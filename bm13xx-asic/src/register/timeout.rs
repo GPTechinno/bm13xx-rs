@@ -19,7 +19,7 @@ impl core::fmt::Display for TimeOut {
     }
 }
 
-#[cfg(feature = "defmt")]
+#[cfg(feature = "defmt-03")]
 impl defmt::Format for TimeOut {
     fn format(&self, fmt: defmt::Formatter) {
         defmt::write!(fmt, "TimeOut {{  }}",);

@@ -161,7 +161,7 @@ impl ::core::fmt::Display for ClockDelayCtrl {
     }
 }
 
-#[cfg(feature = "defmt")]
+#[cfg(feature = "defmt-03")]
 impl defmt::Format for ClockDelayCtrl {
     fn format(&self, fmt: defmt::Formatter) {
         defmt::write!(
@@ -280,7 +280,7 @@ impl ::core::fmt::Display for ClockDelayCtrlV2 {
     }
 }
 
-#[cfg(feature = "defmt")]
+#[cfg(feature = "defmt-03")]
 impl defmt::Format for ClockDelayCtrlV2 {
     fn format(&self, fmt: defmt::Formatter) {
         defmt::write!(

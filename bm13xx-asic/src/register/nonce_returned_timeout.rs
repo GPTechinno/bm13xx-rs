@@ -19,7 +19,7 @@ impl core::fmt::Display for NonceReturnedTimeout {
     }
 }
 
-#[cfg(feature = "defmt")]
+#[cfg(feature = "defmt-03")]
 impl defmt::Format for NonceReturnedTimeout {
     fn format(&self, fmt: defmt::Formatter) {
         defmt::write!(fmt, "NonceReturnedTimeout {{  }}",);

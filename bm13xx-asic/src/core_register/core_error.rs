@@ -55,7 +55,7 @@ impl ::core::fmt::Display for CoreError {
     }
 }
 
-#[cfg(feature = "defmt")]
+#[cfg(feature = "defmt-03")]
 impl defmt::Format for CoreError {
     fn format(&self, fmt: defmt::Formatter) {
         defmt::write!(

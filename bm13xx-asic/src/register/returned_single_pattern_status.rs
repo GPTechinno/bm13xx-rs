@@ -19,7 +19,7 @@ impl core::fmt::Display for ReturnedSinglePatternStatus {
     }
 }
 
-#[cfg(feature = "defmt")]
+#[cfg(feature = "defmt-03")]
 impl defmt::Format for ReturnedSinglePatternStatus {
     fn format(&self, fmt: defmt::Formatter) {
         defmt::write!(fmt, "ReturnedSinglePatternStatus {{  }}",);

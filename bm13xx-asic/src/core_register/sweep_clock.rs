@@ -21,7 +21,7 @@ impl ::core::fmt::Display for SweepClockCtrl {
     }
 }
 
-#[cfg(feature = "defmt")]
+#[cfg(feature = "defmt-03")]
 impl defmt::Format for SweepClockCtrl {
     fn format(&self, fmt: defmt::Formatter) {
         defmt::write!(fmt, "SweepClockCtrl {{ }}",);

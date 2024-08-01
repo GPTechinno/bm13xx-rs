@@ -67,7 +67,7 @@ impl ::core::fmt::Display for HashClockCtrl {
     }
 }
 
-#[cfg(feature = "defmt")]
+#[cfg(feature = "defmt-03")]
 impl defmt::Format for HashClockCtrl {
     fn format(&self, fmt: defmt::Formatter) {
         defmt::write!(
@@ -98,7 +98,7 @@ impl ::core::fmt::Display for HashClockCounter {
     }
 }
 
-#[cfg(feature = "defmt")]
+#[cfg(feature = "defmt-03")]
 impl defmt::Format for HashClockCounter {
     fn format(&self, fmt: defmt::Formatter) {
         defmt::write!(fmt, "HashClockCounter {{ }}",);

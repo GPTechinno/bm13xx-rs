@@ -123,7 +123,7 @@ impl core::fmt::Display for RegA8 {
     }
 }
 
-#[cfg(feature = "defmt")]
+#[cfg(feature = "defmt-03")]
 impl defmt::Format for RegA8 {
     fn format(&self, fmt: defmt::Formatter) {
         defmt::write!(fmt, "RegA8 {{  }}",);

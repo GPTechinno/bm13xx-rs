@@ -6,10 +6,10 @@ edition = "2021"
 [dependencies]
 bm13xx-protocol = { path = "../bm13xx-protocol" }
 
-defmt = { version = "0.3", optional = true }
-derive_more = { version = "1.0.0-beta", default-features = false, features = ["from"] }
-fugit = "0.3"
-heapless = "0.8"
+defmt = { workspace = true, optional = true }
+derive_more = { workspace = true, features = ["from"] }
+fugit = { workspace = true }
+heapless = { workspace = true }
 
 [features]
-defmt = ["dep:defmt", "fugit/defmt", "heapless/defmt-03"]
+defmt-03 = ["dep:defmt", "fugit/defmt", "heapless/defmt-03"]

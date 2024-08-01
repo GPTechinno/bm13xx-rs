@@ -21,7 +21,7 @@ impl core::fmt::Display for HashRate {
     }
 }
 
-#[cfg(feature = "defmt")]
+#[cfg(feature = "defmt-03")]
 impl defmt::Format for HashRate {
     fn format(&self, fmt: defmt::Formatter) {
         defmt::write!(fmt, "HashRate {{  }}",);

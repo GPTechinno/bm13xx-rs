@@ -25,7 +25,7 @@ impl core::fmt::Display for ReturnedGroupPatternStatus {
     }
 }
 
-#[cfg(feature = "defmt")]
+#[cfg(feature = "defmt-03")]
 impl defmt::Format for ReturnedGroupPatternStatus {
     fn format(&self, fmt: defmt::Formatter) {
         defmt::write!(fmt, "ReturnedGroupPatternStatus {{  }}",);

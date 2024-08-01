@@ -9,4 +9,10 @@ members = [
 ]
 
 [workspace.dependencies]
+crc = "3.2"
+defmt = { version = "0.3" }
+derive_more = { version = "1.0.0-beta", default-features = false }
+embedded-hal-async = "1.0"
+embedded-io-async = "0.6"
 fugit = "0.3"
+heapless = "0.8"

@@ -61,7 +61,7 @@ impl core::fmt::Display for FastUARTConfiguration {
     }
 }
 
-#[cfg(feature = "defmt")]
+#[cfg(feature = "defmt-03")]
 impl defmt::Format for FastUARTConfiguration {
     fn format(&self, fmt: defmt::Formatter) {
         defmt::write!(
@@ -78,7 +78,7 @@ impl defmt::Format for FastUARTConfiguration {
 ///
 /// [`FastUARTConfigurationV2::bclk_sel`]: crate::register::FastUARTConfigurationV2::bclk_sel
 #[derive(Copy, Clone, Eq, PartialEq, Debug, PartialOrd, Ord, Hash, Default)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[repr(u8)]
 pub enum BaudrateClockSelectV2 {
     /// Baudrate base clock is CLKI (external clock).
@@ -223,7 +223,7 @@ impl core::fmt::Display for FastUARTConfigurationV2 {
     }
 }
 
-#[cfg(feature = "defmt")]
+#[cfg(feature = "defmt-03")]
 impl defmt::Format for FastUARTConfigurationV2 {
     fn format(&self, fmt: defmt::Formatter) {
         defmt::write!(

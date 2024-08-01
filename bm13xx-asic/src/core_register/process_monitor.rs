@@ -7,7 +7,7 @@ use crate::core_register::CoreRegister;
 /// [`ProcessMonitorCtrl::pm_sel`]: crate::core_register::ProcessMonitorCtrl::pm_sel
 /// [`ProcessMonitorCtrl::start`]: crate::core_register::ProcessMonitorCtrl::start
 #[derive(Copy, Clone, Eq, PartialEq, Debug, PartialOrd, Ord, Hash)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[repr(u8)]
 pub enum ProcessMonitorSelect {
     /// Process Monitor on LVT delay chain.
@@ -120,7 +120,7 @@ impl ::core::fmt::Display for ProcessMonitorCtrl {
     }
 }
 
-#[cfg(feature = "defmt")]
+#[cfg(feature = "defmt-03")]
 impl defmt::Format for ProcessMonitorCtrl {
     fn format(&self, fmt: defmt::Formatter) {
         defmt::write!(
@@ -168,7 +168,7 @@ impl ::core::fmt::Display for ProcessMonitorData {
     }
 }
 
-#[cfg(feature = "defmt")]
+#[cfg(feature = "defmt-03")]
 impl defmt::Format for ProcessMonitorData {
     fn format(&self, fmt: defmt::Formatter) {
         defmt::write!(fmt, "ProcessMonitorData {{ data: {} }}", self.data());

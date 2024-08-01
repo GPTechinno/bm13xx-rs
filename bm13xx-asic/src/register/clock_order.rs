@@ -23,7 +23,7 @@ impl core::fmt::Display for OrderedClockMonitor {
     }
 }
 
-#[cfg(feature = "defmt")]
+#[cfg(feature = "defmt-03")]
 impl defmt::Format for OrderedClockMonitor {
     fn format(&self, fmt: defmt::Formatter) {
         defmt::write!(fmt, "OrderedClockMonitor {{  }}",);
@@ -40,7 +40,7 @@ impl defmt::Format for OrderedClockMonitor {
 /// [`ClockOrderControl1::clock`]: crate::register::ClockOrderControl1::clock
 // [`ClockOrderControl1::set_clock`]: crate::register::ClockOrderControl1::set_clock
 #[derive(Copy, Clone, Eq, PartialEq, Debug, PartialOrd, Ord, Hash)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 pub enum ClockSelect {
     CLK0,
     CLK1,
@@ -149,7 +149,7 @@ impl core::fmt::Display for ClockOrderControl0 {
     }
 }
 
-#[cfg(feature = "defmt")]
+#[cfg(feature = "defmt-03")]
 impl defmt::Format for ClockOrderControl0 {
     fn format(&self, fmt: defmt::Formatter) {
         defmt::write!(
@@ -256,7 +256,7 @@ impl core::fmt::Display for ClockOrderControl1 {
     }
 }
 
-#[cfg(feature = "defmt")]
+#[cfg(feature = "defmt-03")]
 impl defmt::Format for ClockOrderControl1 {
     fn format(&self, fmt: defmt::Formatter) {
         defmt::write!(
@@ -293,7 +293,7 @@ impl core::fmt::Display for ClockOrderStatus {
     }
 }
 
-#[cfg(feature = "defmt")]
+#[cfg(feature = "defmt-03")]
 impl defmt::Format for ClockOrderStatus {
     fn format(&self, fmt: defmt::Formatter) {
         defmt::write!(fmt, "ClockOrderStatus {{  }}",);
@@ -371,7 +371,7 @@ impl core::fmt::Display for OrderedClockEnable {
     }
 }
 
-#[cfg(feature = "defmt")]
+#[cfg(feature = "defmt-03")]
 impl defmt::Format for OrderedClockEnable {
     fn format(&self, fmt: defmt::Formatter) {
         defmt::write!(

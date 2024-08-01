@@ -7,5 +7,5 @@ edition = "2021"
 "bm13xx-asic" = { path = "../bm13xx-asic" }
 "bm13xx-protocol" = { path = "../bm13xx-protocol" }
 
-fugit = "0.3"
-heapless = "0.8"
+fugit = { workspace = true }
+heapless = { workspace = true }

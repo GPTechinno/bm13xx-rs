@@ -45,7 +45,7 @@ impl core::fmt::Display for AnalogMuxControl {
     }
 }
 
-#[cfg(feature = "defmt")]
+#[cfg(feature = "defmt-03")]
 impl defmt::Format for AnalogMuxControl {
     fn format(&self, fmt: defmt::Formatter) {
         defmt::write!(
@@ -101,7 +101,7 @@ impl core::fmt::Display for AnalogMuxControlV2 {
     }
 }
 
-#[cfg(feature = "defmt")]
+#[cfg(feature = "defmt-03")]
 impl defmt::Format for AnalogMuxControlV2 {
     fn format(&self, fmt: defmt::Formatter) {
         defmt::write!(

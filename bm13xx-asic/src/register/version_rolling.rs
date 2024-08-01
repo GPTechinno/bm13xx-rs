@@ -73,7 +73,7 @@ impl core::fmt::Display for VersionRolling {
     }
 }
 
-#[cfg(feature = "defmt")]
+#[cfg(feature = "defmt-03")]
 impl defmt::Format for VersionRolling {
     fn format(&self, fmt: defmt::Formatter) {
         defmt::write!(fmt, "VersionRolling {{  }}",);
