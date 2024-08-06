@@ -4,6 +4,7 @@ use crate::crc::{crc5, crc5_bits};
 use crate::{Error, Result};
 
 #[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 pub struct RegisterResponse {
     pub chip_addr: u8,
     pub reg_addr: u8,
@@ -11,6 +12,7 @@ pub struct RegisterResponse {
 }
 
 #[derive(Debug)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 pub struct JobResponse {
     pub nonce: u32,
     pub job_id: u8,
@@ -18,6 +20,7 @@ pub struct JobResponse {
 }
 
 #[derive(Debug)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 pub struct JobVersionResponse {
     pub nonce: u32,
     pub job_id: u8,
@@ -26,12 +29,15 @@ pub struct JobVersionResponse {
 }
 
 #[derive(Debug)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 pub enum ResponseType {
     Reg(RegisterResponse),
     Job(JobResponse),
     JobVer(JobVersionResponse),
 }
 
+#[derive(Debug)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 pub struct Response;
 
 impl Response {
