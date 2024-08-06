@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use bm1366::BM1366;
 use bm13xx_chain::Chain;
 

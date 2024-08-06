@@ -16,7 +16,6 @@ fugit = { workspace = true }
 log = { workspace = true, optional = true }
 
 [features]
-default = []
 defmt-03 = [
     "dep:defmt",
     "bm13xx-asic/defmt-03",
