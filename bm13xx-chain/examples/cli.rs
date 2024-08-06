@@ -3,14 +3,10 @@ use bm13xx_chain::Chain;
 
 use embedded_hal_async::delay::DelayNs;
 use fugit::HertzU64;
-use tokio_1::FromTokio;
-// use embedded_io_adapters::std::FromStd;
 use inquire::Select;
-// use serialport::ClearBuffer;
-use std::env;
-use std::error::Error;
-use std::time::Duration;
+use std::{env, error::Error, time::Duration};
 use tokio::time::sleep;
+use tokio_adapter::FromTokio;
 use tokio_serial::SerialStream;
 
 struct Delay;
@@ -23,6 +19,8 @@ impl DelayNs for Delay {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+    env_logger::init();
+
     let mut args: Vec<String> = env::args().collect();
 
     // use the first arg as serial port, query interactively if not given
@@ -30,7 +28,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
         args.pop().unwrap()
     } else {
         let ports = tokio_serial::available_ports()?;
-        // let ports = serialport::available_ports()?;
         let ports: Vec<String> = ports.into_iter().map(|p| p.port_name).collect();
         Select::new("Which serial port should be used?", ports).prompt()?
     };
@@ -38,11 +35,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let builder = tokio_serial::new(port, 115_200).timeout(Duration::from_millis(50));
     let serial = SerialStream::open(&builder)?;
     let adapter = FromTokio::new(serial);
-
-    // let serial = serialport::new(port, 115_200)
-    //     .timeout(Duration::from_millis(50))
-    //     .open()?;
-    // let adapter = FromStd::new(serial);
 
     let bm1366 = BM1366::default();
 
@@ -61,7 +53,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-mod tokio_1 {
+mod tokio_adapter {
     //! Adapters to/from `tokio::io` traits.
 
     use core::future::poll_fn;

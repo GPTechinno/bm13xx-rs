@@ -1,7 +1,8 @@
 [package]
+categories = ["embedded", "no-std"]
+edition = "2021"
 name = "bm13xx-asic"
 version = "0.1.0"
-edition = "2021"
 
 [dependencies]
 bm13xx-protocol = { path = "../bm13xx-protocol" }
@@ -10,6 +11,8 @@ defmt = { workspace = true, optional = true }
 derive_more = { workspace = true, features = ["from"] }
 fugit = { workspace = true }
 heapless = { workspace = true }
+log = { workspace = true, optional = true }
 
 [features]
-defmt-03 = ["dep:defmt", "fugit/defmt", "heapless/defmt-03"]
+default = []
+defmt-03 = ["dep:defmt", "bm13xx-protocol/defmt-03", "fugit/defmt", "heapless/defmt-03"]

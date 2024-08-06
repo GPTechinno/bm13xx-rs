@@ -1,14 +1,22 @@
 [package]
+categories = ["embedded", "no-std"]
+edition = "2021"
 name = "bm13xx-protocol"
 version = "0.1.0"
-edition = "2021"
 
 [dependencies]
 crc = { workspace = true }
+defmt = { workspace = true, optional = true }
 derive_more = { workspace = true, features = ["from"] }
 heapless = { workspace = true }
+log = { workspace = true, optional = true }
+
+[features]
+default = []
+defmt-03 = ["dep:defmt", "heapless/defmt-03"]
 
 [dev-dependencies]
+env_logger = "0.11"
 serialport = { version="4.4", default-features = false}
 
 [[example]]

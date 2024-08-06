@@ -8,6 +8,7 @@ const PLL_VCO_FREQ_HIGH: HertzU64 = HertzU64::MHz(2400);
 const PLL_VCO_FREQ_MIN: HertzU64 = HertzU64::MHz(2000);
 
 #[derive(Debug, Clone, Copy, Default)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 pub struct Pll {
     enabled: bool,
     locked: bool,

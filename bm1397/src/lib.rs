@@ -1,5 +1,8 @@
-#![no_std]
 //! BM1397 ASIC implementation.
+
+#![no_std]
+#![macro_use]
+pub(crate) mod fmt;
 
 use bm13xx_asic::{core_register::*, register::*, Asic, CmdDelay};
 use bm13xx_protocol::command::{Command, Destination};

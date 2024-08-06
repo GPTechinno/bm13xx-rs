@@ -1,5 +1,8 @@
-#![no_std]
 //! BM13xx ASIC representation.
+
+#![no_std]
+#![macro_use]
+pub(crate) mod fmt;
 
 pub mod core_register;
 mod error;
@@ -15,6 +18,7 @@ use fugit::HertzU64;
 use heapless::Vec;
 
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 pub struct CmdDelay {
     pub cmd: [u8; 11],
     pub delay_ms: u32,

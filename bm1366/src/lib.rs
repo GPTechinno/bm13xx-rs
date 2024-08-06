@@ -1,5 +1,8 @@
-#![no_std]
 //! BM1366 ASIC implementation.
+
+#![no_std]
+#![macro_use]
+pub(crate) mod fmt;
 
 use bm13xx_asic::{core_register::*, register::*, Asic, CmdDelay};
 use bm13xx_protocol::command::{Command, Destination};
@@ -29,6 +32,7 @@ const CHIP_ADDR_MASK: u32 = 0b1111_1111;
 
 /// # BM1366
 #[derive(Debug)]
+// #[cfg_attr(feature = "defmt-03", derive(defmt::Format))] // FnvIndexMap doesn't implement defmt
 pub struct BM1366 {
     pub sha: bm13xx_asic::sha::Sha<
         BM1366_CORE_CNT,

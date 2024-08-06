@@ -70,10 +70,8 @@
 //! ```
 
 #![no_std]
-#![allow(stable_features)] // remove this once rust 1.81 is stable
-#![feature(error_in_core)]
-// #![warn(clippy::pedantic)]
-// #![warn(clippy::cargo)]
+#![macro_use]
+pub(crate) mod fmt;
 
 mod error;
 
@@ -93,6 +91,8 @@ pub trait Baud {
     fn set_baudrate(&mut self, baudrate: u32);
 }
 
+#[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 pub struct Chain<A, P, D> {
     pub asic_cnt: u8,
     asic: A,

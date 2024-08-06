@@ -7,6 +7,8 @@ use bm13xx_protocol::command::{Command, Destination};
 use bm13xx_protocol::response::{Response, ResponseType};
 
 fn main() {
+    env_logger::init();
+
     // let ports = serialport::available_ports().expect("No ports found!");
     // for p in ports {
     //     println!("{}", p.port_name);

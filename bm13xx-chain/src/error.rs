@@ -5,6 +5,7 @@ use derive_more::From;
 pub type Result<T, E> = core::result::Result<T, Error<E>>;
 
 #[derive(PartialEq, From)]
+// #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 pub enum Error<E> {
     /// We received a response from ASIC which does not correspond to the command sent
     UnexpectedResponse { resp: [u8; 9] },
@@ -26,8 +27,10 @@ pub enum Error<E> {
     SetBaudrate,
 }
 
+impl<E: core::fmt::Debug> core::error::Error for Error<E> {}
+
 impl<E: core::fmt::Debug> core::fmt::Display for Error<E> {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::result::Result<(), core::fmt::Error> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{self:?}")
     }
 }
@@ -61,5 +64,3 @@ impl<E: core::fmt::Debug> core::fmt::Debug for Error<E> {
         }
     }
 }
-
-impl<E: core::fmt::Debug> core::error::Error for Error<E> {}
