@@ -1,8 +1,8 @@
 [workspace]
 resolver = "2"
 members = [
-  "bm1397",
   "bm1366",
+  "bm1397",
   "bm13xx-asic",
   "bm13xx-chain",
   "bm13xx-protocol",
@@ -11,7 +11,7 @@ members = [
 [workspace.dependencies]
 crc = "3.2"
 defmt = { version = "0.3" }
-derive_more = { version = "1.0.0-beta", default-features = false }
+derive_more = { version = "1.0", default-features = false }
 embedded-hal-async = "1.0"
 embedded-io-async = "0.6"
 fugit = "0.3"
