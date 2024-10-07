@@ -2,6 +2,7 @@
 categories = ["embedded", "no-std"]
 edition = "2021"
 name = "bm13xx-chain"
+rust-version = "1.75.0"
 version = "0.1.0"
 
 [dependencies]
@@ -16,13 +17,17 @@ fugit = { workspace = true }
 log = { workspace = true, optional = true }
 
 [features]
+core-error = [ # bump MSRV to 1.81.0
+    "bm13xx-asic/core-error",
+    "bm13xx-protocol/core-error",
+]
 defmt-03 = [
     "dep:defmt",
     "bm13xx-asic/defmt-03",
     "bm13xx-protocol/defmt-03",
     "embedded-hal-async/defmt-03",
     "embedded-io-async/defmt-03",
-    "fugit/defmt"
+    "fugit/defmt",
 ]
 
 [dev-dependencies]
