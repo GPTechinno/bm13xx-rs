@@ -24,3 +24,4 @@ defmt-03 = [
     "fugit/defmt",
     "heapless/defmt-03",
 ]
+log = ["dep:log"]

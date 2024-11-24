@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
   "bm1366",
+  "bm1370",
   "bm1397",
   "bm13xx-asic",
   "bm13xx-chain",

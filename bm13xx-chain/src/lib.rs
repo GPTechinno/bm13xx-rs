@@ -131,23 +131,38 @@ impl<A: Asic, P: Read + Write + Baud, D: DelayNs> Chain<A, P, D> {
         self.port.write_all(&cmd).await.map_err(Error::Io)?;
 
         let mut asic_cnt = 0;
-        // loop { // TODO: fix the Timeout based loop
-        let mut resp = [0u8; 9];
-        self.port.read(&mut resp).await.map_err(Error::Io)?;
-        if let ResponseType::Reg(reg_resp) = Response::parse(&resp)? {
-            if reg_resp.chip_addr != 0 || reg_resp.reg_addr != ChipIdentification::ADDR {
-                return Err(Error::BadRegisterResponse { reg_resp });
+
+        loop {
+            debug!("Enumerating asic: {}", asic_cnt);
+            // FIXME: This is a workaround for the Timeout based loop
+            if asic_cnt == self.asic_cnt {
+                break;
             }
-            let chip_ident = ChipIdentification(reg_resp.reg_value);
-            if chip_ident.chip_id() == self.asic.chip_id() {
-                asic_cnt += 1;
+            // TODO: fix the Timeout based loop
+            let mut resp = [0u8; 9];
+            match self.port.read(&mut resp).await {
+                Ok(_) => {}
+                Err(e) => {
+                    error!("Error reading response: {:?}", e);
+                    continue;
+                }
+            }
+            // self.port.read(&mut resp).await.map_err(Error::Io)?;
+            if let ResponseType::Reg(reg_resp) = Response::parse(&resp)? {
+                if reg_resp.chip_addr != 0 || reg_resp.reg_addr != ChipIdentification::ADDR {
+                    warn!("reg_resp: {:#?}, {}", reg_resp, ChipIdentification::ADDR);
+                    return Err(Error::BadRegisterResponse { reg_resp });
+                }
+                let chip_ident = ChipIdentification(reg_resp.reg_value);
+                if chip_ident.chip_id() == self.asic.chip_id() {
+                    asic_cnt += 1;
+                } else {
+                    return Err(Error::UnexpectedAsic { chip_ident });
+                }
             } else {
-                return Err(Error::UnexpectedAsic { chip_ident });
-            }
-        } else {
-            return Err(Error::UnexpectedResponse { resp });
-        };
-        // }
+                return Err(Error::UnexpectedResponse { resp });
+            };
+        }
         if asic_cnt > 0 {
             self.asic_addr_interval = 256 / (asic_cnt as u16);
         }
@@ -180,6 +195,16 @@ impl<A: Asic, P: Read + Write + Baud, D: DelayNs> Chain<A, P, D> {
             self.delay.delay_ms(step.delay_ms).await;
         }
         Ok(())
+    }
+
+    pub async fn send_job(&mut self, job: &[u8]) -> Result<u8, P::Error> {
+        self.port.write_all(job).await.map_err(Error::Io)?;
+        Ok(job.len() as u8)
+    }
+
+    pub async fn read_job(&mut self, job: &mut [u8]) -> Result<u8, P::Error> {
+        self.port.read_exact(job).await.map_err(Error::Io).unwrap();
+        Ok(job.len() as u8)
     }
 
     pub async fn init(&mut self, initial_diffculty: u32) -> Result<(), P::Error> {

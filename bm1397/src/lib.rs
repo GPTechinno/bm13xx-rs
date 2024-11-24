@@ -440,7 +440,7 @@ impl Asic for BM1397 {
         _chain_domain_cnt: u8,
         _domain_asic_cnt: u8,
         _asic_addr_interval: u16,
-    ) -> Vec<CmdDelay, 14> {
+    ) -> Vec<CmdDelay, 28> {
         let mut init_seq = Vec::new();
         let clk_ord_ctrl0 =
             ClockOrderControl0(*self.registers.get(&ClockOrderControl0::ADDR).unwrap())

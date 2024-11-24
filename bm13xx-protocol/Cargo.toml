@@ -15,6 +15,7 @@ log = { workspace = true, optional = true }
 [features]
 core-error = []                               # bump MSRV to 1.81.0
 defmt-03 = ["dep:defmt", "heapless/defmt-03"]
+log = ["dep:log"]
 
 [dev-dependencies]
 env_logger = "0.11"

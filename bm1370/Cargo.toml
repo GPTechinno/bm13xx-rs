@@ -1,7 +1,7 @@
 [package]
 categories = ["embedded", "no-std"]
 edition = "2021"
-name = "bm1366"
+name = "bm1370"
 rust-version = "1.75.0"
 version = "0.1.0"
 
@@ -26,5 +26,4 @@ defmt-03 = [
     "fugit/defmt",
     "heapless/defmt-03",
 ]
-
-log = ["dep:log"]
+    log = ["dep:log"]
