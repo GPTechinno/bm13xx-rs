@@ -22,36 +22,36 @@ impl DelayNs for Delay {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     env_logger::init();
-
-    let mut args: Vec<String> = env::args().collect();
-
-    // use the first arg as serial port, query interactively if not given
-    let port = if args.len() == 2 {
-        args.pop().unwrap()
-    } else {
-        let ports = tokio_serial::available_ports()?;
-        let ports: Vec<String> = ports.into_iter().map(|p| p.port_name).collect();
-        Select::new("Which serial port should be used?", ports).prompt()?
-    };
-
-    let builder = tokio_serial::new(port, 115_200).timeout(Duration::from_millis(50));
-    let serial = SerialStream::open(&builder)?;
-    let adapter = FromTokio::new(serial);
-
-    let bm1366 = BM1366::default();
-
-    let mut chain = Chain::new(1, bm1366, 1, adapter, Delay);
-    chain.enumerate().await?;
-    println!("Enumerated {} asics", chain.asic_cnt);
-    println!("Interval: {}", chain.asic_addr_interval);
-    chain.init(256).await?;
-    chain.set_baudrate(1_000_000).await?;
-    // chain.enumerate().await?; // just to be sure the new baudrate is well setup
+    //
+    // let mut args: Vec<String> = env::args().collect();
+    //
+    // // use the first arg as serial port, query interactively if not given
+    // let port = if args.len() == 2 {
+    //     args.pop().unwrap()
+    // } else {
+    //     let ports = tokio_serial::available_ports()?;
+    //     let ports: Vec<String> = ports.into_iter().map(|p| p.port_name).collect();
+    //     Select::new("Which serial port should be used?", ports).prompt()?
+    // };
+    //
+    // let builder = tokio_serial::new(port, 115_200).timeout(Duration::from_millis(50));
+    // let serial = SerialStream::open(&builder)?;
+    // let adapter = FromTokio::new(serial);
+    //
+    // let bm1366 = BM1366::default();
+    //
+    // let mut chain = Chain::new(1, bm1366, 1, adapter, Delay);
+    // chain.enumerate().await?;
     // println!("Enumerated {} asics", chain.asic_cnt);
     // println!("Interval: {}", chain.asic_addr_interval);
-    chain.reset_core().await?;
-    chain.set_hash_freq(HertzU64::MHz(525)).await?;
-    chain.set_version_rolling(0x1fff_e000).await?;
+    // chain.init(256).await?;
+    // chain.set_baudrate(1_000_000).await?;
+    // // chain.enumerate().await?; // just to be sure the new baudrate is well setup
+    // // println!("Enumerated {} asics", chain.asic_cnt);
+    // // println!("Interval: {}", chain.asic_addr_interval);
+    // chain.reset_core().await?;
+    // chain.set_hash_freq(HertzU64::MHz(525)).await?;
+    // chain.set_version_rolling(0x1fff_e000).await?;
     Ok(())
 }
 

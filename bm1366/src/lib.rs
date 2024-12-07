@@ -527,7 +527,7 @@ impl Asic for BM1366 {
         chain_domain_cnt: u8,
         domain_asic_cnt: u8,
         asic_addr_interval: u16,
-    ) -> Vec<CmdDelay, 28> {
+    ) -> Vec<CmdDelay, 2048> {
         let mut init_seq = Vec::new();
         let hash_clk_ctrl = HashClockCtrl(*self.core_registers.get(&HashClockCtrl::ID).unwrap())
             .enable()
@@ -802,7 +802,7 @@ impl Asic for BM1366 {
     /// assert_eq!(reset_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x41, 0x09, 0x00, 0x18, 0xf0, 0x00, 0xc1, 0x00, 0x0c]);
     /// assert_eq!(reset_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x41, 0x09, 0x00, 0xa8, 0x00, 0x07, 0x01, 0xf0, 0x15]);
     /// ```
-    fn send_reset_core(&mut self, dest: Destination) -> Vec<CmdDelay, 6> {
+    fn send_reset_core(&mut self, dest: Destination) -> Vec<CmdDelay, 800> {
         let mut reset_seq = Vec::new();
         if dest == Destination::All {
             let reg_a8 = RegA8(*self.registers.get(&RegA8::ADDR).unwrap())
@@ -950,7 +950,7 @@ impl Asic for BM1366 {
     /// assert_eq!(hash_freq_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x08, 0xc0, 0xb4, 0x02, 0x74, 29]);
     /// assert_eq!(bm1366.plls[BM1366_PLL_ID_HASH].parameter(), 0xc0a8_0263);
     /// ```
-    fn send_hash_freq(&mut self, target_freq: HertzU64) -> Vec<CmdDelay, 80> {
+    fn send_hash_freq(&mut self, target_freq: HertzU64) -> Vec<CmdDelay, 800> {
         let mut hash_freq_seq = Vec::new();
         if self.plls[BM1366_PLL_ID_HASH].out_div(BM1366_PLL_OUT_HASH) != 0 {
             self.plls[BM1366_PLL_ID_HASH].set_out_div(BM1366_PLL_OUT_HASH, 0);
@@ -1042,5 +1042,8 @@ impl Asic for BM1366 {
             .unwrap();
         self.enable_version_rolling(mask);
         vers_roll_seq
+    }
+    fn between_reset_and_set_freq(&mut self) -> Vec<CmdDelay, 40> {
+        unimplemented!() // FIXME: A temporary hack this function should be removed
     }
 }

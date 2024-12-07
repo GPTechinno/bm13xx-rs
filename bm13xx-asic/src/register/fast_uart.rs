@@ -86,15 +86,27 @@ pub enum BaudrateClockSelectV2 {
     Clki = 0,
     /// Baudrate base clock is PLL1.
     Pll1 = 1,
+    /// Baudrate base clock is PLL2.
+    Pll2 = 2,
+    /// Baudrate base clock is PLL3.
+    Pll3 = 3,
 }
 
-impl From<bool> for BaudrateClockSelectV2 {
-    fn from(val: bool) -> BaudrateClockSelectV2 {
-        if val {
-            BaudrateClockSelectV2::Pll1
-        } else {
-            BaudrateClockSelectV2::Clki
+impl From<u8> for BaudrateClockSelectV2 {
+    fn from(val: u8) -> BaudrateClockSelectV2 {
+        match val {
+            0 => BaudrateClockSelectV2::Clki,
+            1 => BaudrateClockSelectV2::Pll1,
+            2 => BaudrateClockSelectV2::Pll2,
+            3 => BaudrateClockSelectV2::Pll3,
+            _ => unreachable!(),
         }
+    }
+}
+
+impl From<u32> for BaudrateClockSelectV2 {
+    fn from(val: u32) -> BaudrateClockSelectV2 {
+        BaudrateClockSelectV2::from(val as u8)
     }
 }
 
@@ -127,6 +139,8 @@ impl FastUARTConfigurationV2 {
     const BCK_SEL_OFFSET: u8 = 26;
     // const ?_OFFSET: u8 = 24;
     const PLL1_DIV4_OFFSET: u8 = 20;
+    const PLL3_DIV4_OFFSET: u8 = 20; // TODO: Check if this is correct
+
     // const ?_OFFSET: u8 = 16;
     const BT8D_OFFSET: u8 = 8;
     // const CLKO_DIV_OFFSET: u8 = 0;
@@ -138,6 +152,8 @@ impl FastUARTConfigurationV2 {
     const BCK_SEL_MASK: u32 = 0b1; /* should be 0b11 but only 1 values are known for now */
     // const ?_MASK: u32 = 0b1;
     const PLL1_DIV4_MASK: u32 = 0b1111;
+    const PLL3_DIV4_MASK: u32 = 0b1111; // TODO: Check if this is correct
+
     // const ?_MASK: u32 = 0b1111;
     const BT8D_MASK: u32 = 0xff;
     // const CLKO_DIV_MASK: u32 = 0xff;
@@ -191,6 +207,18 @@ impl FastUARTConfigurationV2 {
         self
     }
 
+    // TODO: Add Docs with example
+    // TODO: Check if this is correct
+    pub const fn pll3_div4(&self) -> u8 {
+        ((self.0 >> Self::PLL3_DIV4_OFFSET) & Self::PLL3_DIV4_MASK) as u8
+    }
+    // TODO: Add Docs with example
+    // TODO: Check if this is correct
+    pub fn set_pll3_div4(&mut self, pll3_div4: u8) -> &mut Self {
+        self.0 &= !(Self::PLL3_DIV4_MASK << Self::PLL3_DIV4_OFFSET);
+        self.0 |= ((pll3_div4 as u32) & Self::PLL3_DIV4_MASK) << Self::PLL3_DIV4_OFFSET;
+        self
+    }
     /// ## Handle the BT8D field.
     ///
     /// This returns an `u8` with the BT8D value.
@@ -217,7 +245,7 @@ impl FastUARTConfigurationV2 {
 
 impl core::fmt::Display for FastUARTConfigurationV2 {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("FastUARTConfigurationV2")
+        f.debug_struct("FastUARTConfigurationV2") // TODO: For BM1370 we use `pll3` instead of `pll1`
             .field("pll1_div4", &self.pll1_div4())
             .finish()
     }
@@ -227,7 +255,7 @@ impl core::fmt::Display for FastUARTConfigurationV2 {
 impl defmt::Format for FastUARTConfigurationV2 {
     fn format(&self, fmt: defmt::Formatter) {
         defmt::write!(
-            fmt,
+            fmt, // TODO: For BM1370 we use `pll3` instead of `pll1`
             "FastUARTConfigurationV2 {{ pll1_div4: {} }}",
             self.pll1_div4(),
         );

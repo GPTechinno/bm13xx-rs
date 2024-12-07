@@ -172,6 +172,11 @@ impl<A: Asic, P: Read + Write + Baud, D: DelayNs> Chain<A, P, D> {
                 actual_asic_cnt: asic_cnt,
             });
         }
+        // TODO: S21 Pro has here:
+        // name	type	chip	register	value	value_raw	crc
+        // BM13xx protocol decoder	write_register	ALL	0xA8	0x00070000	0x00070000	0x03
+        // BM13xx protocol decoder	write_register	ALL	misc_control	0xF000C100	0xF000C100	0x04
+
         self.delay.delay_ms(50).await;
         let cmd = Command::chain_inactive();
         self.port.write_all(&cmd).await.map_err(Error::Io)?;
@@ -220,7 +225,7 @@ impl<A: Asic, P: Read + Write + Baud, D: DelayNs> Chain<A, P, D> {
     }
 
     pub async fn set_baudrate(&mut self, baudrate: u32) -> Result<(), P::Error> {
-        let steps = self.asic.send_baudrate(baudrate);
+        let steps = self.asic.send_baudrate(baudrate, self.domain_cnt, self.asic_cnt / self.domain_cnt, self.asic_addr_interval);
         self.send(steps.iter()).await?;
         self.delay.delay_ms(50).await;
         self.port.set_baudrate(baudrate);
@@ -236,6 +241,11 @@ impl<A: Asic, P: Read + Write + Baud, D: DelayNs> Chain<A, P, D> {
             self.send(steps.iter()).await?;
         }
         self.delay.delay_ms(100).await;
+
+        // FIXME: Find where should be placed
+        self.delay.delay_ms(100).await;
+        let steps = self.asic.between_reset_and_set_freq();
+        self.send(steps.iter()).await?;
         Ok(())
     }
 
@@ -248,7 +258,7 @@ impl<A: Asic, P: Read + Write + Baud, D: DelayNs> Chain<A, P, D> {
 
     pub async fn set_version_rolling(&mut self, mask: u32) -> Result<(), P::Error> {
         if self.asic.has_version_rolling() {
-            let steps = self.asic.send_version_rolling(mask);
+            let steps = self.asic.send_version_rolling(mask, self.domain_cnt, self.asic_cnt / self.domain_cnt, self.asic_addr_interval);
             self.send(steps.iter()).await?;
             self.delay.delay_ms(100).await;
         }

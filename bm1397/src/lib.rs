@@ -440,7 +440,7 @@ impl Asic for BM1397 {
         _chain_domain_cnt: u8,
         _domain_asic_cnt: u8,
         _asic_addr_interval: u16,
-    ) -> Vec<CmdDelay, 28> {
+    ) -> Vec<CmdDelay, 2048> {
         let mut init_seq = Vec::new();
         let clk_ord_ctrl0 =
             ClockOrderControl0(*self.registers.get(&ClockOrderControl0::ADDR).unwrap())
@@ -648,7 +648,7 @@ impl Asic for BM1397 {
     /// let mut reset_seq = bm1397.send_reset_core(Destination::All);
     /// assert_eq!(reset_seq.len(), 0);
     /// ```
-    fn send_reset_core(&mut self, _dest: Destination) -> Vec<CmdDelay, 6> {
+    fn send_reset_core(&mut self, _dest: Destination) -> Vec<CmdDelay, 800> {
         Vec::new() // TODO impl
     }
 
@@ -669,7 +669,7 @@ impl Asic for BM1397 {
     /// assert_eq!(hash_freq_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x70, 0x0f, 0x0f, 0x0f, 0x00, 25]);
     /// assert_eq!(bm1397.plls[BM1397_PLL_ID_HASH].parameter(), 0xc0ad_0276);
     /// ```
-    fn send_hash_freq(&mut self, target_freq: HertzU64) -> Vec<CmdDelay, 80> {
+    fn send_hash_freq(&mut self, target_freq: HertzU64) -> Vec<CmdDelay, 800> {
         let mut hash_freq_seq = Vec::new();
         self.plls[BM1397_PLL_ID_HASH].set_divider(0x0f0f_0f00);
         self.registers
@@ -777,5 +777,9 @@ impl Asic for BM1397 {
     /// ```
     fn send_version_rolling(&mut self, _mask: u32) -> Vec<CmdDelay, 2> {
         Vec::new()
+    }
+
+    fn between_reset_and_set_freq(&mut self) -> Vec<CmdDelay, 40> {
+        unimplemented!() // FIXME: A temporary hack this function should be removed
     }
 }
