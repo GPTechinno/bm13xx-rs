@@ -131,7 +131,7 @@ impl<A: Asic, P: Read + Write + Baud, D: DelayNs> Chain<A, P, D> {
         self.port.write_all(&cmd).await.map_err(Error::Io)?;
 
         let mut asic_cnt = 0;
-
+        let mut post_s19jpro = false;
         loop {
             debug!("Enumerating asic: {}", asic_cnt);
             // FIXME: This is a workaround for the Timeout based loop
@@ -154,6 +154,9 @@ impl<A: Asic, P: Read + Write + Baud, D: DelayNs> Chain<A, P, D> {
                     return Err(Error::BadRegisterResponse { reg_resp });
                 }
                 let chip_ident = ChipIdentification(reg_resp.reg_value);
+                if chip_ident.core_num() == 0 {
+                    post_s19jpro = true;
+                }
                 if chip_ident.chip_id() == self.asic.chip_id() {
                     asic_cnt += 1;
                 } else {
@@ -172,18 +175,21 @@ impl<A: Asic, P: Read + Write + Baud, D: DelayNs> Chain<A, P, D> {
                 actual_asic_cnt: asic_cnt,
             });
         }
-        // TODO: S21 Pro has here:
-        // name	type	chip	register	value	value_raw	crc
-        // BM13xx protocol decoder	write_register	ALL	0xA8	0x00070000	0x00070000	0x03
-        // BM13xx protocol decoder	write_register	ALL	misc_control	0xF000C100	0xF000C100	0x04
-
         self.delay.delay_ms(50).await;
+        if post_s19jpro {
+            self.delay.delay_ms(100).await;
+            while let Some(step) = self.asic.reset_core_next(Destination::All) {
+                self.send(step).await?;
+            }
+        }
         let cmd = Command::chain_inactive();
         self.port.write_all(&cmd).await.map_err(Error::Io)?;
-        self.delay.delay_ms(2).await;
-        self.port.write_all(&cmd).await.map_err(Error::Io)?;
-        self.delay.delay_ms(2).await;
-        self.port.write_all(&cmd).await.map_err(Error::Io)?;
+        if !post_s19jpro {
+            self.delay.delay_ms(2).await;
+            self.port.write_all(&cmd).await.map_err(Error::Io)?;
+            self.delay.delay_ms(2).await;
+            self.port.write_all(&cmd).await.map_err(Error::Io)?;
+        }
         self.delay.delay_ms(30).await;
         for i in 0..asic_cnt {
             let cmd = Command::set_chip_addr((i as u16 * self.asic_addr_interval) as u8);
@@ -194,11 +200,9 @@ impl<A: Asic, P: Read + Write + Baud, D: DelayNs> Chain<A, P, D> {
         Ok(())
     }
 
-    async fn send(&mut self, steps: impl Iterator<Item = &CmdDelay>) -> Result<(), P::Error> {
-        for step in steps {
-            self.port.write_all(&step.cmd).await.map_err(Error::Io)?;
-            self.delay.delay_ms(step.delay_ms).await;
-        }
+    async fn send(&mut self, step: CmdDelay) -> Result<(), P::Error> {
+        self.port.write_all(&step.cmd).await.map_err(Error::Io)?;
+        self.delay.delay_ms(step.delay_ms).await;
         Ok(())
     }
 
@@ -212,54 +216,55 @@ impl<A: Asic, P: Read + Write + Baud, D: DelayNs> Chain<A, P, D> {
         Ok(job.len() as u8)
     }
 
-    pub async fn init(&mut self, initial_diffculty: u32) -> Result<(), P::Error> {
-        let steps = self.asic.send_init(
-            initial_diffculty,
-            self.domain_cnt,
-            self.asic_cnt / self.domain_cnt,
-            self.asic_addr_interval,
-        );
-        self.send(steps.iter()).await?;
+    pub async fn init(&mut self, diffculty: u32) -> Result<(), P::Error> {
+        while let Some(step) = self.asic.init_next(diffculty) {
+            self.send(step).await?;
+        }
         self.delay.delay_ms(100).await;
         Ok(())
     }
 
     pub async fn set_baudrate(&mut self, baudrate: u32) -> Result<(), P::Error> {
-        let steps = self.asic.send_baudrate(baudrate, self.domain_cnt, self.asic_cnt / self.domain_cnt, self.asic_addr_interval);
-        self.send(steps.iter()).await?;
+        while let Some(step) = self.asic.set_baudrate_next(
+            baudrate,
+            self.domain_cnt,
+            self.asic_cnt / self.domain_cnt,
+            self.asic_addr_interval,
+        ) {
+            self.send(step).await?;
+        }
         self.delay.delay_ms(50).await;
         self.port.set_baudrate(baudrate);
         self.delay.delay_ms(50).await;
         Ok(())
     }
 
-    pub async fn reset_core(&mut self) -> Result<(), P::Error> {
+    pub async fn reset_all_cores(&mut self) -> Result<(), P::Error> {
         for asic_i in 0..self.asic_cnt {
-            let steps = self
+            while let Some(step) = self
                 .asic
-                .send_reset_core(Destination::Chip(asic_i * self.asic_addr_interval as u8));
-            self.send(steps.iter()).await?;
+                .reset_core_next(Destination::Chip(asic_i * self.asic_addr_interval as u8))
+            {
+                self.send(step).await?;
+            }
         }
         self.delay.delay_ms(100).await;
-
-        // FIXME: Find where should be placed
-        self.delay.delay_ms(100).await;
-        let steps = self.asic.between_reset_and_set_freq();
-        self.send(steps.iter()).await?;
         Ok(())
     }
 
     pub async fn set_hash_freq(&mut self, freq: HertzU64) -> Result<(), P::Error> {
-        let steps = self.asic.send_hash_freq(freq);
-        self.send(steps.iter()).await?;
+        while let Some(step) = self.asic.set_hash_freq_next(freq) {
+            self.send(step).await?;
+        }
         self.delay.delay_ms(100).await;
         Ok(())
     }
 
     pub async fn set_version_rolling(&mut self, mask: u32) -> Result<(), P::Error> {
         if self.asic.has_version_rolling() {
-            let steps = self.asic.send_version_rolling(mask, self.domain_cnt, self.asic_cnt / self.domain_cnt, self.asic_addr_interval);
-            self.send(steps.iter()).await?;
+            while let Some(step) = self.asic.set_version_rolling_next(mask) {
+                self.send(step).await?;
+            }
             self.delay.delay_ms(100).await;
         }
         Ok(())

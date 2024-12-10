@@ -11,17 +11,11 @@ bm13xx-protocol = { path = "../bm13xx-protocol" }
 defmt = { workspace = true, optional = true }
 derive_more = { workspace = true, features = ["from"] }
 fugit = { workspace = true }
-heapless = { workspace = true }
 log = { workspace = true, optional = true }
 
 [features]
 core-error = [ # bump MSRV to 1.81.0
     "bm13xx-protocol/core-error",
 ]
-defmt-03 = [
-    "dep:defmt",
-    "bm13xx-protocol/defmt-03",
-    "fugit/defmt",
-    "heapless/defmt-03",
-]
+defmt-03 = ["dep:defmt", "bm13xx-protocol/defmt-03", "fugit/defmt"]
 log = ["dep:log"]
