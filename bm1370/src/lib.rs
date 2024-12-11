@@ -538,7 +538,7 @@ impl Asic for BM1370 {
     /// use bm13xx_asic::{core_register::*, register::*, Asic, CmdDelay};
     ///
     /// let mut bm1370 = BM1370::default();
-    /// // Seen on S21XP (but with 13 chain_domain_cnt)
+    /// // Seen on S21XP
     /// assert_eq!(bm1370.init_next(256), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x3c, 0x80, 0x00, 0x8B, 0x00, 0x12], delay_ms: 10}));
     /// assert_eq!(bm1370.init_next(256), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x3c, 0x80, 0x00, 0x80, 0x10, 0x12], delay_ms: 10}));
     /// assert_eq!(bm1370.init_next(256), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x14, 0x00, 0x00, 0x00, 0xFF, 0x08], delay_ms: 10}));

@@ -424,18 +424,19 @@ impl Asic for BM1397 {
     /// use bm13xx_asic::{core_register::*, register::*, Asic, CmdDelay};
     ///
     /// let mut bm1397 = BM1397::default();
-    /// assert_eq!(bm1397.init_next(256), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x1c], delay_ms:0}));
-    /// assert_eq!(bm1397.init_next(256), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x84, 0x00, 0x00, 0x00, 0x00, 0x11], delay_ms:0}));
-    /// assert_eq!(bm1397.init_next(256), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x20, 0x00, 0x00, 0x00, 0x01, 0x02], delay_ms:0}));
-    /// assert_eq!(bm1397.init_next(256), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x3c, 0x80, 0x00, 0x80, 0x74, 0x10], delay_ms:0}));
-    /// assert_eq!(bm1397.init_next(256), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x14, 0x00, 0x00, 0x00, 0xff, 0x08], delay_ms:0}));
+    /// // Seen on T17
+    /// assert_eq!(bm1397.init_next(64), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x1c], delay_ms:0}));
+    /// assert_eq!(bm1397.init_next(64), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x84, 0x00, 0x00, 0x00, 0x00, 0x11], delay_ms:100}));
+    /// assert_eq!(bm1397.init_next(64), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x20, 0x00, 0x00, 0x00, 0x00, 0x07], delay_ms:100}));
+    /// assert_eq!(bm1397.init_next(64), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x20, 0x00, 0x00, 0x00, 0xff, 0x13], delay_ms:10}));
+    /// assert_eq!(bm1397.init_next(64), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x3c, 0x80, 0x00, 0x80, 0xb4, 0x19], delay_ms:5}));
+    /// assert_eq!(bm1397.init_next(64), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x14, 0x00, 0x00, 0x00, 0xfc, 0x07], delay_ms:10}));
     /// assert_eq!(bm1397.registers.get(&ClockOrderControl0::ADDR).unwrap(), &0x0000_0000);
     /// assert_eq!(bm1397.registers.get(&ClockOrderControl1::ADDR).unwrap(), &0x0000_0000);
-    /// assert_eq!(bm1397.registers.get(&OrderedClockEnable::ADDR).unwrap(), &0x0000_0001);
-    /// assert_eq!(bm1397.core_registers.get(&ClockDelayCtrl::ID).unwrap(), &0x74);
-    /// assert_eq!(bm1397.registers.get(&TicketMask::ADDR).unwrap(), &0x0000_00ff);
+    /// assert_eq!(bm1397.registers.get(&OrderedClockEnable::ADDR).unwrap(), &0x0000_00ff);
+    /// assert_eq!(bm1397.core_registers.get(&ClockDelayCtrl::ID).unwrap(), &0xb4);
+    /// assert_eq!(bm1397.registers.get(&TicketMask::ADDR).unwrap(), &0x0000_00fc);
     /// ```
-    ///
     fn init_next(&mut self, diffculty: u32) -> Option<CmdDelay> {
         match self.seq_step {
             SequenceStep::Init(step) => {
@@ -463,7 +464,7 @@ impl Asic for BM1397 {
                                 clk_ord_ctrl1,
                                 Destination::All,
                             ), // all CLK_SELx = 0b0000
-                            delay_ms: 0,
+                            delay_ms: 100,
                         })
                     }
                     1 => {
@@ -472,7 +473,6 @@ impl Asic for BM1397 {
                             *self.registers.get(&OrderedClockEnable::ADDR).unwrap(),
                         )
                         .disable_all()
-                        .enable(ClockSelect::CLK0)
                         .val();
                         self.registers
                             .insert(OrderedClockEnable::ADDR, clk_ord_en)
@@ -482,15 +482,42 @@ impl Asic for BM1397 {
                                 OrderedClockEnable::ADDR,
                                 clk_ord_en,
                                 Destination::All,
-                            ), // Only enable the first one
-                            delay_ms: 0,
+                            ),
+                            delay_ms: 100,
                         })
                     }
                     2 => {
                         self.seq_step = SequenceStep::Init(3);
+                        let clk_ord_en = OrderedClockEnable(
+                            *self.registers.get(&OrderedClockEnable::ADDR).unwrap(),
+                        )
+                        .disable_all()
+                        .enable(ClockSelect::CLK0)
+                        .enable(ClockSelect::CLK1)
+                        .enable(ClockSelect::CLK2)
+                        .enable(ClockSelect::CLK3)
+                        .enable(ClockSelect::CLK4)
+                        .enable(ClockSelect::CLK5)
+                        .enable(ClockSelect::CLK6)
+                        .enable(ClockSelect::CLK7)
+                        .val();
+                        self.registers
+                            .insert(OrderedClockEnable::ADDR, clk_ord_en)
+                            .unwrap();
+                        Some(CmdDelay {
+                            cmd: Command::write_reg(
+                                OrderedClockEnable::ADDR,
+                                clk_ord_en,
+                                Destination::All,
+                            ),
+                            delay_ms: 10,
+                        })
+                    }
+                    3 => {
+                        self.seq_step = SequenceStep::Init(4);
                         let clk_dly_ctrl =
                             ClockDelayCtrl(*self.core_registers.get(&ClockDelayCtrl::ID).unwrap())
-                                .set_ccdly(1)
+                                .set_ccdly(2)
                                 .set_pwth(3)
                                 .enable_multi_midstate()
                                 .val();
@@ -506,19 +533,19 @@ impl Asic for BM1397 {
                                 ),
                                 Destination::All,
                             ),
-                            delay_ms: 0,
+                            delay_ms: 5,
                         })
                     }
-                    3 => {
-                        self.seq_step = SequenceStep::Init(4);
+                    4 => {
+                        self.seq_step = SequenceStep::Init(5);
                         let tck_mask = TicketMask::from_difficulty(diffculty).val();
                         self.registers.insert(TicketMask::ADDR, tck_mask).unwrap();
                         Some(CmdDelay {
                             cmd: Command::write_reg(TicketMask::ADDR, tck_mask, Destination::All),
-                            delay_ms: 0,
+                            delay_ms: 10,
                         })
                     }
-                    4 => {
+                    5 => {
                         self.seq_step = SequenceStep::None;
                         None
                     }
@@ -563,20 +590,27 @@ impl Asic for BM1397 {
     /// use bm13xx_asic::{register::*, Asic, CmdDelay};
     ///
     /// let mut bm1397 = BM1397::default();
-    /// assert_eq!(bm1397.set_baudrate_next(6_250_000, 1, 1, 256), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x68, 0xc0, 0x70, 0x01, 0x11, 0], delay_ms:0}));
-    /// assert_eq!(bm1397.set_baudrate_next(6_250_000, 1, 1, 256), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x28, 0x06, 0x00, 0x00, 0x0f, 24], delay_ms:0}));
-    /// assert_eq!(bm1397.set_baudrate_next(6_250_000, 1, 1, 256), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x18, 0x00, 0x01, 0x27, 0x01, 11], delay_ms:0}));
+    // // Seen on T17
+    /// assert_eq!(bm1397.set_baudrate_next(3_125_000, 1, 1, 256), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x18, 0x00, 0x00, 0x20, 0x01, 0x0d], delay_ms:200}));
+    /// assert_eq!(bm1397.set_baudrate_next(3_125_000, 1, 1, 256), None);
+    // assert!(!bm1397.plls[BM1397_PLL_ID_UART].enabled());
+    /// assert_eq!(bm1397.registers.get(&MiscControl::ADDR).unwrap(), &0x0000_2001);
+    /// assert_eq!(bm1397.set_baudrate_next(6_250_000, 1, 1, 256), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x68, 0xc0, 0x70, 0x01, 0x11, 0x00], delay_ms:0}));
+    /// assert_eq!(bm1397.set_baudrate_next(6_250_000, 1, 1, 256), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x68, 0xc0, 0x70, 0x01, 0x11, 0x00], delay_ms:1}));
+    /// assert_eq!(bm1397.set_baudrate_next(6_250_000, 1, 1, 256), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x28, 0x06, 0x00, 0x00, 0x0f, 0x18], delay_ms:0}));
+    // assert_eq!(bm1397.set_baudrate_next(6_250_000, 1, 1, 256), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x18, 0x00, 0x01, 0x67, 0x31, 0x06], delay_ms:200})); // real value equivalent
+    /// assert_eq!(bm1397.set_baudrate_next(6_250_000, 1, 1, 256), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x18, 0x00, 0x01, 0x27, 0x01, 11], delay_ms:200}));
     /// assert_eq!(bm1397.set_baudrate_next(6_250_000, 1, 1, 256), None);
     /// assert!(bm1397.plls[BM1397_PLL_ID_UART].enabled());
-    /// assert_eq!(bm1397.registers.get(&MiscControl::ADDR).unwrap(), &0x0001_2701);
     /// assert_eq!(bm1397.registers.get(&PLL3Parameter::ADDR).unwrap(), &0xC070_0111);
     /// assert_eq!(bm1397.registers.get(&FastUARTConfiguration::ADDR).unwrap(), &0x0600_000F);
-    /// assert_eq!(bm1397.set_baudrate_next(115_740, 1, 1, 256), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x18, 0x00, 0x00, 0x3a, 0x01, 24], delay_ms:0}));
-    /// assert_eq!(bm1397.set_baudrate_next(115_740, 1, 1, 256), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x68, 0x00, 0x70, 0x01, 0x11, 21], delay_ms:0}));
+    /// assert_eq!(bm1397.registers.get(&MiscControl::ADDR).unwrap(), &0x0001_2701);
+    /// assert_eq!(bm1397.set_baudrate_next(115_740, 1, 1, 256), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x18, 0x00, 0x00, 0x3a, 0x01, 0x18], delay_ms:200}));
+    // assert_eq!(bm1397.set_baudrate_next(115_740, 1, 1, 256), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x68, 0x00, 0x70, 0x01, 0x11, 21], delay_ms:0}));
     /// assert_eq!(bm1397.set_baudrate_next(115_740, 1, 1, 256), None);
-    /// assert!(!bm1397.plls[BM1397_PLL_ID_UART].enabled());
+    // assert!(!bm1397.plls[BM1397_PLL_ID_UART].enabled());
     /// assert_eq!(bm1397.registers.get(&MiscControl::ADDR).unwrap(), &0x0000_3A01);
-    /// assert_eq!(bm1397.registers.get(&PLL3Parameter::ADDR).unwrap(), &0x0070_0111);
+    // assert_eq!(bm1397.registers.get(&PLL3Parameter::ADDR).unwrap(), &0x0070_0111);
     /// ```
     fn set_baudrate_next(
         &mut self,
@@ -591,6 +625,11 @@ impl Asic for BM1397 {
             match self.seq_step {
                 SequenceStep::Baudrate(step) => match step {
                     0 => {
+                        // should not be reached for 2 reasons:
+                        // - in previous step we jump directly to end
+                        // - after setting the chip's FastUartConfiguration with bclk_sel(BaudrateClockSelect::Clki) in previous step
+                        //   the chip's baudrate should immediatly adapt and thus this new step with old baudrate from control side
+                        //   will be ignored by the chip.
                         self.seq_step = SequenceStep::Baudrate(1);
                         let pll3_param =
                             self.plls[BM1397_PLL_ID_UART].disable().unlock().parameter();
@@ -616,7 +655,7 @@ impl Asic for BM1397 {
                 },
                 _ => {
                     // authorize a SetBaudrate sequence start whatever the current step was
-                    self.seq_step = SequenceStep::Baudrate(0);
+                    self.seq_step = SequenceStep::Baudrate(1);
                     let misc_ctrl = MiscControl(*self.registers.get(&MiscControl::ADDR).unwrap())
                         .set_bclk_sel(BaudrateClockSelect::Clki)
                         .set_bt8d(bt8d as u16)
@@ -624,13 +663,14 @@ impl Asic for BM1397 {
                     self.registers.insert(MiscControl::ADDR, misc_ctrl).unwrap();
                     Some(CmdDelay {
                         cmd: Command::write_reg(MiscControl::ADDR, misc_ctrl, Destination::All),
-                        delay_ms: 0,
+                        delay_ms: 200,
                     })
                 }
             }
         } else {
             let pll3_div4 = 6;
             self.plls[BM1397_PLL_ID_UART]
+                // .set_parameter(0xC070_0111)
                 .lock()
                 .enable()
                 .set_fb_div(112)
@@ -638,9 +678,6 @@ impl Asic for BM1397 {
                 .set_post1_div(1)
                 .set_post2_div(1)
                 .set_out_div(BM1397_PLL_OUT_UART, pll3_div4);
-            // self.plls[BM1397_PLL_ID_UART]
-            //     .set_parameter(0xC070_0111)
-            //     .set_out_div(BM1397_PLL_OUT_UART, pll3_div4);
             let fbase = self.plls[BM1397_PLL_ID_UART]
                 .frequency(self.input_clock_freq, BM1397_PLL_OUT_UART)
                 .raw();
@@ -648,6 +685,21 @@ impl Asic for BM1397 {
                 SequenceStep::Baudrate(step) => match step {
                     0 => {
                         self.seq_step = SequenceStep::Baudrate(1);
+                        let pll3_param = self.plls[BM1397_PLL_ID_UART].parameter();
+                        self.registers
+                            .insert(PLL3Parameter::ADDR, pll3_param)
+                            .unwrap();
+                        Some(CmdDelay {
+                            cmd: Command::write_reg(
+                                PLL3Parameter::ADDR,
+                                pll3_param,
+                                Destination::All,
+                            ),
+                            delay_ms: 1,
+                        })
+                    }
+                    1 => {
+                        self.seq_step = SequenceStep::Baudrate(2);
                         let fast_uart_cfg = FastUARTConfiguration(
                             *self.registers.get(&FastUARTConfiguration::ADDR).unwrap(),
                         )
@@ -665,8 +717,8 @@ impl Asic for BM1397 {
                             delay_ms: 0,
                         })
                     }
-                    1 => {
-                        self.seq_step = SequenceStep::Baudrate(2);
+                    2 => {
+                        self.seq_step = SequenceStep::Baudrate(3);
                         let bt8d = (fbase as u32 / (2 * baudrate)) - 1;
                         let misc_ctrl =
                             MiscControl(*self.registers.get(&MiscControl::ADDR).unwrap())
@@ -676,10 +728,10 @@ impl Asic for BM1397 {
                         self.registers.insert(MiscControl::ADDR, misc_ctrl).unwrap();
                         Some(CmdDelay {
                             cmd: Command::write_reg(MiscControl::ADDR, misc_ctrl, Destination::All),
-                            delay_ms: 0,
+                            delay_ms: 200,
                         })
                     }
-                    2 => {
+                    3 => {
                         self.seq_step = SequenceStep::None;
                         None
                     }
@@ -727,14 +779,14 @@ impl Asic for BM1397 {
     /// use fugit::HertzU64;
     ///
     /// let mut bm1397 = BM1397::default();
-    // assert_eq!(bm1397.set_hash_freq_next(HertzU64::MHz(45)), CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x70, 0x0f, 0x0f, 0x0f, 0x00, 25], delay_ms: 0});
-    // assert_eq!(bm1397.set_hash_freq_next(HertzU64::MHz(45)), CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x08, 0xc0, 0xad, 0x02, 0x77, 13], delay_ms: 0});
-    // assert_eq!(bm1397.set_hash_freq_next(HertzU64::MHz(45)), CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x70, 0x0f, 0x0f, 0x0f, 0x00, 25], delay_ms: 0});
-    // assert_eq!(bm1397.set_hash_freq_next(HertzU64::MHz(45)), CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x08, 0xc0, 0xad, 0x02, 0x76, 8], delay_ms: 0});
-    /// assert_eq!(bm1397.set_hash_freq_next(HertzU64::MHz(45)), None);
-    // assert_eq!(bm1397.plls[BM1397_PLL_ID_HASH].parameter(), 0xc0ad_0276);
+    // assert_eq!(bm1397.set_hash_freq_next(HertzU64::MHz(700)), CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x70, 0x0f, 0x0f, 0x0f, 0x00, 25], delay_ms: 0});
+    // assert_eq!(bm1397.set_hash_freq_next(HertzU64::MHz(700)), CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x08, 0xc0, 0xad, 0x02, 0x77, 13], delay_ms: 1});
+    // assert_eq!(bm1397.set_hash_freq_next(HertzU64::MHz(700)), CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x70, 0x0f, 0x0f, 0x0f, 0x00, 25], delay_ms: 0});
+    // assert_eq!(bm1397.set_hash_freq_next(HertzU64::MHz(700)), CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x08, 0xc0, 0xad, 0x02, 0x76, 8], delay_ms: 1});
+    /// assert_eq!(bm1397.set_hash_freq_next(HertzU64::MHz(700)), None);
+    // assert_eq!(bm1397.plls[BM1397_PLL_ID_HASH].parameter(), 0xc070_0111);
     /// ```
-    fn set_hash_freq_next(&mut self, target_freq: HertzU64) -> Option<CmdDelay> {
+    fn set_hash_freq_next(&mut self, _target_freq: HertzU64) -> Option<CmdDelay> {
         /*
         self.plls[BM1397_PLL_ID_HASH].set_divider(0x0f0f_0f00);
         self.registers
