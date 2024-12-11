@@ -826,6 +826,8 @@ impl Asic for BM1370 {
                         let fast_uart_cfg = FastUARTConfigurationV2(
                             *self.registers.get(&FastUARTConfigurationV2::ADDR).unwrap(),
                         )
+                        .clr_b28()
+                        // .set_b24()
                         .set_bclk_sel(BaudrateClockSelectV2::Clki)
                         .set_bt8d(bt8d as u8)
                         .val();
@@ -867,6 +869,11 @@ impl Asic for BM1370 {
                 } else if step == sub_seq6_start {
                     self.seq_step = SequenceStep::Baudrate(end);
                     if baudrate <= self.input_clock_freq.raw() as u32 / 8 {
+                        // should not be reached for 2 reasons:
+                        // - in step above we jump directly to end
+                        // - after setting the chip's FastUartConfiguration with bclk_sel(BaudrateClockSelectV2::Clki) in previous step
+                        //   the chip's baudrate should immediatly adapt and thus this new step with old baudrate from control side
+                        //   will be ignored by the chip.
                         let pll3_param =
                             self.plls[BM1370_PLL_ID_UART].disable().unlock().parameter();
                         self.registers
@@ -888,8 +895,8 @@ impl Asic for BM1370 {
                         let fast_uart_cfg = FastUARTConfigurationV2(
                             *self.registers.get(&FastUARTConfigurationV2::ADDR).unwrap(),
                         )
-                        .set_pll3_div4(pll3_div4)
-                        .set_bclk_sel(BaudrateClockSelectV2::Pll1)
+                        .set_pll1_div4(pll3_div4) // TODO: not sure yet where the pll3_div4 really fit into FastUartConfiguration
+                        .set_bclk_sel(BaudrateClockSelectV2::Pll1) // TODO: it should be Pll3, but not sure about the BCLK_SEL field yet for it
                         .set_bt8d(bt8d as u8)
                         .val();
                         self.registers

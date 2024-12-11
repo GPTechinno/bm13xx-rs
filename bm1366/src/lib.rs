@@ -640,28 +640,22 @@ impl Asic for BM1366 {
     /// assert_eq!(bm1366.set_baudrate_next(1_000_000, 11, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0x26, 0x2c, 0x00, 0x72, 0x00, 0x03, 0x05], delay_ms: 0}));
     /// assert_eq!(bm1366.set_baudrate_next(1_000_000, 11, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0x00, 0x2c, 0x00, 0x7c, 0x00, 0x03, 0x03], delay_ms: 0}));
     /// assert_eq!(bm1366.set_baudrate_next(1_000_000, 11, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0x12, 0x2c, 0x00, 0x7c, 0x00, 0x03, 0x1f], delay_ms: 130}));
-    /// assert_eq!(bm1366.set_baudrate_next(1_000_000, 11, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x28, 0x01, 0x30, 0x02, 0x00, 0x07], delay_ms: 0}));
-    // assert_eq!(bm1366.set_baudrate_next(1_000_000, 11, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x28, 0x11, 0x30, 0x02, 0x00, 0x00], delay_ms: 0})); // real values
-    /// assert_eq!(bm1366.set_baudrate_next(1_000_000, 11, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x60, 0x00, 0x50, 0x01, 0x74, 31], delay_ms: 0}));
-    // assert_eq!(bm1366.set_baudrate_next(1_000_000, 11, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x60, 0x00, 0x70, 0x01, 0x11, 15], delay_ms: 0})); // real: not sent
+    /// assert_eq!(bm1366.set_baudrate_next(1_000_000, 11, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x28, 0x11, 0x30, 0x02, 0x00, 0x03], delay_ms: 200}));
     /// assert_eq!(bm1366.set_baudrate_next(1_000_000, 11, 10, 2), None);
     /// assert!(!bm1366.plls[BM1366_PLL_ID_UART].enabled());
     /// assert_eq!(bm1366.registers.get(&IoDriverStrenghtConfiguration::ADDR).unwrap(), &0x0211_1111);
-    /// assert_eq!(bm1366.registers.get(&FastUARTConfigurationV2::ADDR).unwrap(), &0x0130_0200);
-    // assert_eq!(bm1366.registers.get(&FastUARTConfigurationV2::ADDR).unwrap(), &0x1130_0200); // real value
-    /// assert_eq!(bm1366.registers.get(&PLL1Parameter::ADDR).unwrap(), &0x0050_0174);
-    // assert_eq!(bm1366.registers.get(&PLL1Parameter::ADDR).unwrap(), &0x0070_0111); // real: not sent
+    /// assert_eq!(bm1366.registers.get(&FastUARTConfigurationV2::ADDR).unwrap(), &0x1130_0200);
     /// assert_eq!(bm1366.set_baudrate_next(6_250_000, 1, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x58, 0x02, 0x11, 0x11, 0x11, 0x06], delay_ms: 0}));
     /// assert_eq!(bm1366.set_baudrate_next(6_250_000, 1, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0x12, 0x58, 0x02, 0x11, 0xf1, 0x11, 0x1b], delay_ms: 0}));
     /// assert_eq!(bm1366.set_baudrate_next(6_250_000, 1, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0x00, 0x2c, 0x00, 0x18, 0x00, 0x03, 0x10], delay_ms: 0}));
     /// assert_eq!(bm1366.set_baudrate_next(6_250_000, 1, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0x12, 0x2c, 0x00, 0x18, 0x00, 0x03, 0x0c], delay_ms: 130}));
     /// assert_eq!(bm1366.set_baudrate_next(6_250_000, 1, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x60, 0xc0, 0x70, 0x01, 0x11, 26], delay_ms: 0}));
-    /// assert_eq!(bm1366.set_baudrate_next(6_250_000, 1, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x28, 0x05, 0x60, 0x07, 0x00, 23], delay_ms: 0}));
+    /// assert_eq!(bm1366.set_baudrate_next(6_250_000, 1, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x28, 0x15, 0x60, 0x07, 0x00, 19], delay_ms: 200}));
     /// assert_eq!(bm1366.set_baudrate_next(6_250_000, 1, 10, 2), None);
     /// assert!(bm1366.plls[BM1366_PLL_ID_UART].enabled());
     /// assert_eq!(bm1366.registers.get(&IoDriverStrenghtConfiguration::ADDR).unwrap(), &0x0211_1111);
     /// assert_eq!(bm1366.registers.get(&PLL1Parameter::ADDR).unwrap(), &0xC070_0111);
-    /// assert_eq!(bm1366.registers.get(&FastUARTConfigurationV2::ADDR).unwrap(), &0x0560_0700);
+    /// assert_eq!(bm1366.registers.get(&FastUARTConfigurationV2::ADDR).unwrap(), &0x1560_0700);
     /// ```
     fn set_baudrate_next(
         &mut self,
@@ -757,13 +751,15 @@ impl Asic for BM1366 {
                         delay_ms: if step == sub_seq4_start - 1 { 130 } else { 0 },
                     })
                 } else if step == sub_seq4_start {
-                    self.seq_step = SequenceStep::Baudrate(sub_seq5_start);
                     if baudrate <= self.input_clock_freq.raw() as u32 / 8 {
+                        self.seq_step = SequenceStep::Baudrate(end);
                         let fbase = self.input_clock_freq.raw() as u32;
                         let bt8d = (fbase / (8 * baudrate)) - 1;
                         let fast_uart_cfg = FastUARTConfigurationV2(
                             *self.registers.get(&FastUARTConfigurationV2::ADDR).unwrap(),
                         )
+                        .set_b28()
+                        // .set_b24()
                         .set_bclk_sel(BaudrateClockSelectV2::Clki)
                         .set_bt8d(bt8d as u8)
                         .val();
@@ -776,10 +772,12 @@ impl Asic for BM1366 {
                                 fast_uart_cfg,
                                 Destination::All,
                             ),
-                            delay_ms: 0,
+                            delay_ms: 200,
                         })
                     } else {
+                        self.seq_step = SequenceStep::Baudrate(sub_seq5_start);
                         self.plls[BM1366_PLL_ID_UART]
+                            // .set_parameter(0xC070_0111)
                             .lock()
                             .enable()
                             .set_fb_div(112)
@@ -787,9 +785,6 @@ impl Asic for BM1366 {
                             .set_post1_div(1)
                             .set_post2_div(1)
                             .set_out_div(BM1366_PLL_OUT_UART, pll1_div4);
-                        // self.plls[BM1366_PLL_ID_UART]
-                        //     .set_parameter(0xC070_0111)
-                        //     .set_out_div(BM1366_PLL_OUT_UART, pll1_div4);
                         let pll1_param = self.plls[BM1366_PLL_ID_UART].parameter();
                         self.registers
                             .insert(PLL1Parameter::ADDR, pll1_param)
@@ -806,6 +801,11 @@ impl Asic for BM1366 {
                 } else if step == sub_seq5_start {
                     self.seq_step = SequenceStep::Baudrate(end);
                     if baudrate <= self.input_clock_freq.raw() as u32 / 8 {
+                        // should not be reached for 2 reasons:
+                        // - in step above we jump directly to end
+                        // - after setting the chip's FastUartConfiguration with bclk_sel(BaudrateClockSelectV2::Clki) in previous step
+                        //   the chip's baudrate should immediatly adapt and thus this new step with old baudrate from control side
+                        //   will be ignored by the chip.
                         let pll1_param =
                             self.plls[BM1366_PLL_ID_UART].disable().unlock().parameter();
                         self.registers
@@ -827,6 +827,8 @@ impl Asic for BM1366 {
                         let fast_uart_cfg = FastUARTConfigurationV2(
                             *self.registers.get(&FastUARTConfigurationV2::ADDR).unwrap(),
                         )
+                        .set_b28()
+                        // .set_b24()
                         .set_pll1_div4(pll1_div4)
                         .set_bclk_sel(BaudrateClockSelectV2::Pll1)
                         .set_bt8d(bt8d as u8)
@@ -840,7 +842,7 @@ impl Asic for BM1366 {
                                 fast_uart_cfg,
                                 Destination::All,
                             ),
-                            delay_ms: 0,
+                            delay_ms: 200,
                         })
                     }
                 } else if step == end {
