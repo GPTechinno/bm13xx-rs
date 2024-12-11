@@ -4,12 +4,12 @@
 #![macro_use]
 pub(crate) mod fmt;
 
-use bm13xx_asic::{core_register::*, register::*, Asic, CmdDelay};
+use bm13xx_asic::{core_register::*, register::*, Asic, CmdDelay, SequenceStep};
 use bm13xx_protocol::command::{Command, Destination};
 
 use core::time::Duration;
 use fugit::HertzU64;
-use heapless::{FnvIndexMap, Vec};
+use heapless::FnvIndexMap;
 
 pub const BM1366_CHIP_ID: u16 = 0x1366;
 pub const BM1366_CORE_CNT: usize = 112;
@@ -34,6 +34,7 @@ const CHIP_ADDR_MASK: u32 = 0b1111_1111;
 #[derive(Debug)]
 // #[cfg_attr(feature = "defmt-03", derive(defmt::Format))] // FnvIndexMap doesn't implement defmt
 pub struct BM1366 {
+    seq_step: SequenceStep,
     pub sha: bm13xx_asic::sha::Sha<
         BM1366_CORE_CNT,
         BM1366_SMALL_CORE_CNT,
@@ -110,6 +111,7 @@ impl BM1366 {
             self.input_clock_freq,
             BM1366_PLL_OUT_HASH,
             freq,
+            false,
         );
         self
     }
@@ -267,6 +269,7 @@ impl BM1366 {
 impl Default for BM1366 {
     fn default() -> Self {
         let mut bm1366 = Self {
+            seq_step: SequenceStep::default(),
             sha: bm13xx_asic::sha::Sha::default(),
             input_clock_freq: HertzU64::MHz(25),
             plls: [bm13xx_asic::pll::Pll::default(); BM1366_PLL_CNT],
@@ -501,171 +504,97 @@ impl Asic for BM1366 {
     /// ### Example
     /// ```
     /// use bm1366::BM1366;
-    /// use bm13xx_asic::{core_register::*, register::*, Asic};
+    /// use bm13xx_asic::{core_register::*, register::*, Asic, CmdDelay};
     ///
     /// let mut bm1366 = BM1366::default();
-    /// let mut init_seq = bm1366.send_init(256, 1, 10, 2);
-    /// assert_eq!(init_seq.len(), 8);
-    /// assert_eq!(init_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x41, 0x09, 0x12, 0x2c, 0x00, 0x18, 0x00, 0x03, 0x0c]);
-    /// assert_eq!(init_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x41, 0x09, 0x00, 0x2c, 0x00, 0x18, 0x00, 0x03, 0x10]);
-    /// assert_eq!(init_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x41, 0x09, 0x12, 0x58, 0x02, 0x11, 0xf1, 0x11, 0x1b]);
-    /// assert_eq!(init_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x58, 0x02, 0x11, 0x11, 0x11, 0x06]);
-    /// assert_eq!(init_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x54, 0x00, 0x00, 0x00, 0x03, 0x1d]);
-    /// assert_eq!(init_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x14, 0x00, 0x00, 0x00, 0xff, 0x08]);
-    /// assert_eq!(init_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x3c, 0x80, 0x00, 0x80, 0x20, 0x19]);
-    /// assert_eq!(init_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x3c, 0x80, 0x00, 0x85, 0x40, 0x0c]);
+    /// assert_eq!(bm1366.init_next(256), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x3c, 0x80, 0x00, 0x85, 0x40, 0x0c], delay_ms: 10}));
+    /// assert_eq!(bm1366.init_next(256), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x3c, 0x80, 0x00, 0x80, 0x20, 0x19], delay_ms: 10}));
+    /// assert_eq!(bm1366.init_next(256), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x14, 0x00, 0x00, 0x00, 0xff, 0x08], delay_ms: 10}));
+    /// assert_eq!(bm1366.init_next(256), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x54, 0x00, 0x00, 0x00, 0x03, 0x1d], delay_ms: 0}));
+    /// assert_eq!(bm1366.init_next(256), None);
     /// assert_eq!(bm1366.core_registers.get(&HashClockCtrl::ID).unwrap(), &0x40);
     /// assert_eq!(bm1366.core_registers.get(&ClockDelayCtrlV2::ID).unwrap(), &0x20);
     /// assert_eq!(bm1366.registers.get(&TicketMask::ADDR).unwrap(), &0x0000_00ff);
     /// assert_eq!(bm1366.registers.get(&AnalogMuxControlV2::ADDR).unwrap(), &0x0000_0003);
-    /// assert_eq!(bm1366.registers.get(&IoDriverStrenghtConfiguration::ADDR).unwrap(), &0x0211_1111);
     /// ```
     ///
-    fn send_init(
-        &mut self,
-        initial_diffculty: u32,
-        chain_domain_cnt: u8,
-        domain_asic_cnt: u8,
-        asic_addr_interval: u16,
-    ) -> Vec<CmdDelay, 2048> {
-        let mut init_seq = Vec::new();
-        let hash_clk_ctrl = HashClockCtrl(*self.core_registers.get(&HashClockCtrl::ID).unwrap())
-            .enable()
-            .set_pll_source(0)
-            .val();
-        init_seq
-            .push(CmdDelay {
-                cmd: Command::write_reg(
-                    CoreRegisterControl::ADDR,
-                    CoreRegisterControl::write_core_reg(0, HashClockCtrl(hash_clk_ctrl)), // CLOCK_CTRL=64
-                    Destination::All,
-                ),
-                delay_ms: 10,
-            })
-            .unwrap();
-        self.core_registers
-            .insert(HashClockCtrl::ID, hash_clk_ctrl)
-            .unwrap();
-        let clk_dly_ctrl =
-            ClockDelayCtrlV2(*self.core_registers.get(&ClockDelayCtrlV2::ID).unwrap())
-                .set_ccdly(0)
-                .set_pwth(4)
-                .disable_sweep_frequency_mode()
-                .val();
-        init_seq
-            .push(CmdDelay {
-                cmd: Command::write_reg(
-                    CoreRegisterControl::ADDR,
-                    CoreRegisterControl::write_core_reg(0, ClockDelayCtrlV2(clk_dly_ctrl)),
-                    Destination::All,
-                ),
-                delay_ms: 10,
-            })
-            .unwrap();
-        self.core_registers
-            .insert(ClockDelayCtrlV2::ID, clk_dly_ctrl)
-            .unwrap();
-        let tck_mask = TicketMask::from_difficulty(initial_diffculty).val();
-        init_seq
-            .push(CmdDelay {
-                cmd: Command::write_reg(TicketMask::ADDR, tck_mask, Destination::All),
-                delay_ms: 10,
-            })
-            .unwrap();
-        self.registers.insert(TicketMask::ADDR, tck_mask).unwrap();
-        let ana_mux_ctrl =
-            AnalogMuxControlV2(*self.registers.get(&AnalogMuxControlV2::ADDR).unwrap())
-                .set_diode_vdd_mux_sel(3)
-                .val();
-        init_seq
-            .push(CmdDelay {
-                cmd: Command::write_reg(AnalogMuxControlV2::ADDR, ana_mux_ctrl, Destination::All),
-                delay_ms: 0,
-            })
-            .unwrap();
-        self.registers
-            .insert(AnalogMuxControlV2::ADDR, ana_mux_ctrl)
-            .unwrap();
-        let io_drv_st_cfg = IoDriverStrenghtConfiguration(
-            *self
-                .registers
-                .get(&IoDriverStrenghtConfiguration::ADDR)
-                .unwrap(),
-        )
-        .set_strenght(DriverSelect::RF, 2)
-        .set_strenght(DriverSelect::R0, 1)
-        .set_strenght(DriverSelect::CLKO, 1)
-        .set_strenght(DriverSelect::NRSTO, 1)
-        .set_strenght(DriverSelect::BO, 1)
-        .set_strenght(DriverSelect::CO, 1)
-        .enable(DriverRSelect::D0R)
-        .disable(DriverRSelect::D1R)
-        .disable(DriverRSelect::D2R)
-        .disable(DriverRSelect::D3R)
-        .val();
-        init_seq
-            .push(CmdDelay {
-                cmd: Command::write_reg(
-                    IoDriverStrenghtConfiguration::ADDR,
-                    io_drv_st_cfg,
-                    Destination::All,
-                ),
-                delay_ms: 0,
-            })
-            .unwrap();
-        self.registers
-            .insert(IoDriverStrenghtConfiguration::ADDR, io_drv_st_cfg)
-            .unwrap();
-        // last chip of each voltage domain should have IoDriverStrenghtConfiguration set to 0x0211_f111
-        // (iterating voltage domain in decreasing chip address order)
-        for dom in (0..chain_domain_cnt).rev() {
-            init_seq
-                .push(CmdDelay {
-                    cmd: Command::write_reg(
-                        IoDriverStrenghtConfiguration::ADDR,
-                        0x0211_f111,
-                        Destination::Chip((dom + domain_asic_cnt - 1) * asic_addr_interval as u8),
-                    ),
-                    delay_ms: 0,
-                })
-                .unwrap();
-        }
-        // first and last chip of each voltage domain should have UARTRelay with GAP_CNT=domain_asic_num*(chain_domain_num-domain_i)+14 and RO_REL_EN=CO_REL_EN=1
-        // (iterating voltage domain in decreasing chip address order)
-        for dom in (0..chain_domain_cnt).rev() {
-            let uart_delay = UARTRelay(*self.registers.get(&UARTRelay::ADDR).unwrap())
-                .set_gap_cnt(
-                    (domain_asic_cnt as u16) * ((chain_domain_cnt as u16) - (dom as u16)) + 14,
-                )
-                .enable_ro_relay()
-                .enable_co_relay()
-                .val();
-            init_seq
-                .push(CmdDelay {
-                    cmd: Command::write_reg(
-                        UARTRelay::ADDR,
-                        uart_delay,
-                        Destination::Chip(dom * asic_addr_interval as u8),
-                    ),
-                    delay_ms: 0,
-                })
-                .unwrap();
-            if domain_asic_cnt > 1 {
-                init_seq
-                    .push(CmdDelay {
+    fn init_next(&mut self, diffculty: u32) -> Option<CmdDelay> {
+        match self.seq_step {
+            SequenceStep::Init(step) => match step {
+                0 => {
+                    self.seq_step = SequenceStep::Init(1);
+                    let clk_dly_ctrl =
+                        ClockDelayCtrlV2(*self.core_registers.get(&ClockDelayCtrlV2::ID).unwrap())
+                            .set_ccdly(0)
+                            .set_pwth(4)
+                            .disable_sweep_frequency_mode()
+                            .val();
+                    self.core_registers
+                        .insert(ClockDelayCtrlV2::ID, clk_dly_ctrl)
+                        .unwrap();
+                    Some(CmdDelay {
                         cmd: Command::write_reg(
-                            UARTRelay::ADDR,
-                            uart_delay,
-                            Destination::Chip(
-                                (dom + domain_asic_cnt - 1) * asic_addr_interval as u8,
-                            ),
+                            CoreRegisterControl::ADDR,
+                            CoreRegisterControl::write_core_reg(0, ClockDelayCtrlV2(clk_dly_ctrl)),
+                            Destination::All,
+                        ),
+                        delay_ms: 10,
+                    })
+                }
+                1 => {
+                    self.seq_step = SequenceStep::Init(2);
+                    let tck_mask = TicketMask::from_difficulty(diffculty).val();
+                    self.registers.insert(TicketMask::ADDR, tck_mask).unwrap();
+                    Some(CmdDelay {
+                        cmd: Command::write_reg(TicketMask::ADDR, tck_mask, Destination::All),
+                        delay_ms: 10,
+                    })
+                }
+                2 => {
+                    self.seq_step = SequenceStep::Init(3);
+                    let ana_mux_ctrl =
+                        AnalogMuxControlV2(*self.registers.get(&AnalogMuxControlV2::ADDR).unwrap())
+                            .set_diode_vdd_mux_sel(3)
+                            .val();
+                    self.registers
+                        .insert(AnalogMuxControlV2::ADDR, ana_mux_ctrl)
+                        .unwrap();
+                    Some(CmdDelay {
+                        cmd: Command::write_reg(
+                            AnalogMuxControlV2::ADDR,
+                            ana_mux_ctrl,
+                            Destination::All,
                         ),
                         delay_ms: 0,
                     })
+                }
+                3 => {
+                    self.seq_step = SequenceStep::None;
+                    None
+                }
+                _ => unreachable!(),
+            },
+            _ => {
+                // authorize an Init sequence start whatever the current step was
+                self.seq_step = SequenceStep::Init(0);
+                let hash_clk_ctrl =
+                    HashClockCtrl(*self.core_registers.get(&HashClockCtrl::ID).unwrap())
+                        .enable()
+                        .set_pll_source(0)
+                        .val();
+                self.core_registers
+                    .insert(HashClockCtrl::ID, hash_clk_ctrl)
                     .unwrap();
+                Some(CmdDelay {
+                    cmd: Command::write_reg(
+                        CoreRegisterControl::ADDR,
+                        CoreRegisterControl::write_core_reg(0, HashClockCtrl(hash_clk_ctrl)), // CLOCK_CTRL=64
+                        Destination::All,
+                    ),
+                    delay_ms: 10,
+                })
             }
         }
-        init_seq
     }
 
     /// ## Send Baudrate command list
@@ -673,107 +602,289 @@ impl Asic for BM1366 {
     /// ### Example
     /// ```
     /// use bm1366::{BM1366, BM1366_PLL_ID_UART};
-    /// use bm13xx_asic::{register::*, Asic};
+    /// use bm13xx_asic::{register::*, Asic, CmdDelay};
     ///
     /// let mut bm1366 = BM1366::default();
-    /// let mut baud_seq = bm1366.send_baudrate(6_250_000);
-    /// assert_eq!(baud_seq.len(), 2);
-    /// assert_eq!(baud_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x28, 0x05, 0x60, 0x07, 0x00, 23]);
-    /// assert_eq!(baud_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x60, 0xc0, 0x70, 0x01, 0x11, 26]);
-    /// assert!(bm1366.plls[BM1366_PLL_ID_UART].enabled());
-    /// assert_eq!(bm1366.registers.get(&PLL1Parameter::ADDR).unwrap(), &0xC070_0111);
-    /// assert_eq!(bm1366.registers.get(&FastUARTConfigurationV2::ADDR).unwrap(), &0x0560_0700);
-    /// let mut baud_seq = bm1366.send_baudrate(1_000_000);
-    /// assert_eq!(baud_seq.len(), 2);
-    /// assert_eq!(baud_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x60, 0x00, 0x70, 0x01, 0x11, 15]);
-    /// assert_eq!(baud_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x28, 0x01, 0x60, 0x02, 0x00, 21]);
+    /// // real example from S19XP
+    /// assert_eq!(bm1366.set_baudrate_next(1_000_000, 11, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x58, 0x02, 0x11, 0x11, 0x11, 0x06], delay_ms: 0}));
+    /// assert_eq!(bm1366.set_baudrate_next(1_000_000, 11, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0xDA, 0x58, 0x02, 0x11, 0xf1, 0x11, 0x1c], delay_ms: 0}));
+    /// assert_eq!(bm1366.set_baudrate_next(1_000_000, 11, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0xC6, 0x58, 0x02, 0x11, 0xf1, 0x11, 0x17], delay_ms: 0}));
+    /// assert_eq!(bm1366.set_baudrate_next(1_000_000, 11, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0xB2, 0x58, 0x02, 0x11, 0xf1, 0x11, 0x05], delay_ms: 0}));
+    /// assert_eq!(bm1366.set_baudrate_next(1_000_000, 11, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0x9E, 0x58, 0x02, 0x11, 0xf1, 0x11, 0x0b], delay_ms: 0}));
+    /// assert_eq!(bm1366.set_baudrate_next(1_000_000, 11, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0x8A, 0x58, 0x02, 0x11, 0xf1, 0x11, 0x13], delay_ms: 0}));
+    /// assert_eq!(bm1366.set_baudrate_next(1_000_000, 11, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0x76, 0x58, 0x02, 0x11, 0xf1, 0x11, 0x0a], delay_ms: 0}));
+    /// assert_eq!(bm1366.set_baudrate_next(1_000_000, 11, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0x62, 0x58, 0x02, 0x11, 0xf1, 0x11, 0x12], delay_ms: 0}));
+    /// assert_eq!(bm1366.set_baudrate_next(1_000_000, 11, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0x4E, 0x58, 0x02, 0x11, 0xf1, 0x11, 0x1c], delay_ms: 0}));
+    /// assert_eq!(bm1366.set_baudrate_next(1_000_000, 11, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0x3A, 0x58, 0x02, 0x11, 0xf1, 0x11, 0x0e], delay_ms: 0}));
+    /// assert_eq!(bm1366.set_baudrate_next(1_000_000, 11, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0x26, 0x58, 0x02, 0x11, 0xf1, 0x11, 0x05], delay_ms: 0}));
+    /// assert_eq!(bm1366.set_baudrate_next(1_000_000, 11, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0x12, 0x58, 0x02, 0x11, 0xf1, 0x11, 0x1b], delay_ms: 0}));
+    /// assert_eq!(bm1366.set_baudrate_next(1_000_000, 11, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0xC8, 0x2c, 0x00, 0x18, 0x00, 0x03, 0x17], delay_ms: 0}));
+    /// assert_eq!(bm1366.set_baudrate_next(1_000_000, 11, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0xDA, 0x2c, 0x00, 0x18, 0x00, 0x03, 0x0b], delay_ms: 0}));
+    /// assert_eq!(bm1366.set_baudrate_next(1_000_000, 11, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0xB4, 0x2c, 0x00, 0x22, 0x00, 0x03, 0x13], delay_ms: 0}));
+    /// assert_eq!(bm1366.set_baudrate_next(1_000_000, 11, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0xC6, 0x2c, 0x00, 0x22, 0x00, 0x03, 0x05], delay_ms: 0}));
+    /// assert_eq!(bm1366.set_baudrate_next(1_000_000, 11, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0xA0, 0x2c, 0x00, 0x2c, 0x00, 0x03, 0x0f], delay_ms: 0}));
+    /// assert_eq!(bm1366.set_baudrate_next(1_000_000, 11, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0xB2, 0x2c, 0x00, 0x2c, 0x00, 0x03, 0x13], delay_ms: 0}));
+    /// assert_eq!(bm1366.set_baudrate_next(1_000_000, 11, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0x8C, 0x2c, 0x00, 0x36, 0x00, 0x03, 0x13], delay_ms: 0}));
+    /// assert_eq!(bm1366.set_baudrate_next(1_000_000, 11, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0x9E, 0x2c, 0x00, 0x36, 0x00, 0x03, 0x0f], delay_ms: 0}));
+    /// assert_eq!(bm1366.set_baudrate_next(1_000_000, 11, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0x78, 0x2c, 0x00, 0x40, 0x00, 0x03, 0x06], delay_ms: 0}));
+    /// assert_eq!(bm1366.set_baudrate_next(1_000_000, 11, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0x8A, 0x2c, 0x00, 0x40, 0x00, 0x03, 0x08], delay_ms: 0}));
+    /// assert_eq!(bm1366.set_baudrate_next(1_000_000, 11, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0x64, 0x2c, 0x00, 0x4a, 0x00, 0x03, 0x06], delay_ms: 0}));
+    /// assert_eq!(bm1366.set_baudrate_next(1_000_000, 11, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0x76, 0x2c, 0x00, 0x4a, 0x00, 0x03, 0x1a], delay_ms: 0}));
+    /// assert_eq!(bm1366.set_baudrate_next(1_000_000, 11, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0x50, 0x2c, 0x00, 0x54, 0x00, 0x03, 0x05], delay_ms: 0}));
+    /// assert_eq!(bm1366.set_baudrate_next(1_000_000, 11, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0x62, 0x2c, 0x00, 0x54, 0x00, 0x03, 0x1f], delay_ms: 0}));
+    /// assert_eq!(bm1366.set_baudrate_next(1_000_000, 11, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0x3c, 0x2c, 0x00, 0x5e, 0x00, 0x03, 0x0c], delay_ms: 0}));
+    /// assert_eq!(bm1366.set_baudrate_next(1_000_000, 11, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0x4e, 0x2c, 0x00, 0x5e, 0x00, 0x03, 0x1a], delay_ms: 0}));
+    /// assert_eq!(bm1366.set_baudrate_next(1_000_000, 11, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0x28, 0x2c, 0x00, 0x68, 0x00, 0x03, 0x00], delay_ms: 0}));
+    /// assert_eq!(bm1366.set_baudrate_next(1_000_000, 11, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0x3a, 0x2c, 0x00, 0x68, 0x00, 0x03, 0x1c], delay_ms: 0}));
+    /// assert_eq!(bm1366.set_baudrate_next(1_000_000, 11, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0x14, 0x2c, 0x00, 0x72, 0x00, 0x03, 0x1f], delay_ms: 0}));
+    /// assert_eq!(bm1366.set_baudrate_next(1_000_000, 11, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0x26, 0x2c, 0x00, 0x72, 0x00, 0x03, 0x05], delay_ms: 0}));
+    /// assert_eq!(bm1366.set_baudrate_next(1_000_000, 11, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0x00, 0x2c, 0x00, 0x7c, 0x00, 0x03, 0x03], delay_ms: 0}));
+    /// assert_eq!(bm1366.set_baudrate_next(1_000_000, 11, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0x12, 0x2c, 0x00, 0x7c, 0x00, 0x03, 0x1f], delay_ms: 130}));
+    /// assert_eq!(bm1366.set_baudrate_next(1_000_000, 11, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x28, 0x11, 0x30, 0x02, 0x00, 0x03], delay_ms: 200}));
+    /// assert_eq!(bm1366.set_baudrate_next(1_000_000, 11, 10, 2), None);
     /// assert!(!bm1366.plls[BM1366_PLL_ID_UART].enabled());
-    /// assert_eq!(bm1366.registers.get(&FastUARTConfigurationV2::ADDR).unwrap(), &0x0160_0200);
-    /// assert_eq!(bm1366.registers.get(&PLL1Parameter::ADDR).unwrap(), &0x0070_0111);
+    /// assert_eq!(bm1366.registers.get(&IoDriverStrenghtConfiguration::ADDR).unwrap(), &0x0211_1111);
+    /// assert_eq!(bm1366.registers.get(&FastUARTConfigurationV2::ADDR).unwrap(), &0x1130_0200);
+    /// assert_eq!(bm1366.set_baudrate_next(6_250_000, 1, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x58, 0x02, 0x11, 0x11, 0x11, 0x06], delay_ms: 0}));
+    /// assert_eq!(bm1366.set_baudrate_next(6_250_000, 1, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0x12, 0x58, 0x02, 0x11, 0xf1, 0x11, 0x1b], delay_ms: 0}));
+    /// assert_eq!(bm1366.set_baudrate_next(6_250_000, 1, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0x00, 0x2c, 0x00, 0x18, 0x00, 0x03, 0x10], delay_ms: 0}));
+    /// assert_eq!(bm1366.set_baudrate_next(6_250_000, 1, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0x12, 0x2c, 0x00, 0x18, 0x00, 0x03, 0x0c], delay_ms: 130}));
+    /// assert_eq!(bm1366.set_baudrate_next(6_250_000, 1, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x60, 0xc0, 0x70, 0x01, 0x11, 26], delay_ms: 0}));
+    /// assert_eq!(bm1366.set_baudrate_next(6_250_000, 1, 10, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x28, 0x15, 0x60, 0x07, 0x00, 19], delay_ms: 200}));
+    /// assert_eq!(bm1366.set_baudrate_next(6_250_000, 1, 10, 2), None);
+    /// assert!(bm1366.plls[BM1366_PLL_ID_UART].enabled());
+    /// assert_eq!(bm1366.registers.get(&IoDriverStrenghtConfiguration::ADDR).unwrap(), &0x0211_1111);
+    /// assert_eq!(bm1366.registers.get(&PLL1Parameter::ADDR).unwrap(), &0xC070_0111);
+    /// assert_eq!(bm1366.registers.get(&FastUARTConfigurationV2::ADDR).unwrap(), &0x1560_0700);
     /// ```
-    fn send_baudrate(&mut self, baudrate: u32) -> Vec<CmdDelay, 3> {
-        let mut baud_seq = Vec::new();
-        if baudrate <= self.input_clock_freq.raw() as u32 / 8 {
-            let fbase = self.input_clock_freq.raw() as u32;
-            let bt8d = (fbase / (8 * baudrate)) - 1;
-            let fast_uart_cfg = FastUARTConfigurationV2(
-                *self.registers.get(&FastUARTConfigurationV2::ADDR).unwrap(),
-            )
-            .set_bclk_sel(BaudrateClockSelectV2::Clki)
-            .set_bt8d(bt8d as u8)
-            .val();
-            baud_seq
-                .push(CmdDelay {
+    fn set_baudrate_next(
+        &mut self,
+        baudrate: u32,
+        chain_domain_cnt: u8,
+        domain_asic_cnt: u8,
+        asic_addr_interval: u16,
+    ) -> Option<CmdDelay> {
+        let sub_seq1_start = 0;
+        let sub_seq2_start = sub_seq1_start + chain_domain_cnt as usize;
+        let sub_seq3_start = sub_seq2_start + chain_domain_cnt as usize;
+        let sub_seq4_start = sub_seq3_start + chain_domain_cnt as usize;
+        let sub_seq5_start = sub_seq4_start + 1;
+        let end = sub_seq5_start + 1;
+        let pll1_div4 = 6;
+        match self.seq_step {
+            SequenceStep::Baudrate(step) => {
+                if (sub_seq1_start..sub_seq2_start).contains(&step) {
+                    self.seq_step = SequenceStep::Baudrate(step + 1);
+                    // last chip of each voltage domain should have IoDriverStrenghtConfiguration set to 0x0211_f111
+                    // (iterating voltage domain in decreasing chip address order)
+                    let dom = (sub_seq2_start - step - 1) as u8;
+                    let io_drv_st_cfg = IoDriverStrenghtConfiguration(
+                        *self
+                            .registers
+                            .get(&IoDriverStrenghtConfiguration::ADDR)
+                            .unwrap(),
+                    )
+                    .set_strenght(DriverSelect::CLKO, 15)
+                    .val();
+                    // do not save any chip-specific value
+                    Some(CmdDelay {
+                        cmd: Command::write_reg(
+                            IoDriverStrenghtConfiguration::ADDR,
+                            io_drv_st_cfg,
+                            Destination::Chip(
+                                ((dom + 1) * domain_asic_cnt - 1) * asic_addr_interval as u8,
+                            ),
+                        ),
+                        delay_ms: 0,
+                    })
+                } else if (sub_seq2_start..sub_seq3_start).contains(&step) {
+                    // first and last chip of each voltage domain should have UARTRelay with
+                    // GAP_CNT=domain_asic_num*(chain_domain_num-domain_i)+14
+                    // RO_REL_EN=CO_REL_EN=1
+                    // (iterating voltage domain in decreasing chip address order)
+                    self.seq_step = SequenceStep::Baudrate(step + chain_domain_cnt as usize);
+                    // jump to next sub-seq to alternate
+                    let dom = (sub_seq3_start - step - 1) as u8;
+                    let uart_delay = UARTRelay(*self.registers.get(&UARTRelay::ADDR).unwrap())
+                        .set_gap_cnt(
+                            (domain_asic_cnt as u16) * ((chain_domain_cnt as u16) - (dom as u16))
+                                + 14,
+                        )
+                        .enable_ro_relay()
+                        .enable_co_relay()
+                        .val();
+                    // do not save any chip-specific value
+                    Some(CmdDelay {
+                        cmd: Command::write_reg(
+                            UARTRelay::ADDR,
+                            uart_delay,
+                            Destination::Chip(dom * domain_asic_cnt * asic_addr_interval as u8),
+                        ),
+                        delay_ms: 0,
+                    })
+                } else if (sub_seq3_start..sub_seq4_start).contains(&step) {
+                    // same for last chip of each voltage domain
+                    self.seq_step = SequenceStep::Baudrate(if step == sub_seq4_start - 1 {
+                        sub_seq4_start
+                    } else {
+                        step - chain_domain_cnt as usize + 1
+                    });
+                    // jump back to previous sub-seq to alternate
+                    let dom = (sub_seq4_start - step - 1) as u8;
+                    let uart_delay = UARTRelay(*self.registers.get(&UARTRelay::ADDR).unwrap())
+                        .set_gap_cnt(
+                            (domain_asic_cnt as u16) * ((chain_domain_cnt as u16) - (dom as u16))
+                                + 14,
+                        )
+                        .enable_ro_relay()
+                        .enable_co_relay()
+                        .val();
+                    // do not save any chip-specific value
+                    Some(CmdDelay {
+                        cmd: Command::write_reg(
+                            UARTRelay::ADDR,
+                            uart_delay,
+                            Destination::Chip(
+                                ((dom + 1) * domain_asic_cnt - 1) * asic_addr_interval as u8,
+                            ),
+                        ),
+                        delay_ms: if step == sub_seq4_start - 1 { 130 } else { 0 },
+                    })
+                } else if step == sub_seq4_start {
+                    if baudrate <= self.input_clock_freq.raw() as u32 / 8 {
+                        self.seq_step = SequenceStep::Baudrate(end);
+                        let fbase = self.input_clock_freq.raw() as u32;
+                        let bt8d = (fbase / (8 * baudrate)) - 1;
+                        let fast_uart_cfg = FastUARTConfigurationV2(
+                            *self.registers.get(&FastUARTConfigurationV2::ADDR).unwrap(),
+                        )
+                        .set_b28()
+                        // .set_b24()
+                        .set_bclk_sel(BaudrateClockSelectV2::Clki)
+                        .set_bt8d(bt8d as u8)
+                        .val();
+                        self.registers
+                            .insert(FastUARTConfigurationV2::ADDR, fast_uart_cfg)
+                            .unwrap();
+                        Some(CmdDelay {
+                            cmd: Command::write_reg(
+                                FastUARTConfigurationV2::ADDR,
+                                fast_uart_cfg,
+                                Destination::All,
+                            ),
+                            delay_ms: 200,
+                        })
+                    } else {
+                        self.seq_step = SequenceStep::Baudrate(sub_seq5_start);
+                        self.plls[BM1366_PLL_ID_UART]
+                            // .set_parameter(0xC070_0111)
+                            .lock()
+                            .enable()
+                            .set_fb_div(112)
+                            .set_ref_div(1)
+                            .set_post1_div(1)
+                            .set_post2_div(1)
+                            .set_out_div(BM1366_PLL_OUT_UART, pll1_div4);
+                        let pll1_param = self.plls[BM1366_PLL_ID_UART].parameter();
+                        self.registers
+                            .insert(PLL1Parameter::ADDR, pll1_param)
+                            .unwrap();
+                        Some(CmdDelay {
+                            cmd: Command::write_reg(
+                                PLL1Parameter::ADDR,
+                                pll1_param,
+                                Destination::All,
+                            ),
+                            delay_ms: 0,
+                        })
+                    }
+                } else if step == sub_seq5_start {
+                    self.seq_step = SequenceStep::Baudrate(end);
+                    if baudrate <= self.input_clock_freq.raw() as u32 / 8 {
+                        // should not be reached for 2 reasons:
+                        // - in step above we jump directly to end
+                        // - after setting the chip's FastUartConfiguration with bclk_sel(BaudrateClockSelectV2::Clki) in previous step
+                        //   the chip's baudrate should immediatly adapt and thus this new step with old baudrate from control side
+                        //   will be ignored by the chip.
+                        let pll1_param =
+                            self.plls[BM1366_PLL_ID_UART].disable().unlock().parameter();
+                        self.registers
+                            .insert(PLL1Parameter::ADDR, pll1_param)
+                            .unwrap();
+                        Some(CmdDelay {
+                            cmd: Command::write_reg(
+                                PLL1Parameter::ADDR,
+                                pll1_param,
+                                Destination::All,
+                            ),
+                            delay_ms: 0,
+                        })
+                    } else {
+                        let fbase = self.plls[BM1366_PLL_ID_UART]
+                            .frequency(self.input_clock_freq, BM1366_PLL_OUT_UART)
+                            .raw();
+                        let bt8d = (fbase as u32 / (2 * baudrate)) - 1;
+                        let fast_uart_cfg = FastUARTConfigurationV2(
+                            *self.registers.get(&FastUARTConfigurationV2::ADDR).unwrap(),
+                        )
+                        .set_b28()
+                        // .set_b24()
+                        .set_pll1_div4(pll1_div4)
+                        .set_bclk_sel(BaudrateClockSelectV2::Pll1)
+                        .set_bt8d(bt8d as u8)
+                        .val();
+                        self.registers
+                            .insert(FastUARTConfigurationV2::ADDR, fast_uart_cfg)
+                            .unwrap();
+                        Some(CmdDelay {
+                            cmd: Command::write_reg(
+                                FastUARTConfigurationV2::ADDR,
+                                fast_uart_cfg,
+                                Destination::All,
+                            ),
+                            delay_ms: 200,
+                        })
+                    }
+                } else if step == end {
+                    self.seq_step = SequenceStep::None;
+                    None
+                } else {
+                    unreachable!("step={}", step)
+                }
+            }
+            _ => {
+                // authorize a SetBaudrate sequence start whatever the current step was
+                self.seq_step = SequenceStep::Baudrate(sub_seq1_start);
+                let io_drv_st_cfg = IoDriverStrenghtConfiguration(
+                    *self
+                        .registers
+                        .get(&IoDriverStrenghtConfiguration::ADDR)
+                        .unwrap(),
+                )
+                .set_strenght(DriverSelect::RF, 2)
+                .disable(DriverRSelect::D3R)
+                .disable(DriverRSelect::D2R)
+                .disable(DriverRSelect::D1R)
+                .enable(DriverRSelect::D0R)
+                .set_strenght(DriverSelect::RO, 1)
+                .set_strenght(DriverSelect::CLKO, 1)
+                .set_strenght(DriverSelect::NRSTO, 1)
+                .set_strenght(DriverSelect::BO, 1)
+                .set_strenght(DriverSelect::CO, 1)
+                .val();
+                self.registers
+                    .insert(IoDriverStrenghtConfiguration::ADDR, io_drv_st_cfg)
+                    .unwrap();
+                Some(CmdDelay {
                     cmd: Command::write_reg(
-                        FastUARTConfigurationV2::ADDR,
-                        fast_uart_cfg,
+                        IoDriverStrenghtConfiguration::ADDR,
+                        io_drv_st_cfg,
                         Destination::All,
                     ),
                     delay_ms: 0,
                 })
-                .unwrap();
-            self.registers
-                .insert(FastUARTConfigurationV2::ADDR, fast_uart_cfg)
-                .unwrap();
-            let pll1_param = self.plls[BM1366_PLL_ID_UART].disable().unlock().parameter();
-            baud_seq
-                .push(CmdDelay {
-                    cmd: Command::write_reg(PLL1Parameter::ADDR, pll1_param, Destination::All),
-                    delay_ms: 0,
-                })
-                .unwrap();
-            self.registers
-                .insert(PLL1Parameter::ADDR, pll1_param)
-                .unwrap();
-        } else {
-            let pll1_div4 = 6;
-            self.plls[BM1366_PLL_ID_UART]
-                .lock()
-                .enable()
-                .set_fb_div(112)
-                .set_ref_div(1)
-                .set_post1_div(1)
-                .set_post2_div(1)
-                .set_out_div(BM1366_PLL_OUT_UART, pll1_div4);
-            // self.plls[BM1366_PLL_ID_UART]
-            //     .set_parameter(0xC070_0111)
-            //     .set_out_div(BM1366_PLL_OUT_UART, pll1_div4);
-            let fbase = self.plls[BM1366_PLL_ID_UART]
-                .frequency(self.input_clock_freq, BM1366_PLL_OUT_UART)
-                .raw();
-            let pll1_param = self.plls[BM1366_PLL_ID_UART].parameter();
-            baud_seq
-                .push(CmdDelay {
-                    cmd: Command::write_reg(PLL1Parameter::ADDR, pll1_param, Destination::All),
-                    delay_ms: 0,
-                })
-                .unwrap();
-            self.registers
-                .insert(PLL1Parameter::ADDR, pll1_param)
-                .unwrap();
-            let bt8d = (fbase as u32 / (2 * baudrate)) - 1;
-            let fast_uart_cfg = FastUARTConfigurationV2(
-                *self.registers.get(&FastUARTConfigurationV2::ADDR).unwrap(),
-            )
-            .set_pll1_div4(pll1_div4)
-            .set_bclk_sel(BaudrateClockSelectV2::Pll1)
-            .set_bt8d(bt8d as u8)
-            .val();
-            baud_seq
-                .push(CmdDelay {
-                    cmd: Command::write_reg(
-                        FastUARTConfigurationV2::ADDR,
-                        fast_uart_cfg,
-                        Destination::All,
-                    ),
-                    delay_ms: 0,
-                })
-                .unwrap();
-            self.registers
-                .insert(FastUARTConfigurationV2::ADDR, fast_uart_cfg)
-                .unwrap();
+            }
         }
-        baud_seq
     }
 
     /// ## Reset the Chip Cores command list
@@ -781,154 +892,240 @@ impl Asic for BM1366 {
     /// ### Example
     /// ```
     /// use bm1366::BM1366;
-    /// use bm13xx_asic::{core_register::*, register::*, Asic};
+    /// use bm13xx_asic::{core_register::*, register::*, Asic, CmdDelay};
     /// use bm13xx_protocol::command::Destination;
     ///
     /// let mut bm1366 = BM1366::default();
-    /// let mut reset_seq = bm1366.send_reset_core(Destination::All);
-    /// assert_eq!(reset_seq.len(), 6);
-    /// assert_eq!(reset_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x3c, 0x80, 0x00, 0x80, 0x20, 0x19]);
-    /// assert_eq!(reset_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x3c, 0x80, 0x00, 0x85, 0x40, 0x0c]);
-    /// assert_eq!(reset_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x18, 0xff, 0x0f, 0xc1, 0x00, 0]);
-    /// assert_eq!(reset_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0xa8, 0x00, 0x07, 0x01, 0x00, 31]);
-    /// assert_eq!(reset_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x18, 0x00, 0x00, 0xc1, 0x00, 29]);
-    /// assert_eq!(reset_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0xa8, 0x00, 0x07, 0x00, 0x0f, 21]);
+    /// assert_eq!(bm1366.reset_core_next(Destination::All), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0xa8, 0x00, 0x07, 0x00, 0x0f, 21], delay_ms: 10}));
+    /// assert_eq!(bm1366.reset_core_next(Destination::All), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x18, 0x00, 0x00, 0xc1, 0x00, 29], delay_ms: 10}));
+    /// assert_eq!(bm1366.reset_core_next(Destination::All), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0xa8, 0x00, 0x07, 0x01, 0x00, 31], delay_ms: 10}));
+    /// assert_eq!(bm1366.reset_core_next(Destination::All), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x18, 0xff, 0x0f, 0xc1, 0x00, 0x00], delay_ms: 10}));
+    /// assert_eq!(bm1366.reset_core_next(Destination::All), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x3c, 0x80, 0x00, 0x85, 0x40, 0x0c], delay_ms: 10}));
+    /// assert_eq!(bm1366.reset_core_next(Destination::All), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x3c, 0x80, 0x00, 0x80, 0x20, 0x19], delay_ms: 10}));
+    /// assert_eq!(bm1366.reset_core_next(Destination::All), None);
     /// let mut bm1366 = BM1366::default();
-    /// let mut reset_seq = bm1366.send_reset_core(Destination::Chip(0));
-    /// assert_eq!(reset_seq.len(), 5);
-    /// assert_eq!(reset_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x41, 0x09, 0x00, 0x3c, 0x80, 0x00, 0x82, 0xaa, 0x05]);
-    /// assert_eq!(reset_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x41, 0x09, 0x00, 0x3c, 0x80, 0x00, 0x80, 0x20, 0x11]);
-    /// assert_eq!(reset_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x41, 0x09, 0x00, 0x3c, 0x80, 0x00, 0x85, 0x40, 0x04]);
-    /// assert_eq!(reset_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x41, 0x09, 0x00, 0x18, 0xf0, 0x00, 0xc1, 0x00, 0x0c]);
-    /// assert_eq!(reset_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x41, 0x09, 0x00, 0xa8, 0x00, 0x07, 0x01, 0xf0, 0x15]);
+    /// assert_eq!(bm1366.reset_core_next(Destination::Chip(0)), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0x00, 0xa8, 0x00, 0x07, 0x01, 0xf0, 0x15], delay_ms: 10}));
+    /// assert_eq!(bm1366.reset_core_next(Destination::Chip(0)), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0x00, 0x18, 0xf0, 0x00, 0xc1, 0x00, 0x0c], delay_ms: 10}));
+    /// assert_eq!(bm1366.reset_core_next(Destination::Chip(0)), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0x00, 0x3c, 0x80, 0x00, 0x85, 0x40, 0x04], delay_ms: 10}));
+    /// assert_eq!(bm1366.reset_core_next(Destination::Chip(0)), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0x00, 0x3c, 0x80, 0x00, 0x80, 0x20, 0x11], delay_ms: 10}));
+    /// assert_eq!(bm1366.reset_core_next(Destination::Chip(0)), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0x00, 0x3c, 0x80, 0x00, 0x82, 0xaa, 0x05], delay_ms: 10}));
+    /// assert_eq!(bm1366.reset_core_next(Destination::Chip(0)), None);
     /// ```
-    fn send_reset_core(&mut self, dest: Destination) -> Vec<CmdDelay, 800> {
-        let mut reset_seq = Vec::new();
+    fn reset_core_next(&mut self, dest: Destination) -> Option<CmdDelay> {
         if dest == Destination::All {
-            let reg_a8 = RegA8(*self.registers.get(&RegA8::ADDR).unwrap())
-                .set_b3_0(0xf)
-                .val();
-            reset_seq
-                .push(CmdDelay {
-                    cmd: Command::write_reg(RegA8::ADDR, reg_a8, dest),
-                    delay_ms: 10,
-                })
-                .unwrap();
-            self.registers.insert(RegA8::ADDR, reg_a8).unwrap();
-            let misc = MiscControlV2(*self.registers.get(&MiscControlV2::ADDR).unwrap())
-                .set_core_return_nonce(0)
-                .set_b27_26(0)
-                .set_b25_24(0)
-                .set_b19_16(0)
-                .val();
-            reset_seq
-                .push(CmdDelay {
-                    cmd: Command::write_reg(MiscControlV2::ADDR, misc, dest),
-                    delay_ms: 10,
-                })
-                .unwrap();
-            self.registers.insert(MiscControlV2::ADDR, misc).unwrap();
-            let reg_a8 = RegA8(*self.registers.get(&RegA8::ADDR).unwrap())
-                .set_b8()
-                .set_b3_0(0)
-                .val();
-            reset_seq
-                .push(CmdDelay {
-                    cmd: Command::write_reg(RegA8::ADDR, reg_a8, dest),
-                    delay_ms: 10,
-                })
-                .unwrap();
-            self.registers.insert(RegA8::ADDR, reg_a8).unwrap();
-            let misc = MiscControlV2(*self.registers.get(&MiscControlV2::ADDR).unwrap())
-                .set_core_return_nonce(0xf)
-                .set_b27_26(0x3)
-                .set_b25_24(0x3)
-                .set_b19_16(0xf)
-                .val();
-            reset_seq
-                .push(CmdDelay {
-                    cmd: Command::write_reg(MiscControlV2::ADDR, misc, dest),
-                    delay_ms: 10,
-                })
-                .unwrap();
-            self.registers.insert(MiscControlV2::ADDR, misc).unwrap();
+            match self.seq_step {
+                SequenceStep::ResetCore(step) => {
+                    match step {
+                        0 => {
+                            self.seq_step = SequenceStep::ResetCore(1);
+                            let misc =
+                                MiscControlV2(*self.registers.get(&MiscControlV2::ADDR).unwrap())
+                                    .set_core_return_nonce(0)
+                                    .set_b27_26(0)
+                                    .set_b25_24(0)
+                                    .set_b19_16(0)
+                                    .val();
+                            self.registers.insert(MiscControlV2::ADDR, misc).unwrap();
+                            Some(CmdDelay {
+                                cmd: Command::write_reg(MiscControlV2::ADDR, misc, dest),
+                                delay_ms: 10,
+                            })
+                        }
+                        1 => {
+                            self.seq_step = SequenceStep::ResetCore(2);
+                            let reg_a8 = RegA8(*self.registers.get(&RegA8::ADDR).unwrap())
+                                .set_b8()
+                                .set_b3_0(0)
+                                .val();
+                            self.registers.insert(RegA8::ADDR, reg_a8).unwrap();
+                            Some(CmdDelay {
+                                cmd: Command::write_reg(RegA8::ADDR, reg_a8, dest),
+                                delay_ms: 10,
+                            })
+                        }
+                        2 => {
+                            self.seq_step = SequenceStep::ResetCore(3);
+                            let misc =
+                                MiscControlV2(*self.registers.get(&MiscControlV2::ADDR).unwrap())
+                                    .set_core_return_nonce(0xf)
+                                    .set_b27_26(0x3)
+                                    .set_b25_24(0x3)
+                                    .set_b19_16(0xf)
+                                    .val();
+                            self.registers.insert(MiscControlV2::ADDR, misc).unwrap();
+                            Some(CmdDelay {
+                                cmd: Command::write_reg(MiscControlV2::ADDR, misc, dest),
+                                delay_ms: 10,
+                            })
+                        }
+                        3 => {
+                            self.seq_step = SequenceStep::ResetCore(4);
+                            let hash_clk_ctrl = HashClockCtrl(
+                                *self.core_registers.get(&HashClockCtrl::ID).unwrap(),
+                            )
+                            .enable()
+                            .set_pll_source(0)
+                            .val();
+                            self.core_registers
+                                .insert(HashClockCtrl::ID, hash_clk_ctrl)
+                                .unwrap();
+                            Some(CmdDelay {
+                                cmd: Command::write_reg(
+                                    CoreRegisterControl::ADDR,
+                                    CoreRegisterControl::write_core_reg(
+                                        0,
+                                        HashClockCtrl(hash_clk_ctrl),
+                                    ), // CLOCK_CTRL=64
+                                    dest,
+                                ),
+                                delay_ms: 10,
+                            })
+                        }
+                        4 => {
+                            self.seq_step = SequenceStep::ResetCore(5);
+                            let clk_dly_ctrl = ClockDelayCtrlV2(
+                                *self.core_registers.get(&ClockDelayCtrlV2::ID).unwrap(),
+                            )
+                            .set_ccdly(0)
+                            .set_pwth(4)
+                            .disable_sweep_frequency_mode()
+                            .val();
+                            self.core_registers
+                                .insert(ClockDelayCtrlV2::ID, clk_dly_ctrl)
+                                .unwrap();
+                            Some(CmdDelay {
+                                cmd: Command::write_reg(
+                                    CoreRegisterControl::ADDR,
+                                    CoreRegisterControl::write_core_reg(
+                                        0,
+                                        ClockDelayCtrlV2(clk_dly_ctrl),
+                                    ),
+                                    dest,
+                                ),
+                                delay_ms: 10,
+                            })
+                        }
+                        5 => {
+                            self.seq_step = SequenceStep::None;
+                            None
+                        }
+                        _ => unreachable!(),
+                    }
+                }
+                _ => {
+                    // authorize a ResetCore sequence start whatever the current step was
+                    self.seq_step = SequenceStep::ResetCore(0);
+                    let reg_a8 = RegA8(*self.registers.get(&RegA8::ADDR).unwrap())
+                        .set_b3_0(0xf)
+                        .val();
+                    self.registers.insert(RegA8::ADDR, reg_a8).unwrap();
+                    Some(CmdDelay {
+                        cmd: Command::write_reg(RegA8::ADDR, reg_a8, dest),
+                        delay_ms: 10,
+                    })
+                }
+            }
         } else {
-            let reg_a8 = RegA8(*self.registers.get(&RegA8::ADDR).unwrap())
-                .set_b8()
-                .set_b7_4(0xf)
-                .val();
-            reset_seq
-                .push(CmdDelay {
-                    cmd: Command::write_reg(RegA8::ADDR, reg_a8, dest),
-                    delay_ms: 10,
-                })
-                .unwrap();
-            self.registers.insert(RegA8::ADDR, reg_a8).unwrap();
-            let misc = MiscControlV2(*self.registers.get(&MiscControlV2::ADDR).unwrap())
-                .set_core_return_nonce(0xf)
-                .set_b27_26(0)
-                .set_b25_24(0)
-                .set_b19_16(0)
-                .val();
-            reset_seq
-                .push(CmdDelay {
-                    cmd: Command::write_reg(MiscControlV2::ADDR, misc, dest),
-                    delay_ms: 10,
-                })
-                .unwrap();
-            self.registers.insert(MiscControlV2::ADDR, misc).unwrap();
+            match self.seq_step {
+                SequenceStep::ResetCore(step) => {
+                    match step {
+                        0 => {
+                            self.seq_step = SequenceStep::ResetCore(1);
+                            let misc =
+                                MiscControlV2(*self.registers.get(&MiscControlV2::ADDR).unwrap())
+                                    .set_core_return_nonce(0xf)
+                                    .set_b27_26(0)
+                                    .set_b25_24(0)
+                                    .set_b19_16(0)
+                                    .val();
+                            self.registers.insert(MiscControlV2::ADDR, misc).unwrap();
+                            Some(CmdDelay {
+                                cmd: Command::write_reg(MiscControlV2::ADDR, misc, dest),
+                                delay_ms: 10,
+                            })
+                        }
+                        1 => {
+                            self.seq_step = SequenceStep::ResetCore(2);
+                            let hash_clk_ctrl = HashClockCtrl(
+                                *self.core_registers.get(&HashClockCtrl::ID).unwrap(),
+                            )
+                            .enable()
+                            .set_pll_source(0)
+                            .val();
+                            self.core_registers
+                                .insert(HashClockCtrl::ID, hash_clk_ctrl)
+                                .unwrap();
+                            Some(CmdDelay {
+                                cmd: Command::write_reg(
+                                    CoreRegisterControl::ADDR,
+                                    CoreRegisterControl::write_core_reg(
+                                        0,
+                                        HashClockCtrl(hash_clk_ctrl),
+                                    ), // CLOCK_CTRL=64
+                                    dest,
+                                ),
+                                delay_ms: 10,
+                            })
+                        }
+                        2 => {
+                            self.seq_step = SequenceStep::ResetCore(3);
+                            let clk_dly_ctrl = ClockDelayCtrlV2(
+                                *self.core_registers.get(&ClockDelayCtrlV2::ID).unwrap(),
+                            )
+                            .set_ccdly(0)
+                            .set_pwth(4)
+                            .disable_sweep_frequency_mode()
+                            .val();
+                            self.core_registers
+                                .insert(ClockDelayCtrlV2::ID, clk_dly_ctrl)
+                                .unwrap();
+                            Some(CmdDelay {
+                                cmd: Command::write_reg(
+                                    CoreRegisterControl::ADDR,
+                                    CoreRegisterControl::write_core_reg(
+                                        0,
+                                        ClockDelayCtrlV2(clk_dly_ctrl),
+                                    ),
+                                    dest,
+                                ),
+                                delay_ms: 10,
+                            })
+                        }
+                        3 => {
+                            self.seq_step = SequenceStep::ResetCore(4);
+                            let core_reg2 = 0xAA;
+                            self.core_registers.insert(CoreReg2::ID, core_reg2).unwrap();
+                            Some(CmdDelay {
+                                cmd: Command::write_reg(
+                                    CoreRegisterControl::ADDR,
+                                    CoreRegisterControl::write_core_reg(0, CoreReg2(core_reg2)),
+                                    dest,
+                                ),
+                                delay_ms: 10,
+                            })
+                        }
+                        4 => {
+                            self.seq_step = SequenceStep::None;
+                            None
+                        }
+                        _ => unreachable!(),
+                    }
+                }
+                _ => {
+                    // authorize a ResetCore sequence start whatever the current step was
+                    self.seq_step = SequenceStep::ResetCore(0);
+                    let reg_a8 = RegA8(*self.registers.get(&RegA8::ADDR).unwrap())
+                        .set_b8()
+                        .set_b7_4(0xf)
+                        .val();
+                    self.registers.insert(RegA8::ADDR, reg_a8).unwrap();
+                    Some(CmdDelay {
+                        cmd: Command::write_reg(RegA8::ADDR, reg_a8, dest),
+                        delay_ms: 10,
+                    })
+                }
+            }
         }
-        let hash_clk_ctrl = HashClockCtrl(*self.core_registers.get(&HashClockCtrl::ID).unwrap())
-            .enable()
-            .set_pll_source(0)
-            .val();
-        reset_seq
-            .push(CmdDelay {
-                cmd: Command::write_reg(
-                    CoreRegisterControl::ADDR,
-                    CoreRegisterControl::write_core_reg(0, HashClockCtrl(hash_clk_ctrl)), // CLOCK_CTRL=64
-                    dest,
-                ),
-                delay_ms: 10,
-            })
-            .unwrap();
-        self.core_registers
-            .insert(HashClockCtrl::ID, hash_clk_ctrl)
-            .unwrap();
-        let clk_dly_ctrl =
-            ClockDelayCtrlV2(*self.core_registers.get(&ClockDelayCtrlV2::ID).unwrap())
-                .set_ccdly(0)
-                .set_pwth(4)
-                .disable_sweep_frequency_mode()
-                .val();
-        reset_seq
-            .push(CmdDelay {
-                cmd: Command::write_reg(
-                    CoreRegisterControl::ADDR,
-                    CoreRegisterControl::write_core_reg(0, ClockDelayCtrlV2(clk_dly_ctrl)),
-                    dest,
-                ),
-                delay_ms: 10,
-            })
-            .unwrap();
-        self.core_registers
-            .insert(ClockDelayCtrlV2::ID, clk_dly_ctrl)
-            .unwrap();
-        if let Destination::Chip(_) = dest {
-            let core_reg2 = 0xAA;
-            reset_seq
-                .push(CmdDelay {
-                    cmd: Command::write_reg(
-                        CoreRegisterControl::ADDR,
-                        CoreRegisterControl::write_core_reg(0, CoreReg2(core_reg2)),
-                        dest,
-                    ),
-                    delay_ms: 10,
-                })
-                .unwrap();
-            self.core_registers.insert(CoreReg2::ID, core_reg2).unwrap();
-        }
-        reset_seq
     }
 
     /// ## Send Hash Frequency command list
@@ -936,26 +1133,57 @@ impl Asic for BM1366 {
     /// ### Example
     /// ```
     /// use bm1366::{BM1366, BM1366_PLL_ID_HASH};
-    /// use bm13xx_asic::{register::*, Asic};
+    /// use bm13xx_asic::{register::*, Asic, CmdDelay};
     /// use fugit::HertzU64;
     ///
     /// let mut bm1366 = BM1366::default();
-    /// let mut hash_freq_seq = bm1366.send_hash_freq(HertzU64::MHz(75));
-    /// assert_eq!(hash_freq_seq.len(), 4);
-    /// assert_eq!(hash_freq_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x08, 0xc0, 0xa8, 0x02, 0x63, 0x14]);
-    // assert_eq!(hash_freq_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x08, 0xc0, 0xa5, 0x02, 0x54, 0x09]); // seen on S19XP, but equivalent
-    /// assert_eq!(hash_freq_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x08, 0xc0, 0xb0, 0x02, 0x73, 9]);
-    /// assert_eq!(hash_freq_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x08, 0xc0, 0xaf, 0x02, 0x64, 0x0d]);
-    // assert_eq!(hash_freq_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x08, 0xc0, 0xa2, 0x02, 0x55, 0x30]); // seen on S19XP, but equivalent
-    /// assert_eq!(hash_freq_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x08, 0xc0, 0xb4, 0x02, 0x74, 29]);
+    /// assert_eq!(bm1366.set_hash_freq_next(HertzU64::MHz(75)), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x70, 0x00, 0x00, 0x00, 0x00, 24], delay_ms: 2}));
+    /// assert_eq!(bm1366.set_hash_freq_next(HertzU64::MHz(75)), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x08, 0xc0, 0xb4, 0x02, 0x74, 29], delay_ms: 400}));
+    // assert_eq!(bm1366.set_hash_freq_next(HertzU64::MHz(75)), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x08, 0xc0, 0xa2, 0x02, 0x55, 0x30], delay_ms: 400})); // seen on S19XP, but equivalent
+    /// assert_eq!(bm1366.set_hash_freq_next(HertzU64::MHz(75)), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x08, 0xc0, 0xaf, 0x02, 0x64, 0x0d], delay_ms: 400}));
+    /// assert_eq!(bm1366.set_hash_freq_next(HertzU64::MHz(75)), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x08, 0xc0, 0xb0, 0x02, 0x73, 9], delay_ms: 400}));
+    // assert_eq!(bm1366.set_hash_freq_next(HertzU64::MHz(75)), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x08, 0xc0, 0xa5, 0x02, 0x54, 0x09], delay_ms: 400})); // seen on S19XP, but equivalent
+    /// assert_eq!(bm1366.set_hash_freq_next(HertzU64::MHz(75)), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x08, 0xc0, 0xa8, 0x02, 0x63, 0x14], delay_ms: 400}));
+    /// assert_eq!(bm1366.set_hash_freq_next(HertzU64::MHz(75)), None);
     /// assert_eq!(bm1366.plls[BM1366_PLL_ID_HASH].parameter(), 0xc0a8_0263);
     /// ```
-    fn send_hash_freq(&mut self, target_freq: HertzU64) -> Vec<CmdDelay, 800> {
-        let mut hash_freq_seq = Vec::new();
-        if self.plls[BM1366_PLL_ID_HASH].out_div(BM1366_PLL_OUT_HASH) != 0 {
-            self.plls[BM1366_PLL_ID_HASH].set_out_div(BM1366_PLL_OUT_HASH, 0);
-            hash_freq_seq
-                .push(CmdDelay {
+    fn set_hash_freq_next(&mut self, target_freq: HertzU64) -> Option<CmdDelay> {
+        match self.seq_step {
+            SequenceStep::HashFreq(_) => {
+                let freq = self.hash_freq() + HertzU64::kHz(6250);
+                self.set_hash_freq(if freq > target_freq {
+                    target_freq
+                } else {
+                    freq
+                });
+                self.registers
+                    .insert(
+                        PLL0Parameter::ADDR,
+                        self.plls[BM1366_PLL_ID_HASH].parameter(),
+                    )
+                    .unwrap();
+                if freq > target_freq {
+                    self.seq_step = SequenceStep::None;
+                    None
+                } else {
+                    Some(CmdDelay {
+                        cmd: Command::write_reg(
+                            PLL0Parameter::ADDR,
+                            self.plls[BM1366_PLL_ID_HASH].parameter(),
+                            Destination::All,
+                        ),
+                        delay_ms: if freq > HertzU64::MHz(380) { 2300 } else { 400 },
+                    })
+                }
+            }
+            _ => {
+                // authorize a SetHashFreq sequence start whatever the current step was
+                self.seq_step = SequenceStep::HashFreq(0);
+                self.plls[BM1366_PLL_ID_HASH].set_out_div(BM1366_PLL_OUT_HASH, 0);
+                self.registers
+                    .insert(PLL0Divider::ADDR, self.plls[BM1366_PLL_ID_HASH].divider())
+                    .unwrap();
+                Some(CmdDelay {
                     cmd: Command::write_reg(
                         PLL0Divider::ADDR,
                         self.plls[BM1366_PLL_ID_HASH].divider(),
@@ -963,43 +1191,8 @@ impl Asic for BM1366 {
                     ),
                     delay_ms: 2,
                 })
-                .unwrap();
-            self.registers
-                .insert(PLL0Divider::ADDR, self.plls[BM1366_PLL_ID_HASH].divider())
-                .unwrap();
-        }
-        let mut freq = self.hash_freq();
-        let mut long_delay = false;
-        loop {
-            freq += HertzU64::kHz(6250);
-            if freq > target_freq {
-                freq = target_freq;
-            }
-            self.set_hash_freq(freq);
-            if freq > HertzU64::MHz(380) {
-                long_delay = !long_delay;
-            }
-            hash_freq_seq
-                .push(CmdDelay {
-                    cmd: Command::write_reg(
-                        PLL0Parameter::ADDR,
-                        self.plls[BM1366_PLL_ID_HASH].parameter(),
-                        Destination::All,
-                    ),
-                    delay_ms: if long_delay { 2300 } else { 400 },
-                })
-                .unwrap();
-            self.registers
-                .insert(
-                    PLL0Parameter::ADDR,
-                    self.plls[BM1366_PLL_ID_HASH].parameter(),
-                )
-                .unwrap();
-            if freq == target_freq {
-                break;
             }
         }
-        hash_freq_seq
     }
 
     /// ## Send Enable Version Rolling command list
@@ -1007,43 +1200,50 @@ impl Asic for BM1366 {
     /// ### Example
     /// ```
     /// use bm1366::BM1366;
-    /// use bm13xx_asic::Asic;
+    /// use bm13xx_asic::{Asic, CmdDelay};
     ///
     /// let mut bm1366 = BM1366::default();
-    /// let mut vers_roll_seq = bm1366.send_version_rolling(0x1fff_e000);
-    /// assert_eq!(vers_roll_seq.len(), 2);
-    /// assert_eq!(vers_roll_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0xa4, 0x90, 0x00, 0xff, 0xff, 0x1c]);
-    /// assert_eq!(vers_roll_seq.pop().unwrap().cmd, [0x55, 0xaa, 0x51, 0x09, 0x00, 0x10, 0x00, 0x00, 0x15, 0x1c, 0x02]);
+    /// assert_eq!(bm1366.set_version_rolling_next(0x1fff_e000), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x10, 0x00, 0x00, 0x15, 0x1c, 0x02], delay_ms: 1}));
+    /// assert_eq!(bm1366.set_version_rolling_next(0x1fff_e000), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0xa4, 0x90, 0x00, 0xff, 0xff, 0x1c], delay_ms: 1}));
+    /// assert_eq!(bm1366.set_version_rolling_next(0x1fff_e000), None);
     /// ```
-    fn send_version_rolling(&mut self, mask: u32) -> Vec<CmdDelay, 2> {
-        let mut vers_roll_seq = Vec::new();
-        let hcn = 0x0000_151c;
-        vers_roll_seq
-            .push(CmdDelay {
-                cmd: Command::write_reg(HashCountingNumber::ADDR, hcn, Destination::All),
-                delay_ms: 1,
-            })
-            .unwrap();
-        self.registers
-            .insert(HashCountingNumber::ADDR, hcn)
-            .unwrap();
-        let vers_roll = VersionRolling(*self.registers.get(&VersionRolling::ADDR).unwrap())
-            .enable()
-            .set_mask(mask)
-            .val();
-        vers_roll_seq
-            .push(CmdDelay {
-                cmd: Command::write_reg(VersionRolling::ADDR, vers_roll, Destination::All),
-                delay_ms: 1,
-            })
-            .unwrap();
-        self.registers
-            .insert(VersionRolling::ADDR, vers_roll)
-            .unwrap();
-        self.enable_version_rolling(mask);
-        vers_roll_seq
-    }
-    fn between_reset_and_set_freq(&mut self) -> Vec<CmdDelay, 40> {
-        unimplemented!() // FIXME: A temporary hack this function should be removed
+    fn set_version_rolling_next(&mut self, mask: u32) -> Option<CmdDelay> {
+        match self.seq_step {
+            SequenceStep::VersionRolling(step) => match step {
+                0 => {
+                    self.seq_step = SequenceStep::VersionRolling(1);
+                    let vers_roll =
+                        VersionRolling(*self.registers.get(&VersionRolling::ADDR).unwrap())
+                            .enable()
+                            .set_mask(mask)
+                            .val();
+                    self.registers
+                        .insert(VersionRolling::ADDR, vers_roll)
+                        .unwrap();
+                    self.enable_version_rolling(mask);
+                    Some(CmdDelay {
+                        cmd: Command::write_reg(VersionRolling::ADDR, vers_roll, Destination::All),
+                        delay_ms: 1,
+                    })
+                }
+                1 => {
+                    self.seq_step = SequenceStep::None;
+                    None
+                }
+                _ => unreachable!(),
+            },
+            _ => {
+                // authorize a VersionRolling sequence start whatever the current step was
+                self.seq_step = SequenceStep::VersionRolling(0);
+                let hcn = 0x0000_151c;
+                self.registers
+                    .insert(HashCountingNumber::ADDR, hcn)
+                    .unwrap();
+                Some(CmdDelay {
+                    cmd: Command::write_reg(HashCountingNumber::ADDR, hcn, Destination::All),
+                    delay_ms: 1,
+                })
+            }
+        }
     }
 }

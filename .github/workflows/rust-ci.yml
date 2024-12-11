@@ -26,7 +26,7 @@ jobs:
       - name: Build
         run: cargo build --verbose
       - name: Test
-        run: cargo test --features core-error --verbose
+        run: cargo test --verbose
       - name: Format
         run: cargo fmt --check
       - name: Clippy
