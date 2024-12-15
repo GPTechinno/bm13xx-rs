@@ -16,4 +16,3 @@ rustversion = { workspace = true }
 
 [features]
 defmt-03 = ["dep:defmt", "bm13xx-protocol/defmt-03", "fugit/defmt"]
-log = ["dep:log"]

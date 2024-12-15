@@ -26,7 +26,6 @@ defmt-03 = [
     "embedded-io-async/defmt-03",
     "fugit/defmt",
 ]
-log = ["dep:log"]
 
 [dev-dependencies]
 bm1366 = { path = "../bm1366" }
