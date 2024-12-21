@@ -298,7 +298,7 @@ impl Default for BM1370 {
             .unwrap();
         bm1370
             .registers
-            .insert(HashRate::ADDR, 0x0001_2a89)
+            .insert(HashRate::ADDR, 0x0000_0000)
             .unwrap();
         bm1370
             .registers
@@ -326,7 +326,6 @@ impl Default for BM1370 {
             .unwrap();
         bm1370
             .registers
-            // .insert(OrderedClockEnable::ADDR, 0x0000_0003) // NOTE: Changed from 1360
             .insert(OrderedClockEnable::ADDR, 0x0000_0007)
             .unwrap();
         bm1370.registers.insert(Reg24::ADDR, 0x0010_0000).unwrap();
@@ -339,7 +338,6 @@ impl Default for BM1370 {
             .insert(UARTRelay::ADDR, 0x000f_0000)
             .unwrap();
         bm1370.registers.insert(Reg30::ADDR, 0x0000_0080).unwrap();
-        // bm1370.registers.insert(Reg30::ADDR, 0x0000_0070).unwrap(); // NOTE: changed from 1360
         bm1370.registers.insert(Reg34::ADDR, 0x0000_0000).unwrap();
         bm1370
             .registers
@@ -352,7 +350,6 @@ impl Default for BM1370 {
         bm1370
             .registers
             .insert(CoreRegisterValue::ADDR, 0x007f_0000)
-            // .insert(CoreRegisterValue::ADDR, 0x1eaf_5fbe) // NOTE: changed from 1360
             .unwrap();
         bm1370
             .registers
@@ -385,7 +382,7 @@ impl Default for BM1370 {
             .unwrap();
         bm1370
             .registers
-            .insert(PLL2Parameter::ADDR, 0x2050_0174) // NOTE: Added by dwarloch
+            .insert(PLL2Parameter::ADDR, 0x2050_0174)
             .unwrap();
         bm1370
             .registers
@@ -447,10 +444,6 @@ impl Default for BM1370 {
             .registers
             .insert(VersionRolling::ADDR, 0x0000_ffff)
             .unwrap();
-        bm1370
-            .registers
-            .insert(HashCountingNumber::ADDR, 0x0000_1eb5)
-            .unwrap();
 
         bm1370.registers.insert(RegA8::ADDR, 0x0007_0000).unwrap();
         bm1370.registers.insert(RegAC::ADDR, 0x0000_0000).unwrap();
@@ -477,7 +470,7 @@ impl Default for BM1370 {
         // Default Core Registers Value
         bm1370
             .core_registers
-            .insert(ClockDelayCtrlV2::ID, 0x98)
+            .insert(ClockDelayCtrlV2::ID, 0x52)
             .unwrap();
         // bm1370.core_registers.insert(1, 0x00).unwrap(); // not used anywhere in official FW
         bm1370.core_registers.insert(2, 0x55).unwrap();
@@ -1162,7 +1155,7 @@ impl Asic for BM1370 {
                             self.plls[BM1370_PLL_ID_HASH].parameter(),
                             Destination::All,
                         ),
-                        delay_ms: if freq > HertzU64::MHz(380) { 2300 } else { 400 },
+                        delay_ms: if freq > HertzU64::MHz(550) { 2700 } else { 400 },
                     })
                 }
             }
@@ -1247,8 +1240,8 @@ impl Asic for BM1370 {
             _ => {
                 // authorize a VersionRolling sequence start whatever the current step was
                 self.seq_step = SequenceStep::VersionRolling(0);
-                // let hcn = 0x0000_1eb5; // S21Pro
-                let hcn = 0x0000_1a44; // S21XP
+                let hcn = 0x0000_1eb5; // S21Pro
+                                       // let hcn = 0x0000_1a44; // S21XP
                 self.registers
                     .insert(HashCountingNumber::ADDR, hcn)
                     .unwrap();
