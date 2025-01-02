@@ -11,9 +11,9 @@ defmt = { workspace = true, optional = true }
 derive_more = { workspace = true, features = ["from"] }
 heapless = { workspace = true }
 log = { workspace = true, optional = true }
+rustversion = { workspace = true }
 
 [features]
-core-error = []                               # bump MSRV to 1.81.0
 defmt-03 = ["dep:defmt", "heapless/defmt-03"]
 
 [dev-dependencies]

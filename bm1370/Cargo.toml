@@ -1,7 +1,7 @@
 [package]
 categories = ["embedded", "no-std"]
 edition = "2021"
-name = "bm1397"
+name = "bm1370"
 rust-version = "1.75.0"
 version = "0.1.0"
 

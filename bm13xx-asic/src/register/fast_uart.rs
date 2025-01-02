@@ -86,14 +86,20 @@ pub enum BaudrateClockSelectV2 {
     Clki = 0,
     /// Baudrate base clock is PLL1.
     Pll1 = 1,
+    // /// Baudrate base clock is PLL2.
+    // Pll2 = 2,
+    // /// Baudrate base clock is PLL3.
+    // Pll3 = 3,
 }
 
-impl From<bool> for BaudrateClockSelectV2 {
-    fn from(val: bool) -> BaudrateClockSelectV2 {
-        if val {
-            BaudrateClockSelectV2::Pll1
-        } else {
-            BaudrateClockSelectV2::Clki
+impl From<u8> for BaudrateClockSelectV2 {
+    fn from(val: u8) -> BaudrateClockSelectV2 {
+        match val {
+            0 => BaudrateClockSelectV2::Clki,
+            1 => BaudrateClockSelectV2::Pll1,
+            // 2 => BaudrateClockSelectV2::Pll2,
+            // 3 => BaudrateClockSelectV2::Pll3,
+            _ => unreachable!(),
         }
     }
 }
@@ -101,12 +107,6 @@ impl From<bool> for BaudrateClockSelectV2 {
 impl From<BaudrateClockSelectV2> for u8 {
     fn from(val: BaudrateClockSelectV2) -> u8 {
         val as u8
-    }
-}
-
-impl From<BaudrateClockSelectV2> for u32 {
-    fn from(val: BaudrateClockSelectV2) -> u32 {
-        val as u32
     }
 }
 
@@ -120,27 +120,53 @@ impl_boilerplate_for!(FastUARTConfigurationV2);
 impl FastUARTConfigurationV2 {
     pub const ADDR: u8 = 0x28;
 
-    // const ?_OFFSET: u8 = 31;
-    // const ?_OFFSET: u8 = 30;
-    // const ?_OFFSET: u8 = 29;
-    // const EN?_OFFSET: u8 = 28;
+    // const B31_OFFSET: u8 = 31;
+    // const B29_OFFSET: u8 = 30;
+    // const B28_OFFSET: u8 = 29;
+    const B28_OFFSET: u8 = 28;
     const BCK_SEL_OFFSET: u8 = 26;
-    // const ?_OFFSET: u8 = 24;
+    // const B24_OFFSET: u8 = 24;
     const PLL1_DIV4_OFFSET: u8 = 20;
-    // const ?_OFFSET: u8 = 16;
+    // const B16_19_OFFSET: u8 = 16;
     const BT8D_OFFSET: u8 = 8;
     // const CLKO_DIV_OFFSET: u8 = 0;
 
-    // const ?_MASK: u32 = 0b1;
-    // const ?_MASK: u32 = 0b1;
-    // const ?_MASK: u32 = 0b1;
-    // const EN?_MASK: u32 = 0b1;
+    // const B31_MASK: u32 = 0b1;
+    // const B30_MASK: u32 = 0b1;
+    // const B29_MASK: u32 = 0b1;
+    const B28_MASK: u32 = 0b1;
     const BCK_SEL_MASK: u32 = 0b1; /* should be 0b11 but only 1 values are known for now */
-    // const ?_MASK: u32 = 0b1;
+    // const B24_MASK: u32 = 0b1;
     const PLL1_DIV4_MASK: u32 = 0b1111;
-    // const ?_MASK: u32 = 0b1111;
+    // const B16_19_MASK: u32 = 0b1111;
     const BT8D_MASK: u32 = 0xff;
     // const CLKO_DIV_MASK: u32 = 0xff;
+
+    /// ## Handle the B28 field.
+    ///
+    /// Get and set the B28 state.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use bm13xx_asic::register::FastUARTConfigurationV2;
+    ///
+    /// let mut fast_uart_cfg = FastUARTConfigurationV2(0x0007_0000); // BM1366 default value
+    /// assert!(!fast_uart_cfg.is_b28());
+    /// assert!(fast_uart_cfg.set_b28().is_b28());
+    /// assert!(!fast_uart_cfg.clr_b28().is_b28());
+    /// ```
+    pub const fn is_b28(&self) -> bool {
+        (self.0 >> Self::B28_OFFSET) & Self::B28_MASK == Self::B28_MASK
+    }
+    pub fn set_b28(&mut self) -> &mut Self {
+        self.0 |= Self::B28_MASK << Self::B28_OFFSET;
+        self
+    }
+    pub fn clr_b28(&mut self) -> &mut Self {
+        self.0 &= !(Self::B28_MASK << Self::B28_OFFSET);
+        self
+    }
 
     /// ## Handle the Baudrate Clock Select field.
     ///
@@ -155,11 +181,8 @@ impl FastUARTConfigurationV2 {
     /// assert_eq!(fast_uart_cfg.bclk_sel(), BaudrateClockSelectV2::Clki);
     /// assert_eq!(fast_uart_cfg.set_bclk_sel(BaudrateClockSelectV2::Pll1).bclk_sel(), BaudrateClockSelectV2::Pll1);
     /// ```
-    pub const fn bclk_sel(&self) -> BaudrateClockSelectV2 {
-        match ((self.0 >> Self::BCK_SEL_OFFSET) & Self::BCK_SEL_MASK) == Self::BCK_SEL_MASK {
-            true => BaudrateClockSelectV2::Pll1,
-            false => BaudrateClockSelectV2::Clki,
-        }
+    pub fn bclk_sel(&self) -> BaudrateClockSelectV2 {
+        (((self.0 >> Self::BCK_SEL_OFFSET) & Self::BCK_SEL_MASK) as u8).into()
     }
     pub fn set_bclk_sel(&mut self, bclk_sel: BaudrateClockSelectV2) -> &mut Self {
         self.0 &= !(Self::BCK_SEL_MASK << Self::BCK_SEL_OFFSET);
@@ -190,7 +213,6 @@ impl FastUARTConfigurationV2 {
         self.0 |= ((pll3_div4 as u32) & Self::PLL1_DIV4_MASK) << Self::PLL1_DIV4_OFFSET;
         self
     }
-
     /// ## Handle the BT8D field.
     ///
     /// This returns an `u8` with the BT8D value.

@@ -10,7 +10,7 @@ use crate::register::Register;
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 pub enum DriverSelect {
     RF,
-    R0,
+    RO,
     CLKO,
     NRSTO,
     BO,
@@ -73,7 +73,7 @@ impl IoDriverStrenghtConfiguration {
     ///
     /// let mut io_conf = IoDriverStrenghtConfiguration(0x0001_2111); // BM1366 default value
     /// assert_eq!(io_conf.strenght(DriverSelect::RF), 0);
-    /// assert_eq!(io_conf.strenght(DriverSelect::R0), 1);
+    /// assert_eq!(io_conf.strenght(DriverSelect::RO), 1);
     /// assert_eq!(io_conf.strenght(DriverSelect::CLKO), 2);
     /// assert_eq!(io_conf.strenght(DriverSelect::NRSTO), 1);
     /// assert_eq!(io_conf.strenght(DriverSelect::BO), 1);
@@ -86,7 +86,7 @@ impl IoDriverStrenghtConfiguration {
         ((self.0
             >> match drv {
                 DriverSelect::RF => Self::RF_DS_OFFSET,
-                DriverSelect::R0 => Self::RO_DS_OFFSET,
+                DriverSelect::RO => Self::RO_DS_OFFSET,
                 DriverSelect::CLKO => Self::CLKO_DS_OFFSET,
                 DriverSelect::NRSTO => Self::NRSTO_DS_OFFSET,
                 DriverSelect::BO => Self::BO_DS_OFFSET,
@@ -94,7 +94,7 @@ impl IoDriverStrenghtConfiguration {
             })
             & match drv {
                 DriverSelect::RF => Self::RF_DS_MASK,
-                DriverSelect::R0 => Self::RO_DS_MASK,
+                DriverSelect::RO => Self::RO_DS_MASK,
                 DriverSelect::CLKO => Self::CLKO_DS_MASK,
                 DriverSelect::NRSTO => Self::NRSTO_DS_MASK,
                 DriverSelect::BO => Self::BO_DS_MASK,
@@ -104,7 +104,7 @@ impl IoDriverStrenghtConfiguration {
     pub fn set_strenght(&mut self, drv: DriverSelect, strenght: u8) -> &mut Self {
         let offset = match drv {
             DriverSelect::RF => Self::RF_DS_OFFSET,
-            DriverSelect::R0 => Self::RO_DS_OFFSET,
+            DriverSelect::RO => Self::RO_DS_OFFSET,
             DriverSelect::CLKO => Self::CLKO_DS_OFFSET,
             DriverSelect::NRSTO => Self::NRSTO_DS_OFFSET,
             DriverSelect::BO => Self::BO_DS_OFFSET,
@@ -112,7 +112,7 @@ impl IoDriverStrenghtConfiguration {
         };
         let mask = match drv {
             DriverSelect::RF => Self::RF_DS_MASK,
-            DriverSelect::R0 => Self::RO_DS_MASK,
+            DriverSelect::RO => Self::RO_DS_MASK,
             DriverSelect::CLKO => Self::CLKO_DS_MASK,
             DriverSelect::NRSTO => Self::NRSTO_DS_MASK,
             DriverSelect::BO => Self::BO_DS_MASK,
@@ -193,7 +193,7 @@ impl core::fmt::Display for IoDriverStrenghtConfiguration {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("IoDriverStrenghtConfiguration")
             .field("RF_DS", &self.strenght(DriverSelect::RF))
-            .field("RO_DS", &self.strenght(DriverSelect::R0))
+            .field("RO_DS", &self.strenght(DriverSelect::RO))
             .field("CLKO_DS", &self.strenght(DriverSelect::CLKO))
             .field("NRSTO_DS", &self.strenght(DriverSelect::NRSTO))
             .field("BO_DS", &self.strenght(DriverSelect::BO))
@@ -209,7 +209,7 @@ impl defmt::Format for IoDriverStrenghtConfiguration {
             fmt,
             "IoDriverStrenghtConfiguration {{ RF_DS: {}, RO_DS: {}, CLKO_DS: {}, NRSTO_DS: {}, BO_DS: {}, CO_DS: {} }}",
             self.strenght(DriverSelect::RF),
-            self.strenght(DriverSelect::R0),
+            self.strenght(DriverSelect::RO),
             self.strenght(DriverSelect::CLKO),
             self.strenght(DriverSelect::NRSTO),
             self.strenght(DriverSelect::BO),

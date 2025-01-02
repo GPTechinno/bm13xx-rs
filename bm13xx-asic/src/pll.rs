@@ -152,7 +152,7 @@ impl Pll {
     /// pll.set_divider(0x0304_0607); // BM1397 PLL0 default divider
     /// assert_eq!(pll.frequency(clki, 0), HertzU64::Hz(21428571));
     /// assert_eq!(pll.frequency(clki, 5), HertzU64::MHz(0));
-    /// assert_eq!(pll.set_frequency(clki, 0, HertzU64::MHz(425)).frequency(clki, 0), HertzU64::MHz(425));
+    /// assert_eq!(pll.set_frequency(clki, 0, HertzU64::MHz(425), false).frequency(clki, 0), HertzU64::MHz(425));
     /// pll.set_parameter(0x0064_0111); // BM1397 PLL1 default value
     /// pll.set_divider(0x0304_0506); // BM1397 PLL1 default divider
     /// assert_eq!(pll.frequency(clki, 0), HertzU64::MHz(0));
@@ -172,6 +172,7 @@ impl Pll {
         in_clk_freq: HertzU64,
         out: usize,
         target_freq: HertzU64,
+        lock: bool,
     ) -> &mut Self {
         if out < PLL_OUT_MAX {
             let mut pll = *self;
@@ -190,7 +191,10 @@ impl Pll {
                             + 0.5) as u16;
                         if fb_div < 251 {
                             pll.fb_div = fb_div;
-                            pll.enable().lock();
+                            pll.enable();
+                            if lock {
+                                pll.lock();
+                            }
                             let vco_freq = pll.vco_freq(in_clk_freq);
                             pll.vco_high_freq = vco_freq > PLL_VCO_FREQ_HIGH;
                             if (pll.ref_div > 1 || vco_freq <= HertzU64::MHz(3125))
