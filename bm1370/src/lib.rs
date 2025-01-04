@@ -562,15 +562,15 @@ impl Asic for BM1370 {
                         // .disable_sweep_frequency_mode()
                         // .val();
                         // S21XP
-                        // let clk_dly_ctrl = 0x10;
-                        let clk_dly_ctrl = ClockDelayCtrlV2(
-                            *self.core_registers.get(&ClockDelayCtrlV2::ID).unwrap(),
-                        )
-                        .set_ccdly(0)
-                        .set_pwth(2)
-                        // .disable_bit2()
-                        .disable_sweep_frequency_mode()
-                        .val();
+                        let clk_dly_ctrl = 0x10;
+                        // let clk_dly_ctrl = ClockDelayCtrlV2(
+                        //     *self.core_registers.get(&ClockDelayCtrlV2::ID).unwrap(),
+                        // )
+                        // .set_ccdly(0)
+                        // .set_pwth(2)
+                        // // .disable_bit2()
+                        // .disable_sweep_frequency_mode()
+                        // .val();
                         self.core_registers
                             .insert(ClockDelayCtrlV2::ID, clk_dly_ctrl)
                             .unwrap();
@@ -596,6 +596,9 @@ impl Asic for BM1370 {
                         })
                     }
                     2 => {
+                        // self.seq_step = SequenceStep::None;
+                        // None
+
                         self.seq_step = SequenceStep::Init(3);
                         let ana_mux_ctrl = AnalogMuxControlV2(
                             *self.registers.get(&AnalogMuxControlV2::ADDR).unwrap(),
@@ -705,7 +708,7 @@ impl Asic for BM1370 {
         domain_asic_cnt: u8,
         asic_addr_interval: u16,
     ) -> Option<CmdDelay> {
-        let sub_seq1_start = 0;
+        let sub_seq1_start = 1;
         let sub_seq2_start = sub_seq1_start + chain_domain_cnt as usize;
         let sub_seq3_start = sub_seq2_start + 1;
         let sub_seq4_start = sub_seq3_start + chain_domain_cnt as usize;
@@ -741,16 +744,16 @@ impl Asic for BM1370 {
                     })
                 } else if step == sub_seq2_start {
                     self.seq_step = SequenceStep::Baudrate(sub_seq3_start);
-                    self.plls[BM1370_PLL_ID_UART]
-                        .set_parameter(0x5aa5_5aa5) // TODO: replace these fixed values with equivalent individual ones below
-                        // .lock()
-                        // .enable()
-                        // .set_fb_div(112)
-                        // .set_ref_div(1)
-                        // .set_post1_div(1)
-                        // .set_post2_div(1)
-                        .set_out_div(BM1370_PLL_OUT_UART, pll3_div4);
+                    self.plls[BM1370_PLL_ID_UART].set_parameter(0x5aa5_5aa5); // TODO: replace these fixed values with equivalent individual ones below
+                                                                              // .lock()
+                                                                              // .enable()
+                                                                              // .set_fb_div(112)
+                                                                              // .set_ref_div(1)
+                                                                              // .set_post1_div(1)
+                                                                              // .set_post2_div(1)
+                                                                              // .set_out_div(BM1370_PLL_OUT_UART, pll3_div4);
                     let pll3_param = self.plls[BM1370_PLL_ID_UART].parameter();
+                    let pll3_param = 0x5aa5_5aa5; // TODO: replace these fixed values with equivalent individual ones below
                     self.registers
                         .insert(PLL3Parameter::ADDR, pll3_param)
                         .unwrap();
@@ -847,6 +850,7 @@ impl Asic for BM1370 {
                             .set_post2_div(1)
                             .set_out_div(BM1370_PLL_OUT_UART, pll3_div4);
                         let pll3_param = self.plls[BM1370_PLL_ID_UART].parameter();
+                        let pll3_param = 0x5aa5_5aa5; // TODO: replace these fixed values with equivalent individual ones below
                         self.registers
                             .insert(PLL3Parameter::ADDR, pll3_param)
                             .unwrap();
@@ -869,6 +873,7 @@ impl Asic for BM1370 {
                         //   will be ignored by the chip.
                         let pll3_param =
                             self.plls[BM1370_PLL_ID_UART].disable().unlock().parameter();
+                        let pll3_param = 0x5aa5_5aa5; // TODO: replace these fixed values with equivalent individual ones below
                         self.registers
                             .insert(PLL3Parameter::ADDR, pll3_param)
                             .unwrap();
@@ -1134,6 +1139,14 @@ impl Asic for BM1370 {
         match self.seq_step {
             SequenceStep::HashFreq(_) => {
                 let freq = self.hash_freq() + HertzU64::kHz(6250);
+                let mut cmd_delay = 400;
+                if freq > HertzU64::MHz(550) {
+                    let freq_over = freq - HertzU64::MHz(550);
+                    if freq_over.raw() % HertzU64::kHz(2 * 6250).raw() != 0 {
+                        cmd_delay = 2700;
+                    }
+                }
+
                 self.set_hash_freq(if freq > target_freq {
                     target_freq
                 } else {
@@ -1155,25 +1168,60 @@ impl Asic for BM1370 {
                             self.plls[BM1370_PLL_ID_HASH].parameter(),
                             Destination::All,
                         ),
-                        delay_ms: if freq > HertzU64::MHz(550) { 2700 } else { 400 },
+                        delay_ms: cmd_delay,
                     })
                 }
             }
             _ => {
-                // authorize a SetHashFreq sequence start whatever the current step was
-                self.seq_step = SequenceStep::HashFreq(0);
-                self.plls[BM1370_PLL_ID_HASH].set_out_div(BM1370_PLL_OUT_HASH, 0);
+                let freq = self.hash_freq() + HertzU64::kHz(6250);
+                let mut cmd_delay = 400;
+                if freq > HertzU64::MHz(550) {
+                    let freq_over = freq - HertzU64::MHz(550);
+                    if freq_over.raw() % HertzU64::kHz(2 * 6250).raw() != 0 {
+                        cmd_delay = 2700;
+                    }
+                }
+
+                self.set_hash_freq(if freq > target_freq {
+                    target_freq
+                } else {
+                    freq
+                });
                 self.registers
-                    .insert(PLL0Divider::ADDR, self.plls[BM1370_PLL_ID_HASH].divider())
+                    .insert(
+                        PLL0Parameter::ADDR,
+                        self.plls[BM1370_PLL_ID_HASH].parameter(),
+                    )
                     .unwrap();
-                Some(CmdDelay {
-                    cmd: Command::write_reg(
-                        PLL0Divider::ADDR,
-                        self.plls[BM1370_PLL_ID_HASH].divider(),
-                        Destination::All,
-                    ),
-                    delay_ms: 2,
-                })
+                if freq > target_freq {
+                    self.seq_step = SequenceStep::None;
+                    None
+                } else {
+                    self.seq_step = SequenceStep::HashFreq(0);
+                    Some(CmdDelay {
+                        cmd: Command::write_reg(
+                            PLL0Parameter::ADDR,
+                            self.plls[BM1370_PLL_ID_HASH].parameter(),
+                            Destination::All,
+                        ),
+                        delay_ms: cmd_delay,
+                    })
+                }
+
+                // // authorize a SetHashFreq sequence start whatever the current step was
+                // self.seq_step = SequenceStep::HashFreq(0);
+                // self.plls[BM1370_PLL_ID_HASH].set_out_div(BM1370_PLL_OUT_HASH, 0);
+                // self.registers
+                //     .insert(PLL0Divider::ADDR, self.plls[BM1370_PLL_ID_HASH].divider())
+                //     .unwrap();
+                // Some(CmdDelay {
+                //     cmd: Command::write_reg(
+                //         PLL0Divider::ADDR,
+                //         self.plls[BM1370_PLL_ID_HASH].divider(),
+                //         Destination::All,
+                //     ),
+                //     delay_ms: 2,
+                // })
             }
         }
     }
@@ -1240,8 +1288,8 @@ impl Asic for BM1370 {
             _ => {
                 // authorize a VersionRolling sequence start whatever the current step was
                 self.seq_step = SequenceStep::VersionRolling(0);
-                let hcn = 0x0000_1eb5; // S21Pro
-                                       // let hcn = 0x0000_1a44; // S21XP
+                // let hcn = 0x0000_1eb5; // S21Pro
+                let hcn = 0x0000_1a44; // S21XP
                 self.registers
                     .insert(HashCountingNumber::ADDR, hcn)
                     .unwrap();

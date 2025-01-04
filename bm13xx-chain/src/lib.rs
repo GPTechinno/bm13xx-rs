@@ -87,6 +87,9 @@ use embedded_hal_async::delay::DelayNs;
 use embedded_io_async::{Read, Write};
 use fugit::HertzU64;
 
+use bm13xx_asic::register::AnalogMuxControlV2;
+use bm13xx_asic::register::CoreRegisterControl;
+
 pub trait Baud {
     fn set_baudrate(&mut self, baudrate: u32);
 }
@@ -200,7 +203,7 @@ impl<A: Asic, P: Read + Write + Baud, D: DelayNs> Chain<A, P, D> {
         Ok(())
     }
 
-    async fn send(&mut self, step: CmdDelay) -> Result<(), P::Error> {
+    pub async fn send(&mut self, step: CmdDelay) -> Result<(), P::Error> {
         self.port.write_all(&step.cmd).await.map_err(Error::Io)?;
         self.delay.delay_ms(step.delay_ms).await;
         Ok(())
@@ -248,7 +251,35 @@ impl<A: Asic, P: Read + Write + Baud, D: DelayNs> Chain<A, P, D> {
                 self.send(step).await?;
             }
         }
+        self.delay.delay_ms(290).await;
+
+        self.send(CmdDelay {
+            cmd: Command::write_reg(0xB9, 0x0000_4480, Destination::All),
+            delay_ms: 20,
+        })
+        .await
+        .unwrap();
+        self.send(CmdDelay {
+            cmd: Command::write_reg(AnalogMuxControlV2::ADDR, 0x0000_0002, Destination::All),
+            delay_ms: 100,
+        })
+        .await
+        .unwrap();
+        self.send(CmdDelay {
+            cmd: Command::write_reg(0xB9, 0x0000_4480, Destination::All),
+            delay_ms: 20,
+        })
+        .await
+        .unwrap();
+        self.send(CmdDelay {
+            cmd: Command::write_reg(CoreRegisterControl::ADDR, 0x8000_8DEE, Destination::All),
+            delay_ms: 100,
+        })
+        .await
+        .unwrap();
+
         self.delay.delay_ms(100).await;
+
         Ok(())
     }
 
