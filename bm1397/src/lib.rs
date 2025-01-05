@@ -194,200 +194,163 @@ impl Default for BM1397 {
             registers: FnvIndexMap::<_, _, 64>::new(),
             core_registers: FnvIndexMap::<_, _, 16>::new(),
         };
-        // Default PLLs Parameter
-        bm1397.plls[0].set_parameter(0xC060_0161);
-        bm1397.plls[1].set_parameter(0x0064_0111);
-        bm1397.plls[2].set_parameter(0x0068_0111);
-        bm1397.plls[3].set_parameter(0x0070_0111);
-        // Default PLLs Divider
-        bm1397.plls[0].set_divider(0x0304_0607);
-        bm1397.plls[1].set_divider(0x0304_0506);
-        bm1397.plls[2].set_divider(0x0304_0506);
-        bm1397.plls[3].set_divider(0x0304_0506);
-        // Default Registers Value
-        bm1397
-            .registers
-            .insert(ChipIdentification::ADDR, 0x1397_1800)
-            .unwrap();
-        bm1397
-            .registers
-            .insert(HashRate::ADDR, 0x8000_0000)
-            .unwrap();
-        bm1397
-            .registers
-            .insert(PLL0Parameter::ADDR, 0xC060_0161)
-            .unwrap();
-        bm1397
-            .registers
-            .insert(ChipNonceOffset::ADDR, 0x0000_0000)
-            .unwrap();
-        bm1397
-            .registers
-            .insert(HashCountingNumber::ADDR, 0x0000_0000)
-            .unwrap();
-        bm1397
-            .registers
-            .insert(TicketMask::ADDR, 0x0000_0000)
-            .unwrap();
-        bm1397
-            .registers
-            .insert(MiscControl::ADDR, 0x0000_3A01)
-            .unwrap();
-        bm1397
-            .registers
-            .insert(I2CControl::ADDR, 0x0100_0000)
-            .unwrap();
-        bm1397
-            .registers
-            .insert(OrderedClockEnable::ADDR, 0x0000_FFFF)
-            .unwrap();
-        bm1397
-            .registers
-            .insert(FastUARTConfiguration::ADDR, 0x0600_000F)
-            .unwrap();
-        bm1397
-            .registers
-            .insert(UARTRelay::ADDR, 0x000F_0000)
-            .unwrap();
-        bm1397
-            .registers
-            .insert(TicketMask2::ADDR, 0x0000_0000)
-            .unwrap();
-        bm1397
-            .registers
-            .insert(CoreRegisterControl::ADDR, 0x0000_4000)
-            .unwrap();
-        bm1397
-            .registers
-            .insert(CoreRegisterValue::ADDR, 0x0000_0000)
-            .unwrap();
-        bm1397
-            .registers
-            .insert(ExternalTemperatureSensorRead::ADDR, 0x0000_0100)
-            .unwrap();
-        bm1397
-            .registers
-            .insert(ErrorFlag::ADDR, 0xFF00_0000)
-            .unwrap();
-        bm1397
-            .registers
-            .insert(NonceErrorCounter::ADDR, 0x0000_0000)
-            .unwrap();
-        bm1397
-            .registers
-            .insert(NonceOverflowCounter::ADDR, 0x0000_0000)
-            .unwrap();
-        bm1397
-            .registers
-            .insert(AnalogMuxControl::ADDR, 0x0000_0000)
-            .unwrap();
-        bm1397
-            .registers
-            .insert(IoDriverStrenghtConfiguration::ADDR, 0x0211_2111)
-            .unwrap();
-        bm1397.registers.insert(TimeOut::ADDR, 0x0000_FFFF).unwrap();
-        bm1397
-            .registers
-            .insert(PLL1Parameter::ADDR, 0x0064_0111)
-            .unwrap();
-        bm1397
-            .registers
-            .insert(PLL2Parameter::ADDR, 0x0068_0111)
-            .unwrap();
-        bm1397
-            .registers
-            .insert(PLL3Parameter::ADDR, 0x0070_0111)
-            .unwrap();
-        bm1397
-            .registers
-            .insert(OrderedClockMonitor::ADDR, 0x0000_0000)
-            .unwrap();
-        bm1397
-            .registers
-            .insert(PLL0Divider::ADDR, 0x0304_0607)
-            .unwrap();
-        bm1397
-            .registers
-            .insert(PLL1Divider::ADDR, 0x0304_0506)
-            .unwrap();
-        bm1397
-            .registers
-            .insert(PLL2Divider::ADDR, 0x0304_0506)
-            .unwrap();
-        bm1397
-            .registers
-            .insert(PLL3Divider::ADDR, 0x0304_0506)
-            .unwrap();
-        bm1397
-            .registers
-            .insert(ClockOrderControl0::ADDR, 0xD95C_8410)
-            .unwrap();
-        bm1397
-            .registers
-            .insert(ClockOrderControl1::ADDR, 0xFB73_EA62)
-            .unwrap();
-        bm1397
-            .registers
-            .insert(ClockOrderStatus::ADDR, 0x0000_0000)
-            .unwrap();
-        bm1397
-            .registers
-            .insert(FrequencySweepControl1::ADDR, 0x0000_0070)
-            .unwrap();
-        bm1397
-            .registers
-            .insert(GoldenNonceForSweepReturn::ADDR, 0x0037_6400)
-            .unwrap();
-        bm1397
-            .registers
-            .insert(ReturnedGroupPatternStatus::ADDR, 0x3030_3030)
-            .unwrap();
-        bm1397
-            .registers
-            .insert(NonceReturnedTimeout::ADDR, 0x0000_FFFF)
-            .unwrap();
-        bm1397
-            .registers
-            .insert(ReturnedSinglePatternStatus::ADDR, 0x0000_0000)
-            .unwrap();
-        // Default Core Registers Value
-        bm1397
-            .core_registers
-            .insert(ClockDelayCtrl::ID, 0x00) // TODO: add the correct value from chip actual reading
-            .unwrap();
-        bm1397
-            .core_registers
-            .insert(ProcessMonitorCtrl::ID, 0x00) // TODO: add the correct value from chip actual reading
-            .unwrap();
-        bm1397
-            .core_registers
-            .insert(ProcessMonitorData::ID, 0x00) // TODO: add the correct value from chip actual reading
-            .unwrap();
-        bm1397
-            .core_registers
-            .insert(CoreError::ID, 0x00) // TODO: add the correct value from chip actual reading
-            .unwrap();
-        bm1397
-            .core_registers
-            .insert(CoreEnable::ID, 0x00) // TODO: add the correct value from chip actual reading
-            .unwrap();
-        bm1397
-            .core_registers
-            .insert(HashClockCtrl::ID, 0x00) // TODO: add the correct value from chip actual reading
-            .unwrap();
-        bm1397
-            .core_registers
-            .insert(HashClockCounter::ID, 0x00) // TODO: add the correct value from chip actual reading
-            .unwrap();
-        bm1397
-            .core_registers
-            .insert(SweepClockCtrl::ID, 0x00) // TODO: add the correct value from chip actual reading
-            .unwrap();
+        bm1397.reset();
         bm1397
     }
 }
 
 impl Asic for BM1397 {
+    /// ## Reset the Chip to default state
+    fn reset(&mut self) {
+        self.seq_step = SequenceStep::default();
+        self.sha = bm13xx_asic::sha::Sha::default();
+        self.input_clock_freq = HertzU64::MHz(25);
+        self.plls = [bm13xx_asic::pll::Pll::default(); BM1397_PLL_CNT];
+        self.chip_addr = 0;
+        self.registers = FnvIndexMap::<_, _, 64>::new();
+        self.core_registers = FnvIndexMap::<_, _, 16>::new();
+
+        // Default PLLs Parameter
+        self.plls[0].set_parameter(0xC060_0161);
+        self.plls[1].set_parameter(0x0064_0111);
+        self.plls[2].set_parameter(0x0068_0111);
+        self.plls[3].set_parameter(0x0070_0111);
+        // Default PLLs Divider
+        self.plls[0].set_divider(0x0304_0607);
+        self.plls[1].set_divider(0x0304_0506);
+        self.plls[2].set_divider(0x0304_0506);
+        self.plls[3].set_divider(0x0304_0506);
+        // Default Registers Value
+        self.registers
+            .insert(ChipIdentification::ADDR, 0x1397_1800)
+            .unwrap();
+        self.registers.insert(HashRate::ADDR, 0x8000_0000).unwrap();
+        self.registers
+            .insert(PLL0Parameter::ADDR, 0xC060_0161)
+            .unwrap();
+        self.registers
+            .insert(ChipNonceOffset::ADDR, 0x0000_0000)
+            .unwrap();
+        self.registers
+            .insert(HashCountingNumber::ADDR, 0x0000_0000)
+            .unwrap();
+        self.registers
+            .insert(TicketMask::ADDR, 0x0000_0000)
+            .unwrap();
+        self.registers
+            .insert(MiscControl::ADDR, 0x0000_3A01)
+            .unwrap();
+        self.registers
+            .insert(I2CControl::ADDR, 0x0100_0000)
+            .unwrap();
+        self.registers
+            .insert(OrderedClockEnable::ADDR, 0x0000_FFFF)
+            .unwrap();
+        self.registers
+            .insert(FastUARTConfiguration::ADDR, 0x0600_000F)
+            .unwrap();
+        self.registers.insert(UARTRelay::ADDR, 0x000F_0000).unwrap();
+        self.registers
+            .insert(TicketMask2::ADDR, 0x0000_0000)
+            .unwrap();
+        self.registers
+            .insert(CoreRegisterControl::ADDR, 0x0000_4000)
+            .unwrap();
+        self.registers
+            .insert(CoreRegisterValue::ADDR, 0x0000_0000)
+            .unwrap();
+        self.registers
+            .insert(ExternalTemperatureSensorRead::ADDR, 0x0000_0100)
+            .unwrap();
+        self.registers.insert(ErrorFlag::ADDR, 0xFF00_0000).unwrap();
+        self.registers
+            .insert(NonceErrorCounter::ADDR, 0x0000_0000)
+            .unwrap();
+        self.registers
+            .insert(NonceOverflowCounter::ADDR, 0x0000_0000)
+            .unwrap();
+        self.registers
+            .insert(AnalogMuxControl::ADDR, 0x0000_0000)
+            .unwrap();
+        self.registers
+            .insert(IoDriverStrenghtConfiguration::ADDR, 0x0211_2111)
+            .unwrap();
+        self.registers.insert(TimeOut::ADDR, 0x0000_FFFF).unwrap();
+        self.registers
+            .insert(PLL1Parameter::ADDR, 0x0064_0111)
+            .unwrap();
+        self.registers
+            .insert(PLL2Parameter::ADDR, 0x0068_0111)
+            .unwrap();
+        self.registers
+            .insert(PLL3Parameter::ADDR, 0x0070_0111)
+            .unwrap();
+        self.registers
+            .insert(OrderedClockMonitor::ADDR, 0x0000_0000)
+            .unwrap();
+        self.registers
+            .insert(PLL0Divider::ADDR, 0x0304_0607)
+            .unwrap();
+        self.registers
+            .insert(PLL1Divider::ADDR, 0x0304_0506)
+            .unwrap();
+        self.registers
+            .insert(PLL2Divider::ADDR, 0x0304_0506)
+            .unwrap();
+        self.registers
+            .insert(PLL3Divider::ADDR, 0x0304_0506)
+            .unwrap();
+        self.registers
+            .insert(ClockOrderControl0::ADDR, 0xD95C_8410)
+            .unwrap();
+        self.registers
+            .insert(ClockOrderControl1::ADDR, 0xFB73_EA62)
+            .unwrap();
+        self.registers
+            .insert(ClockOrderStatus::ADDR, 0x0000_0000)
+            .unwrap();
+        self.registers
+            .insert(FrequencySweepControl1::ADDR, 0x0000_0070)
+            .unwrap();
+        self.registers
+            .insert(GoldenNonceForSweepReturn::ADDR, 0x0037_6400)
+            .unwrap();
+        self.registers
+            .insert(ReturnedGroupPatternStatus::ADDR, 0x3030_3030)
+            .unwrap();
+        self.registers
+            .insert(NonceReturnedTimeout::ADDR, 0x0000_FFFF)
+            .unwrap();
+        self.registers
+            .insert(ReturnedSinglePatternStatus::ADDR, 0x0000_0000)
+            .unwrap();
+        // Default Core Registers Value
+        self.core_registers
+            .insert(ClockDelayCtrl::ID, 0x00) // TODO: add the correct value from chip actual reading
+            .unwrap();
+        self.core_registers
+            .insert(ProcessMonitorCtrl::ID, 0x00) // TODO: add the correct value from chip actual reading
+            .unwrap();
+        self.core_registers
+            .insert(ProcessMonitorData::ID, 0x00) // TODO: add the correct value from chip actual reading
+            .unwrap();
+        self.core_registers
+            .insert(CoreError::ID, 0x00) // TODO: add the correct value from chip actual reading
+            .unwrap();
+        self.core_registers
+            .insert(CoreEnable::ID, 0x00) // TODO: add the correct value from chip actual reading
+            .unwrap();
+        self.core_registers
+            .insert(HashClockCtrl::ID, 0x00) // TODO: add the correct value from chip actual reading
+            .unwrap();
+        self.core_registers
+            .insert(HashClockCounter::ID, 0x00) // TODO: add the correct value from chip actual reading
+            .unwrap();
+        self.core_registers
+            .insert(SweepClockCtrl::ID, 0x00) // TODO: add the correct value from chip actual reading
+            .unwrap();
+    }
+
     /// ## Get the Chip ID
     ///
     /// ### Example

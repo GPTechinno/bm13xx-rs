@@ -83,6 +83,7 @@ use bm13xx_protocol::{
     response::{Response, ResponseType},
 };
 
+use embedded_hal::digital::OutputPin;
 use embedded_hal_async::delay::DelayNs;
 use embedded_io_async::{Read, Write};
 use fugit::HertzU64;
@@ -93,25 +94,43 @@ pub trait Baud {
 
 #[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
-pub struct Chain<A, P, D> {
+pub struct Chain<A, P, O, D> {
     pub asic_cnt: u8,
     asic: A,
     pub asic_addr_interval: u16,
     domain_cnt: u8,
     port: P,
+    busy: O,
+    reset: O,
     delay: D,
 }
 
-impl<A: Asic, P: Read + Write + Baud, D: DelayNs> Chain<A, P, D> {
-    pub fn new(asic_cnt: u8, asic: A, domain_cnt: u8, port: P, delay: D) -> Self {
-        Chain::<A, P, D> {
+impl<A: Asic, P: Read + Write + Baud, O: OutputPin, D: DelayNs> Chain<A, P, O, D> {
+    pub fn new(
+        asic_cnt: u8,
+        asic: A,
+        domain_cnt: u8,
+        port: P,
+        busy: O,
+        reset: O,
+        delay: D,
+    ) -> Self {
+        Chain::<A, P, O, D> {
             asic_cnt,
             asic,
             asic_addr_interval: 0,
             domain_cnt,
             port,
+            busy,
+            reset,
             delay,
         }
+    }
+
+    async fn send(&mut self, step: CmdDelay) -> Result<(), P::Error> {
+        self.port.write_all(&step.cmd).await.map_err(Error::Io)?;
+        self.delay.delay_ms(step.delay_ms).await;
+        Ok(())
     }
 
     /// ## Enumerate all asics on the chain
@@ -127,6 +146,9 @@ impl<A: Asic, P: Read + Write + Baud, D: DelayNs> Chain<A, P, D> {
     /// - Protocol error
     /// - Unexpected asic count
     pub async fn enumerate(&mut self) -> Result<(), P::Error> {
+        self.reset.set_high().map_err(|_| Error::Gpio)?;
+        self.delay.delay_ms(10).await;
+        self.busy.set_low().map_err(|_| Error::Gpio)?;
         let cmd = Command::read_reg(ChipIdentification::ADDR, Destination::All);
         self.port.write_all(&cmd).await.map_err(Error::Io)?;
 
@@ -200,9 +222,9 @@ impl<A: Asic, P: Read + Write + Baud, D: DelayNs> Chain<A, P, D> {
         Ok(())
     }
 
-    async fn send(&mut self, step: CmdDelay) -> Result<(), P::Error> {
-        self.port.write_all(&step.cmd).await.map_err(Error::Io)?;
-        self.delay.delay_ms(step.delay_ms).await;
+    pub async fn reset(&mut self) -> Result<(), P::Error> {
+        self.reset.set_low().map_err(|_| Error::Gpio)?;
+        self.asic.reset();
         Ok(())
     }
 

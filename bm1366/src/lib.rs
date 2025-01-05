@@ -279,201 +279,171 @@ impl Default for BM1366 {
             version_rolling_enabled: false,
             version_mask: 0x1fffe000,
         };
-        // Default PLLs Parameter
-        bm1366.plls[0].set_parameter(0xC054_0165);
-        bm1366.plls[1].set_parameter(0x2050_0174);
-        // Default PLLs Divider
-        bm1366.plls[0].set_divider(0x0000_0000);
-        bm1366.plls[1].set_divider(0x0000_0000);
-        // Default Registers Value
-        bm1366
-            .registers
-            .insert(ChipIdentification::ADDR, 0x1366_0000)
-            .unwrap();
-        bm1366
-            .registers
-            .insert(HashRate::ADDR, 0x0001_2a89)
-            .unwrap();
-        bm1366
-            .registers
-            .insert(PLL0Parameter::ADDR, 0xc054_0165)
-            .unwrap();
-        bm1366
-            .registers
-            .insert(ChipNonceOffsetV2::ADDR, 0x0000_0000)
-            .unwrap();
-        bm1366
-            .registers
-            .insert(HashCountingNumber::ADDR, 0x0000_0000)
-            .unwrap();
-        bm1366
-            .registers
-            .insert(TicketMask::ADDR, 0x0000_0000)
-            .unwrap();
-        bm1366
-            .registers
-            .insert(MiscControl::ADDR, 0x0000_c100)
-            .unwrap();
-        bm1366
-            .registers
-            .insert(I2CControl::ADDR, 0x0000_0000)
-            .unwrap();
-        bm1366
-            .registers
-            .insert(OrderedClockEnable::ADDR, 0x0000_0003)
-            .unwrap();
-        bm1366.registers.insert(Reg24::ADDR, 0x0010_0000).unwrap();
-        bm1366
-            .registers
-            .insert(FastUARTConfigurationV2::ADDR, 0x0130_1a00)
-            .unwrap();
-        bm1366
-            .registers
-            .insert(UARTRelay::ADDR, 0x000f_0000)
-            .unwrap();
-        bm1366.registers.insert(Reg30::ADDR, 0x0000_0070).unwrap();
-        bm1366.registers.insert(Reg34::ADDR, 0x0000_0000).unwrap();
-        bm1366
-            .registers
-            .insert(TicketMask2::ADDR, 0x0000_0000)
-            .unwrap();
-        bm1366
-            .registers
-            .insert(CoreRegisterControl::ADDR, 0x0000_0000)
-            .unwrap();
-        bm1366
-            .registers
-            .insert(CoreRegisterValue::ADDR, 0x1eaf_5fbe)
-            .unwrap();
-        bm1366
-            .registers
-            .insert(ExternalTemperatureSensorRead::ADDR, 0x0000_0000)
-            .unwrap();
-        bm1366
-            .registers
-            .insert(ErrorFlag::ADDR, 0x0000_0000)
-            .unwrap();
-        bm1366
-            .registers
-            .insert(NonceErrorCounter::ADDR, 0x0000_0000)
-            .unwrap();
-        bm1366
-            .registers
-            .insert(NonceOverflowCounter::ADDR, 0x0000_0000)
-            .unwrap();
-        bm1366
-            .registers
-            .insert(AnalogMuxControlV2::ADDR, 0x0000_0000)
-            .unwrap();
-        bm1366
-            .registers
-            .insert(IoDriverStrenghtConfiguration::ADDR, 0x0001_2111)
-            .unwrap();
-        bm1366.registers.insert(TimeOut::ADDR, 0x0000_FFFF).unwrap();
-        bm1366
-            .registers
-            .insert(PLL1Parameter::ADDR, 0x2050_0174)
-            .unwrap();
-        bm1366
-            .registers
-            .insert(OrderedClockMonitor::ADDR, 0x0001_0200)
-            .unwrap();
-        bm1366
-            .registers
-            .insert(PLL0Divider::ADDR, 0x0000_0000)
-            .unwrap();
-        bm1366
-            .registers
-            .insert(PLL1Divider::ADDR, 0x0000_0000)
-            .unwrap();
-        bm1366
-            .registers
-            .insert(ClockOrderControl0::ADDR, 0x0000_0000)
-            .unwrap();
-        bm1366
-            .registers
-            .insert(ClockOrderControl1::ADDR, 0x0000_0000)
-            .unwrap();
-        bm1366
-            .registers
-            .insert(ClockOrderStatus::ADDR, 0x0000_0000)
-            .unwrap();
-        bm1366
-            .registers
-            .insert(FrequencySweepControl1::ADDR, 0x0000_0000)
-            .unwrap();
-        bm1366
-            .registers
-            .insert(GoldenNonceForSweepReturn::ADDR, 0x0000_0000)
-            .unwrap();
-        bm1366
-            .registers
-            .insert(ReturnedGroupPatternStatus::ADDR, 0x0000_0000)
-            .unwrap();
-        bm1366
-            .registers
-            .insert(NonceReturnedTimeout::ADDR, 0x00fd_0077)
-            .unwrap();
-        bm1366
-            .registers
-            .insert(ReturnedSinglePatternStatus::ADDR, 0x0000_0000)
-            .unwrap();
-        bm1366
-            .registers
-            .insert(VersionRolling::ADDR, 0x0000_ffff)
-            .unwrap();
-        bm1366.registers.insert(RegA8::ADDR, 0x0007_0000).unwrap();
-        bm1366.registers.insert(RegAC::ADDR, 0x0000_0000).unwrap();
-        bm1366.registers.insert(RegB0::ADDR, 0x0000_0000).unwrap();
-        bm1366.registers.insert(RegB4::ADDR, 0x0000_0000).unwrap();
-        bm1366.registers.insert(RegB8::ADDR, 0x0000_0000).unwrap();
-        bm1366.registers.insert(RegBC::ADDR, 0x0000_3313).unwrap();
-        bm1366.registers.insert(RegC0::ADDR, 0x0000_2000).unwrap();
-        bm1366.registers.insert(RegC4::ADDR, 0x0000_0000).unwrap();
-        bm1366.registers.insert(RegC8::ADDR, 0x0000_0000).unwrap();
-        bm1366.registers.insert(RegCC::ADDR, 0x0000_0000).unwrap();
-        bm1366.registers.insert(RegD0::ADDR, 0x0000_0070).unwrap();
-        bm1366.registers.insert(RegD4::ADDR, 0x0037_6400).unwrap();
-        bm1366.registers.insert(RegD8::ADDR, 0x3030_3030).unwrap();
-        bm1366.registers.insert(RegDC::ADDR, 0x0000_ffff).unwrap();
-        bm1366.registers.insert(RegE0::ADDR, 0x0000_0000).unwrap();
-        bm1366.registers.insert(RegE4::ADDR, 0x0000_0000).unwrap();
-        bm1366.registers.insert(RegE8::ADDR, 0x0000_0000).unwrap();
-        bm1366.registers.insert(RegEC::ADDR, 0x0000_0008).unwrap();
-        bm1366.registers.insert(RegF0::ADDR, 0x0000_0000).unwrap();
-        bm1366.registers.insert(RegF4::ADDR, 0x0000_0000).unwrap();
-        bm1366.registers.insert(RegF8::ADDR, 0x0000_0000).unwrap();
-        bm1366.registers.insert(RegFC::ADDR, 0x0000_0000).unwrap();
-        // Default Core Registers Value
-        bm1366
-            .core_registers
-            .insert(ClockDelayCtrlV2::ID, 0x98)
-            .unwrap();
-        // bm1366.core_registers.insert(1, 0x00).unwrap(); // not used anywhere in official FW
-        bm1366.core_registers.insert(CoreReg2::ID, 0x55).unwrap();
-        bm1366.core_registers.insert(CoreError::ID, 0x00).unwrap();
-        bm1366.core_registers.insert(CoreEnable::ID, 0x00).unwrap();
-        bm1366
-            .core_registers
-            .insert(HashClockCtrl::ID, 0x40)
-            .unwrap();
-        bm1366
-            .core_registers
-            .insert(HashClockCounter::ID, 0x08)
-            .unwrap();
-        bm1366
-            .core_registers
-            .insert(SweepClockCtrl::ID, 0x11)
-            .unwrap();
-        bm1366.core_registers.insert(CoreReg8::ID, 0x00).unwrap();
-        bm1366.core_registers.insert(15, 0x00).unwrap();
-        bm1366.core_registers.insert(16, 0x00).unwrap();
-        bm1366.core_registers.insert(CoreReg22::ID, 0x00).unwrap();
+        bm1366.reset();
         bm1366
     }
 }
 
 impl Asic for BM1366 {
+    /// ## Reset the Chip to default state
+    fn reset(&mut self) {
+        self.seq_step = SequenceStep::default();
+        self.sha = bm13xx_asic::sha::Sha::default();
+        self.input_clock_freq = HertzU64::MHz(25);
+        self.plls = [bm13xx_asic::pll::Pll::default(); BM1366_PLL_CNT];
+        self.chip_addr = 0;
+        self.registers = FnvIndexMap::<_, _, 64>::new();
+        self.core_registers = FnvIndexMap::<_, _, 16>::new();
+        self.version_rolling_enabled = false;
+        self.version_mask = 0x1fffe000;
+
+        // Default PLLs Parameter
+        self.plls[0].set_parameter(0xC054_0165);
+        self.plls[1].set_parameter(0x2050_0174);
+        // Default PLLs Divider
+        self.plls[0].set_divider(0x0000_0000);
+        self.plls[1].set_divider(0x0000_0000);
+        // Default Registers Value
+        self.registers
+            .insert(ChipIdentification::ADDR, 0x1366_0000)
+            .unwrap();
+        self.registers.insert(HashRate::ADDR, 0x0001_2a89).unwrap();
+        self.registers
+            .insert(PLL0Parameter::ADDR, 0xc054_0165)
+            .unwrap();
+        self.registers
+            .insert(ChipNonceOffsetV2::ADDR, 0x0000_0000)
+            .unwrap();
+        self.registers
+            .insert(HashCountingNumber::ADDR, 0x0000_0000)
+            .unwrap();
+        self.registers
+            .insert(TicketMask::ADDR, 0x0000_0000)
+            .unwrap();
+        self.registers
+            .insert(MiscControl::ADDR, 0x0000_c100)
+            .unwrap();
+        self.registers
+            .insert(I2CControl::ADDR, 0x0000_0000)
+            .unwrap();
+        self.registers
+            .insert(OrderedClockEnable::ADDR, 0x0000_0003)
+            .unwrap();
+        self.registers.insert(Reg24::ADDR, 0x0010_0000).unwrap();
+        self.registers
+            .insert(FastUARTConfigurationV2::ADDR, 0x0130_1a00)
+            .unwrap();
+        self.registers.insert(UARTRelay::ADDR, 0x000f_0000).unwrap();
+        self.registers.insert(Reg30::ADDR, 0x0000_0070).unwrap();
+        self.registers.insert(Reg34::ADDR, 0x0000_0000).unwrap();
+        self.registers
+            .insert(TicketMask2::ADDR, 0x0000_0000)
+            .unwrap();
+        self.registers
+            .insert(CoreRegisterControl::ADDR, 0x0000_0000)
+            .unwrap();
+        self.registers
+            .insert(CoreRegisterValue::ADDR, 0x1eaf_5fbe)
+            .unwrap();
+        self.registers
+            .insert(ExternalTemperatureSensorRead::ADDR, 0x0000_0000)
+            .unwrap();
+        self.registers.insert(ErrorFlag::ADDR, 0x0000_0000).unwrap();
+        self.registers
+            .insert(NonceErrorCounter::ADDR, 0x0000_0000)
+            .unwrap();
+        self.registers
+            .insert(NonceOverflowCounter::ADDR, 0x0000_0000)
+            .unwrap();
+        self.registers
+            .insert(AnalogMuxControlV2::ADDR, 0x0000_0000)
+            .unwrap();
+        self.registers
+            .insert(IoDriverStrenghtConfiguration::ADDR, 0x0001_2111)
+            .unwrap();
+        self.registers.insert(TimeOut::ADDR, 0x0000_FFFF).unwrap();
+        self.registers
+            .insert(PLL1Parameter::ADDR, 0x2050_0174)
+            .unwrap();
+        self.registers
+            .insert(OrderedClockMonitor::ADDR, 0x0001_0200)
+            .unwrap();
+        self.registers
+            .insert(PLL0Divider::ADDR, 0x0000_0000)
+            .unwrap();
+        self.registers
+            .insert(PLL1Divider::ADDR, 0x0000_0000)
+            .unwrap();
+        self.registers
+            .insert(ClockOrderControl0::ADDR, 0x0000_0000)
+            .unwrap();
+        self.registers
+            .insert(ClockOrderControl1::ADDR, 0x0000_0000)
+            .unwrap();
+        self.registers
+            .insert(ClockOrderStatus::ADDR, 0x0000_0000)
+            .unwrap();
+        self.registers
+            .insert(FrequencySweepControl1::ADDR, 0x0000_0000)
+            .unwrap();
+        self.registers
+            .insert(GoldenNonceForSweepReturn::ADDR, 0x0000_0000)
+            .unwrap();
+        self.registers
+            .insert(ReturnedGroupPatternStatus::ADDR, 0x0000_0000)
+            .unwrap();
+        self.registers
+            .insert(NonceReturnedTimeout::ADDR, 0x00fd_0077)
+            .unwrap();
+        self.registers
+            .insert(ReturnedSinglePatternStatus::ADDR, 0x0000_0000)
+            .unwrap();
+        self.registers
+            .insert(VersionRolling::ADDR, 0x0000_ffff)
+            .unwrap();
+        self.registers.insert(RegA8::ADDR, 0x0007_0000).unwrap();
+        self.registers.insert(RegAC::ADDR, 0x0000_0000).unwrap();
+        self.registers.insert(RegB0::ADDR, 0x0000_0000).unwrap();
+        self.registers.insert(RegB4::ADDR, 0x0000_0000).unwrap();
+        self.registers.insert(RegB8::ADDR, 0x0000_0000).unwrap();
+        self.registers.insert(RegBC::ADDR, 0x0000_3313).unwrap();
+        self.registers.insert(RegC0::ADDR, 0x0000_2000).unwrap();
+        self.registers.insert(RegC4::ADDR, 0x0000_0000).unwrap();
+        self.registers.insert(RegC8::ADDR, 0x0000_0000).unwrap();
+        self.registers.insert(RegCC::ADDR, 0x0000_0000).unwrap();
+        self.registers.insert(RegD0::ADDR, 0x0000_0070).unwrap();
+        self.registers.insert(RegD4::ADDR, 0x0037_6400).unwrap();
+        self.registers.insert(RegD8::ADDR, 0x3030_3030).unwrap();
+        self.registers.insert(RegDC::ADDR, 0x0000_ffff).unwrap();
+        self.registers.insert(RegE0::ADDR, 0x0000_0000).unwrap();
+        self.registers.insert(RegE4::ADDR, 0x0000_0000).unwrap();
+        self.registers.insert(RegE8::ADDR, 0x0000_0000).unwrap();
+        self.registers.insert(RegEC::ADDR, 0x0000_0008).unwrap();
+        self.registers.insert(RegF0::ADDR, 0x0000_0000).unwrap();
+        self.registers.insert(RegF4::ADDR, 0x0000_0000).unwrap();
+        self.registers.insert(RegF8::ADDR, 0x0000_0000).unwrap();
+        self.registers.insert(RegFC::ADDR, 0x0000_0000).unwrap();
+        // Default Core Registers Value
+        self.core_registers
+            .insert(ClockDelayCtrlV2::ID, 0x98)
+            .unwrap();
+        // self.core_registers.insert(1, 0x00).unwrap(); // not used anywhere in official FW
+        self.core_registers.insert(CoreReg2::ID, 0x55).unwrap();
+        self.core_registers.insert(CoreError::ID, 0x00).unwrap();
+        self.core_registers.insert(CoreEnable::ID, 0x00).unwrap();
+        self.core_registers.insert(HashClockCtrl::ID, 0x40).unwrap();
+        self.core_registers
+            .insert(HashClockCounter::ID, 0x08)
+            .unwrap();
+        self.core_registers
+            .insert(SweepClockCtrl::ID, 0x11)
+            .unwrap();
+        self.core_registers.insert(CoreReg8::ID, 0x00).unwrap();
+        self.core_registers.insert(15, 0x00).unwrap();
+        self.core_registers.insert(16, 0x00).unwrap();
+        self.core_registers.insert(CoreReg22::ID, 0x00).unwrap();
+    }
+
     /// ## Get the Chip ID
     ///
     /// ### Example

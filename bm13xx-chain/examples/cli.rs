@@ -6,6 +6,7 @@ use bm13xx_chain::Chain;
 use embedded_hal_async::delay::DelayNs;
 use fugit::HertzU64;
 use inquire::Select;
+use linux_embedded_hal::SysfsPin;
 use std::{env, error::Error, time::Duration};
 use tokio::time::sleep;
 use tokio_adapter::FromTokio;
@@ -39,8 +40,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let adapter = FromTokio::new(serial);
 
     let bm1366 = BM1366::default();
+    let fake_busy = SysfsPin::new(127);
+    let fake_reset = SysfsPin::new(128);
 
-    let mut chain = Chain::new(1, bm1366, 1, adapter, Delay);
+    let mut chain = Chain::new(1, bm1366, 1, adapter, fake_busy, fake_reset, Delay);
     chain.enumerate().await?;
     println!("Enumerated {} asics", chain.asic_cnt);
     println!("Interval: {}", chain.asic_addr_interval);

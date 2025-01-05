@@ -23,6 +23,8 @@ pub enum Error<E> {
     Protocol(bm13xx_protocol::Error),
     /// The serial interface returned an error
     Io(E),
+    /// The gpio interface returned an error
+    Gpio,
     /// The serial interface returned an error while setting baudrate
     SetBaudrate,
 }
@@ -62,6 +64,7 @@ impl<E: core::fmt::Debug> core::fmt::Debug for Error<E> {
                 .finish(),
             Error::Protocol(protocol_err) => f.debug_tuple("Protocol").field(protocol_err).finish(),
             Error::Io(io_err) => f.debug_tuple("Io").field(io_err).finish(),
+            Error::Gpio => f.debug_struct("Gpio").finish(),
             Error::SetBaudrate => f.debug_struct("SetBaudrate").finish(),
         }
     }
