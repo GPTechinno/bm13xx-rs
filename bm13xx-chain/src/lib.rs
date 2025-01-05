@@ -127,7 +127,7 @@ impl<A: Asic, P: Read + Write + Baud, O: OutputPin, D: DelayNs> Chain<A, P, O, D
         }
     }
 
-    async fn send(&mut self, step: CmdDelay) -> Result<(), P::Error> {
+    async fn send(&mut self, step: CmdDelay) -> Result<(), P::Error, O::Error> {
         self.port.write_all(&step.cmd).await.map_err(Error::Io)?;
         self.delay.delay_ms(step.delay_ms).await;
         Ok(())
@@ -145,10 +145,10 @@ impl<A: Asic, P: Read + Write + Baud, O: OutputPin, D: DelayNs> Chain<A, P, O, D
     /// - Unexpected asic
     /// - Protocol error
     /// - Unexpected asic count
-    pub async fn enumerate(&mut self) -> Result<(), P::Error> {
-        self.reset.set_high().map_err(|_| Error::Gpio)?;
+    pub async fn enumerate(&mut self) -> Result<(), P::Error, O::Error> {
+        self.reset.set_high().map_err(Error::Gpio)?;
         self.delay.delay_ms(10).await;
-        self.busy.set_low().map_err(|_| Error::Gpio)?;
+        self.busy.set_low().map_err(Error::Gpio)?;
         let cmd = Command::read_reg(ChipIdentification::ADDR, Destination::All);
         self.port.write_all(&cmd).await.map_err(Error::Io)?;
 
@@ -222,23 +222,23 @@ impl<A: Asic, P: Read + Write + Baud, O: OutputPin, D: DelayNs> Chain<A, P, O, D
         Ok(())
     }
 
-    pub async fn reset(&mut self) -> Result<(), P::Error> {
-        self.reset.set_low().map_err(|_| Error::Gpio)?;
+    pub async fn reset(&mut self) -> Result<(), P::Error, O::Error> {
+        self.reset.set_low().map_err(Error::Gpio)?;
         self.asic.reset();
         Ok(())
     }
 
-    pub async fn send_job(&mut self, job: &[u8]) -> Result<u8, P::Error> {
+    pub async fn send_job(&mut self, job: &[u8]) -> Result<u8, P::Error, O::Error> {
         self.port.write_all(job).await.map_err(Error::Io)?;
         Ok(job.len() as u8)
     }
 
-    pub async fn read_job(&mut self, job: &mut [u8]) -> Result<u8, P::Error> {
-        self.port.read_exact(job).await.map_err(Error::Io).unwrap();
+    pub async fn read_job(&mut self, job: &mut [u8]) -> Result<u8, P::Error, O::Error> {
+        self.port.read(job).await.map_err(Error::Io)?;
         Ok(job.len() as u8)
     }
 
-    pub async fn init(&mut self, diffculty: u32) -> Result<(), P::Error> {
+    pub async fn init(&mut self, diffculty: u32) -> Result<(), P::Error, O::Error> {
         while let Some(step) = self.asic.init_next(diffculty) {
             self.send(step).await?;
         }
@@ -246,7 +246,7 @@ impl<A: Asic, P: Read + Write + Baud, O: OutputPin, D: DelayNs> Chain<A, P, O, D
         Ok(())
     }
 
-    pub async fn set_baudrate(&mut self, baudrate: u32) -> Result<(), P::Error> {
+    pub async fn set_baudrate(&mut self, baudrate: u32) -> Result<(), P::Error, O::Error> {
         while let Some(step) = self.asic.set_baudrate_next(
             baudrate,
             self.domain_cnt,
@@ -261,7 +261,7 @@ impl<A: Asic, P: Read + Write + Baud, O: OutputPin, D: DelayNs> Chain<A, P, O, D
         Ok(())
     }
 
-    pub async fn reset_all_cores(&mut self) -> Result<(), P::Error> {
+    pub async fn reset_all_cores(&mut self) -> Result<(), P::Error, O::Error> {
         for asic_i in 0..self.asic_cnt {
             while let Some(step) = self
                 .asic
@@ -274,7 +274,7 @@ impl<A: Asic, P: Read + Write + Baud, O: OutputPin, D: DelayNs> Chain<A, P, O, D
         Ok(())
     }
 
-    pub async fn set_hash_freq(&mut self, freq: HertzU64) -> Result<(), P::Error> {
+    pub async fn set_hash_freq(&mut self, freq: HertzU64) -> Result<(), P::Error, O::Error> {
         while let Some(step) = self.asic.set_hash_freq_next(freq) {
             self.send(step).await?;
         }
@@ -282,7 +282,7 @@ impl<A: Asic, P: Read + Write + Baud, O: OutputPin, D: DelayNs> Chain<A, P, O, D
         Ok(())
     }
 
-    pub async fn set_version_rolling(&mut self, mask: u32) -> Result<(), P::Error> {
+    pub async fn set_version_rolling(&mut self, mask: u32) -> Result<(), P::Error, O::Error> {
         if self.asic.has_version_rolling() {
             while let Some(step) = self.asic.set_version_rolling_next(mask) {
                 self.send(step).await?;
