@@ -458,7 +458,7 @@ impl Asic for BM1366 {
         BM1366_CHIP_ID
     }
 
-    /// ## Has Version Rolling in chip
+    /// ## Is Hardware Version Rolling enabled
     ///
     /// ### Example
     /// ```
@@ -466,10 +466,10 @@ impl Asic for BM1366 {
     /// use bm13xx_asic::Asic;
     ///
     /// let bm1366 = BM1366::default();
-    /// assert!(bm1366.has_version_rolling());
+    /// assert!(!bm1366.version_rolling_enabled());
     /// ```
-    fn has_version_rolling(&self) -> bool {
-        true
+    fn version_rolling_enabled(&self) -> bool {
+        self.version_rolling_enabled
     }
 
     /// ## Init the Chip command list

@@ -38,7 +38,7 @@ pub enum SequenceStep {
 pub trait Asic {
     fn reset(&mut self);
     fn chip_id(&self) -> u16;
-    fn has_version_rolling(&self) -> bool;
+    fn version_rolling_enabled(&self) -> bool;
     fn init_next(&mut self, diffculty: u32) -> Option<CmdDelay>;
     fn set_baudrate_next(
         &mut self,

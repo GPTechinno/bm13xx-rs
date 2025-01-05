@@ -37,13 +37,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let builder = tokio_serial::new(port, 115_200).timeout(Duration::from_millis(50));
     let serial = SerialStream::open(&builder)?;
-    let adapter = FromTokio::new(serial);
+    let uart = FromTokio::new(serial);
 
     let bm1366 = BM1366::default();
     let fake_busy = SysfsPin::new(127);
     let fake_reset = SysfsPin::new(128);
 
-    let mut chain = Chain::new(1, bm1366, 1, adapter, fake_busy, fake_reset, Delay);
+    let mut chain = Chain::new(1, bm1366, 1, uart, fake_busy, fake_reset, Delay);
     chain.enumerate().await?;
     println!("Enumerated {} asics", chain.asic_cnt);
     println!("Interval: {}", chain.asic_addr_interval);
@@ -97,6 +97,12 @@ mod tokio_adapter {
 
     impl<T: ?Sized> embedded_io::ErrorType for FromTokio<T> {
         type Error = std::io::Error;
+    }
+
+    impl<T: tokio::io::AsyncRead + Unpin + ?Sized> embedded_io_async::ReadReady for FromTokio<T> {
+        fn read_ready(&mut self) -> Result<bool, Self::Error> {
+            Ok(true) // TODO: fix this
+        }
     }
 
     impl<T: tokio::io::AsyncRead + Unpin + ?Sized> embedded_io_async::Read for FromTokio<T> {

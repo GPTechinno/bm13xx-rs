@@ -11,7 +11,7 @@ pub struct RegisterResponse {
     pub reg_value: u32,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 pub struct JobResponse {
     pub nonce: u32,
@@ -19,7 +19,7 @@ pub struct JobResponse {
     pub midstate_id: u8,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 pub struct JobVersionResponse {
     pub nonce: u32,
@@ -28,13 +28,16 @@ pub struct JobVersionResponse {
     pub version_bit: u32,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 pub enum ResponseType {
     Reg(RegisterResponse),
     Job(JobResponse),
     JobVer(JobVersionResponse),
 }
+
+pub const FRAME_SIZE: usize = 9;
+pub const FRAME_SIZE_VER: usize = 11;
 
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
@@ -100,7 +103,7 @@ impl Response {
     ///     _ => panic!(),
     /// };
     /// ```
-    pub fn parse(data: &[u8; 9]) -> Result<ResponseType> {
+    pub fn parse(data: &[u8; FRAME_SIZE]) -> Result<ResponseType> {
         if data[0] != 0xAA || data[1] != 0x55 {
             return Err(Error::InvalidPreamble);
         }
@@ -184,7 +187,7 @@ impl Response {
     ///     _ => panic!(),
     /// };
     /// ```
-    pub fn parse_version(data: &[u8; 11]) -> Result<ResponseType> {
+    pub fn parse_version(data: &[u8; FRAME_SIZE_VER]) -> Result<ResponseType> {
         if data[0] != 0xAA || data[1] != 0x55 {
             return Err(Error::InvalidPreamble);
         }

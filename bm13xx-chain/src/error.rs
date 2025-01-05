@@ -1,5 +1,5 @@
 use bm13xx_asic::register::ChipIdentification;
-use bm13xx_protocol::response::RegisterResponse;
+use bm13xx_protocol::response::{RegisterResponse, ResponseType};
 use derive_more::From;
 
 pub type Result<T, IO, G> = core::result::Result<T, Error<IO, G>>;
@@ -8,7 +8,7 @@ pub type Result<T, IO, G> = core::result::Result<T, Error<IO, G>>;
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 pub enum Error<IO, G> {
     /// We received a response from ASIC which does not correspond to the command sent
-    UnexpectedResponse { resp: [u8; 9] },
+    UnexpectedResponse { resp: ResponseType },
     /// We received a register response which does not correspond to the register read command
     BadRegisterResponse { reg_resp: RegisterResponse },
     /// We enumerated an ASIC which does not correspond to the chip we are looking for
