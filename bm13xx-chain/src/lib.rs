@@ -87,6 +87,7 @@ use embedded_hal::digital::OutputPin;
 use embedded_hal_async::delay::DelayNs;
 use embedded_io_async::{Read, ReadReady, Write};
 use fugit::HertzU64;
+use heapless::Vec;
 
 pub trait Baud {
     fn set_baudrate(&mut self, baudrate: u32);
@@ -107,6 +108,7 @@ pub struct Chain<A, U, O, D> {
     busy: O,
     reset: O,
     delay: D,
+    job_id: u8,
 }
 
 impl<A: Asic, U: Read + ReadReady + Write + Baud, O: OutputPin, D: DelayNs> Chain<A, U, O, D> {
@@ -130,6 +132,7 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, O: OutputPin, D: DelayNs> Chai
             busy,
             reset,
             delay,
+            job_id: 0,
         }
     }
 
@@ -296,11 +299,9 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, O: OutputPin, D: DelayNs> Chai
         Ok(())
     }
 
-    pub async fn send_job(&mut self, job: &[u8]) -> Result<u8, U::Error, O::Error> {
-        self.uart.write_all(job).await.map_err(Error::Io)?;
-        Ok(job.len() as u8)
-    }
-
+    /// ## Initialize all asics on the chain
+    ///
+    /// Will launch the sequence of initialization steps according to the ASIC detected during enumeration.
     pub async fn init(&mut self, diffculty: u32) -> Result<(), U::Error, O::Error> {
         while let Some(step) = self.asic.init_next(diffculty) {
             self.send(step).await?;
@@ -309,7 +310,8 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, O: OutputPin, D: DelayNs> Chai
         Ok(())
     }
 
-    pub async fn set_baudrate(&mut self, baudrate: u32) -> Result<(), U::Error, O::Error> {
+    /// ## Change the baudrate used by the chain to communicate
+    pub async fn change_baudrate(&mut self, baudrate: u32) -> Result<(), U::Error, O::Error> {
         while let Some(step) = self.asic.set_baudrate_next(
             baudrate,
             self.domain_cnt,
@@ -324,6 +326,7 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, O: OutputPin, D: DelayNs> Chai
         Ok(())
     }
 
+    /// ## Reset all cores of all chip in the chain
     pub async fn reset_all_cores(&mut self) -> Result<(), U::Error, O::Error> {
         for asic_i in 0..self.asic_cnt {
             while let Some(step) = self
@@ -337,6 +340,9 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, O: OutputPin, D: DelayNs> Chai
         Ok(())
     }
 
+    /// ## Set the SHA Hashing Frequency
+    ///
+    /// Will launch the sequence of frequencies ramp-up.
     pub async fn set_hash_freq(&mut self, freq: HertzU64) -> Result<(), U::Error, O::Error> {
         while let Some(step) = self.asic.set_hash_freq_next(freq) {
             self.send(step).await?;
@@ -345,7 +351,10 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, O: OutputPin, D: DelayNs> Chai
         Ok(())
     }
 
-    pub async fn set_version_rolling(&mut self, mask: u32) -> Result<(), U::Error, O::Error> {
+    /// ## Enable Version Rolling in chips
+    ///
+    /// Enable Hardware Version Rolling with the given version mask.
+    pub async fn enable_version_rolling(&mut self, mask: u32) -> Result<(), U::Error, O::Error> {
         if !self.asic.version_rolling_enabled() {
             while let Some(step) = self.asic.set_version_rolling_next(mask) {
                 self.send(step).await?;
@@ -353,5 +362,41 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, O: OutputPin, D: DelayNs> Chai
             self.delay.delay_ms(100).await;
         }
         Ok(())
+    }
+
+    /// ## Send a Job to the chain
+    ///
+    /// Return the Job ID affected for this job.
+    pub async fn send_job(
+        &mut self,
+        version: u32,
+        prev_block_header_hash: [u8; 32],
+        merkle_root: [u8; 32],
+        n_bits: u32,
+        n_time: u32,
+    ) -> Result<u8, U::Error, O::Error> {
+        self.job_id = self.job_id.wrapping_add(self.asic.core_small_core_count());
+        if self.asic.version_rolling_enabled() {
+            let cmd = Command::job_header(
+                self.job_id,
+                n_bits,
+                n_time,
+                merkle_root,
+                prev_block_header_hash,
+                version,
+            );
+            self.uart.write_all(&cmd).await.map_err(Error::Io)?;
+        } else {
+            let merkle_root_end =
+                u32::from_be_bytes(merkle_root[merkle_root.len() - 4..].try_into().unwrap());
+            let mut midstates: Vec<[u8; 32], 4> = Vec::new();
+            for _i in 0..self.asic.core_small_core_count() {
+                midstates.push([0u8; 32]).unwrap(); // TODO finish midstate computation
+            }
+            let cmd =
+                Command::job_midstate(self.job_id, n_bits, n_time, merkle_root_end, midstates);
+            self.uart.write_all(&cmd).await.map_err(Error::Io)?;
+        };
+        Ok(self.job_id)
     }
 }

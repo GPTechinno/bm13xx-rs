@@ -26,7 +26,7 @@ impl<const SC: usize> Core<SC> {
     /// let core = Core::<4>::new();
     /// assert_eq!(core.small_core_count(), 4);
     /// ```
-    pub fn small_core_count(&self) -> usize {
+    pub const fn small_core_count(&self) -> usize {
         SC
     }
 }
@@ -42,16 +42,12 @@ impl<const SC: usize> Default for Core<SC> {
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 pub struct Sha<const C: usize, const SC: usize, const CSC: usize, const D: usize> {
     cores: [Core<CSC>; C],
-    small_cores_cnt: usize,
-    domain_cnt: usize,
 }
 
 impl<const C: usize, const SC: usize, const CSC: usize, const D: usize> Sha<C, SC, CSC, D> {
     pub fn new() -> Self {
         Sha {
             cores: [Core::<CSC>::new(); C],
-            small_cores_cnt: SC,
-            domain_cnt: D,
         }
     }
 
@@ -64,7 +60,7 @@ impl<const C: usize, const SC: usize, const CSC: usize, const D: usize> Sha<C, S
     /// let asic = Sha::<168, 672, 4, 4>::new(); // BM1397
     /// assert_eq!(asic.core_count(), 168);
     /// ```
-    pub fn core_count(&self) -> usize {
+    pub const fn core_count(&self) -> usize {
         C
     }
 
@@ -77,8 +73,21 @@ impl<const C: usize, const SC: usize, const CSC: usize, const D: usize> Sha<C, S
     /// let asic = Sha::<168, 672, 4, 4>::new(); // BM1397
     /// assert_eq!(asic.small_core_count(), 672);
     /// ```
-    pub fn small_core_count(&self) -> usize {
-        self.small_cores_cnt
+    pub const fn small_core_count(&self) -> usize {
+        SC
+    }
+
+    /// ## Get the number of Small Cores in a single Core of the ASIC
+    ///
+    /// ### Example
+    /// ```
+    /// use bm13xx_asic::sha::Sha;
+    ///
+    /// let asic = Sha::<168, 672, 4, 4>::new(); // BM1397
+    /// assert_eq!(asic.core_small_core_count(), 4);
+    /// ```
+    pub const fn core_small_core_count(&self) -> usize {
+        CSC
     }
 
     /// ## Get the number of Domains in the ASIC
@@ -90,8 +99,8 @@ impl<const C: usize, const SC: usize, const CSC: usize, const D: usize> Sha<C, S
     /// let asic = Sha::<168, 672, 4, 4>::new(); // BM1397
     /// assert_eq!(asic.domain_count(), 4);
     /// ```
-    pub fn domain_count(&self) -> usize {
-        self.domain_cnt
+    pub const fn domain_count(&self) -> usize {
+        D
     }
 }
 

@@ -15,6 +15,7 @@ embedded-hal = { workspace = true }
 embedded-hal-async = { workspace = true }
 embedded-io-async = { workspace = true }
 fugit = { workspace = true }
+heapless = { workspace = true }
 log = { workspace = true, optional = true }
 rustversion = { workspace = true }
 
@@ -27,6 +28,7 @@ defmt-03 = [
     "embedded-hal-async/defmt-03",
     "embedded-io-async/defmt-03",
     "fugit/defmt",
+    "heapless/defmt-03",
 ]
 
 [dev-dependencies]

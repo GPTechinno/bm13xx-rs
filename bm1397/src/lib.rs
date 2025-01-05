@@ -365,6 +365,20 @@ impl Asic for BM1397 {
         BM1397_CHIP_ID
     }
 
+    /// ## Get the Chip Core count
+    ///
+    /// ### Example
+    /// ```
+    /// use bm1397::{BM1397, BM1397_CORE_SMALL_CORE_CNT};
+    /// use bm13xx_asic::Asic;
+    ///
+    /// let bm1397 = BM1397::default();
+    /// assert_eq!(bm1397.core_small_core_count(), BM1397_CORE_SMALL_CORE_CNT as u8);
+    /// ```
+    fn core_small_core_count(&self) -> u8 {
+        self.sha.core_small_core_count() as u8
+    }
+
     /// ## Is Hardware Version Rolling enabled
     ///
     /// ### Example
