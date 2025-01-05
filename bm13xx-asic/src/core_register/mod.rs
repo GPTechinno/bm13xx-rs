@@ -45,7 +45,7 @@ pub use clock_delay::{ClockDelayCtrl, ClockDelayCtrlV2};
 pub use core_enable::CoreEnable;
 pub use core_error::CoreError;
 pub use core_reg11::CoreReg11;
-pub use core_reg2::CoreReg2;
+pub use core_reg2::CoreReg2; // different than ProcessMonitorData but reuse of ID=2
 pub use core_reg22::CoreReg22;
 pub use core_reg8::CoreReg8;
 pub use hash_clock::{HashClockCounter, HashClockCtrl};

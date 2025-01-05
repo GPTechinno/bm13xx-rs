@@ -17,8 +17,8 @@ pub const BM1366_SMALL_CORE_CNT: usize = 894;
 pub const BM1366_CORE_SMALL_CORE_CNT: usize = 8;
 pub const BM1366_DOMAIN_CNT: usize = 1;
 pub const BM1366_PLL_CNT: usize = 2;
-pub const BM1366_PLL_ID_HASH: usize = 0; // PLL0 isused for Hashing
-pub const BM1366_PLL_OUT_HASH: usize = 0; // specifically PLL0_OUT0 can be used for Hashing
+pub const BM1366_PLL_ID_HASH: usize = 0; // PLL0 is used for Hashing
+pub const BM1366_PLL_OUT_HASH: usize = 0; // specifically PLL0_OUT0 is used for Hashing
 pub const BM1366_PLL_ID_UART: usize = 1; // PLL1 can be used for UART Baudrate
 pub const BM1366_PLL_OUT_UART: usize = 4; // specifically PLL1_OUT4 can be used for UART Baudrate
 pub const BM1366_NONCE_CORES_BITS: usize = 7; // Core ID is hardcoded on Nonce[31:25] -> 7 bits
@@ -450,9 +450,9 @@ impl Default for BM1366 {
             .insert(ClockDelayCtrlV2::ID, 0x98)
             .unwrap();
         // bm1366.core_registers.insert(1, 0x00).unwrap(); // not used anywhere in official FW
-        bm1366.core_registers.insert(2, 0x55).unwrap();
-        bm1366.core_registers.insert(3, 0x00).unwrap();
-        bm1366.core_registers.insert(4, 0x00).unwrap();
+        bm1366.core_registers.insert(CoreReg2::ID, 0x55).unwrap();
+        bm1366.core_registers.insert(CoreError::ID, 0x00).unwrap();
+        bm1366.core_registers.insert(CoreEnable::ID, 0x00).unwrap();
         bm1366
             .core_registers
             .insert(HashClockCtrl::ID, 0x40)
@@ -461,7 +461,10 @@ impl Default for BM1366 {
             .core_registers
             .insert(HashClockCounter::ID, 0x08)
             .unwrap();
-        bm1366.core_registers.insert(7, 0x11).unwrap();
+        bm1366
+            .core_registers
+            .insert(SweepClockCtrl::ID, 0x11)
+            .unwrap();
         bm1366.core_registers.insert(CoreReg8::ID, 0x00).unwrap();
         bm1366.core_registers.insert(15, 0x00).unwrap();
         bm1366.core_registers.insert(16, 0x00).unwrap();

@@ -17,10 +17,10 @@ pub const BM1370_SMALL_CORE_CNT: usize = 2040;
 pub const BM1370_CORE_SMALL_CORE_CNT: usize = 16;
 pub const BM1370_DOMAIN_CNT: usize = 4;
 pub const BM1370_PLL_CNT: usize = 4;
-pub const BM1370_PLL_ID_HASH: usize = 0; // PLL0 isused for Hashing
-pub const BM1370_PLL_OUT_HASH: usize = 0; // specifically PLL0_OUT0 can be used for Hashing
+pub const BM1370_PLL_ID_HASH: usize = 0; // PLL0 is used for Hashing
+pub const BM1370_PLL_OUT_HASH: usize = 0; // specifically PLL0_OUT0 is used for Hashing
 pub const BM1370_PLL_ID_UART: usize = 3; // PLL3 can be used for UART Baudrate
-pub const BM1370_PLL_OUT_UART: usize = 4; // specifically PLL1_OUT4 can be used for UART Baudrate
+pub const BM1370_PLL_OUT_UART: usize = 4; // specifically PLL3_OUT4 can be used for UART Baudrate
 pub const BM1370_NONCE_CORES_BITS: usize = 7; // TODO: Check if is correct
 pub const BM1370_NONCE_CORES_MASK: u32 = 0b111_1111; // TODO: Check if is correct
 pub const BM1370_NONCE_SMALL_CORES_BITS: usize = 3; // TODO: Check if is correct
@@ -29,8 +29,6 @@ pub const BM1370_NONCE_SMALL_CORES_MASK: u32 = 0b111; // TODO: Check if is corre
 const NONCE_BITS: usize = 32;
 const CHIP_ADDR_BITS: usize = 8;
 const CHIP_ADDR_MASK: u32 = 0b1111_1111;
-
-// TODO: Check and correct values in all of the Examples
 
 /// # BM1370
 #[derive(Debug)]
@@ -349,7 +347,7 @@ impl Default for BM1370 {
             .unwrap();
         bm1370
             .registers
-            .insert(CoreRegisterValue::ADDR, 0x007f_0000)
+            .insert(CoreRegisterValue::ADDR, 0x0802_0100)
             .unwrap();
         bm1370
             .registers
@@ -473,23 +471,37 @@ impl Default for BM1370 {
             .insert(ClockDelayCtrlV2::ID, 0x52)
             .unwrap();
         // bm1370.core_registers.insert(1, 0x00).unwrap(); // not used anywhere in official FW
-        bm1370.core_registers.insert(2, 0x55).unwrap();
-        bm1370.core_registers.insert(3, 0x00).unwrap();
-        bm1370.core_registers.insert(4, 0x00).unwrap();
+        bm1370.core_registers.insert(CoreReg2::ID, 0x55).unwrap();
+        // bm1370.core_registers.insert(CoreError::ID, 0x00).unwrap();
+        // bm1370.core_registers.insert(CoreEnable::ID, 0x08).unwrap();
         bm1370
             .core_registers
-            .insert(HashClockCtrl::ID, 0x40)
+            .insert(HashClockCtrl::ID, 0x00)
             .unwrap();
         bm1370
             .core_registers
             .insert(HashClockCounter::ID, 0x08)
             .unwrap();
-        bm1370.core_registers.insert(7, 0x11).unwrap();
+        // bm1370
+        //     .core_registers
+        //     .insert(SweepClockCtrl::ID, 0x00)
+        //     .unwrap();
         bm1370.core_registers.insert(CoreReg8::ID, 0x00).unwrap();
-        bm1370.core_registers.insert(CoreReg11::ID, 0x00).unwrap(); // TODO: Check initial value
-        bm1370.core_registers.insert(15, 0x00).unwrap();
-        bm1370.core_registers.insert(16, 0x00).unwrap();
+        // bm1370.core_registers.insert(9, 0x00).unwrap();
+        // bm1370.core_registers.insert(9, 0x00).unwrap();
+        bm1370.core_registers.insert(CoreReg11::ID, 0x00).unwrap();
+        // bm1370.core_registers.insert(12, 0x00).unwrap();
+        // bm1370.core_registers.insert(13, 0x15).unwrap();
+        // bm1370.core_registers.insert(14, 0x00).unwrap();
+        // bm1370.core_registers.insert(15, 0x00).unwrap();
+        // bm1370.core_registers.insert(16, 0xbe).unwrap();
+        // bm1370.core_registers.insert(17, 0x00).unwrap();
+        // bm1370.core_registers.insert(18, 0x00).unwrap();
+        // bm1370.core_registers.insert(19, 0x00).unwrap();
+        // bm1370.core_registers.insert(20, 0x00).unwrap();
+        // bm1370.core_registers.insert(21, 0x00).unwrap();
         bm1370.core_registers.insert(CoreReg22::ID, 0x00).unwrap();
+        // bm1370.core_registers.insert(23, 0x80).unwrap();
         bm1370
     }
 }
