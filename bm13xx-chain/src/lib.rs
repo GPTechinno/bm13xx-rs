@@ -97,7 +97,7 @@ const RX_BUF_SIZE: usize = 256;
 
 #[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
-pub struct Chain<A, U, O, D> {
+pub struct Chain<A, U, OB, OR, D> {
     pub asic_cnt: u8,
     asic: A,
     pub asic_addr_interval: u16,
@@ -105,23 +105,25 @@ pub struct Chain<A, U, O, D> {
     uart: U,
     rx_buf: [u8; RX_BUF_SIZE],
     rx_free_pos: usize,
-    busy: O,
-    reset: O,
+    busy: OB,
+    reset: OR,
     delay: D,
     job_id: u8,
 }
 
-impl<A: Asic, U: Read + ReadReady + Write + Baud, O: OutputPin, D: DelayNs> Chain<A, U, O, D> {
+impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, D: DelayNs>
+    Chain<A, U, OB, OR, D>
+{
     pub fn new(
         asic_cnt: u8,
         asic: A,
         domain_cnt: u8,
         uart: U,
-        busy: O,
-        reset: O,
+        busy: OB,
+        reset: OR,
         delay: D,
     ) -> Self {
-        Chain::<A, U, O, D> {
+        Chain::<A, U, OB, OR, D> {
             asic_cnt,
             asic,
             asic_addr_interval: 0,
@@ -136,7 +138,7 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, O: OutputPin, D: DelayNs> Chai
         }
     }
 
-    async fn send(&mut self, step: CmdDelay) -> Result<(), U::Error, O::Error> {
+    async fn send(&mut self, step: CmdDelay) -> Result<(), U::Error, OB::Error, OR::Error> {
         self.uart.write_all(&step.cmd).await.map_err(Error::Io)?;
         self.delay.delay_ms(step.delay_ms).await;
         Ok(())
@@ -150,7 +152,9 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, O: OutputPin, D: DelayNs> Chai
     /// If more than the first frame has been received, this function will keep the extra data in the internal rx buffer.
     /// In case of receiving a Frame but with bad CRC, this function will ignore the frame and return None.
     /// In case of receiving a Frame but with bad Preamble, this function will try to resync and return None.
-    pub async fn poll_response(&mut self) -> Result<Option<ResponseType>, U::Error, O::Error> {
+    pub async fn poll_response(
+        &mut self,
+    ) -> Result<Option<ResponseType>, U::Error, OB::Error, OR::Error> {
         let mut resp = None;
         let expected_frame_size = if self.asic.version_rolling_enabled() {
             FRAME_SIZE_VER
@@ -219,10 +223,10 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, O: OutputPin, D: DelayNs> Chai
     /// - Unexpected asic
     /// - Protocol error
     /// - Unexpected asic count
-    pub async fn enumerate(&mut self) -> Result<(), U::Error, O::Error> {
-        self.reset.set_high().map_err(Error::Gpio)?;
+    pub async fn enumerate(&mut self) -> Result<(), U::Error, OB::Error, OR::Error> {
+        self.reset.set_high().map_err(Error::Reset)?;
         self.delay.delay_ms(10).await;
-        self.busy.set_low().map_err(Error::Gpio)?;
+        self.busy.set_low().map_err(Error::Busy)?;
         let cmd = Command::read_reg(ChipIdentification::ADDR, Destination::All);
         self.uart.write_all(&cmd).await.map_err(Error::Io)?;
 
@@ -293,8 +297,8 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, O: OutputPin, D: DelayNs> Chai
     ///
     /// Act on the physical NRST signal propagating through the chain.
     /// A new chain enumeration is required to release the NRST signal.
-    pub async fn reset(&mut self) -> Result<(), U::Error, O::Error> {
-        self.reset.set_low().map_err(Error::Gpio)?;
+    pub async fn reset(&mut self) -> Result<(), U::Error, OB::Error, OR::Error> {
+        self.reset.set_low().map_err(Error::Reset)?;
         self.asic.reset();
         Ok(())
     }
@@ -302,7 +306,7 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, O: OutputPin, D: DelayNs> Chai
     /// ## Initialize all asics on the chain
     ///
     /// Will launch the sequence of initialization steps according to the ASIC detected during enumeration.
-    pub async fn init(&mut self, diffculty: u32) -> Result<(), U::Error, O::Error> {
+    pub async fn init(&mut self, diffculty: u32) -> Result<(), U::Error, OB::Error, OR::Error> {
         while let Some(step) = self.asic.init_next(diffculty) {
             self.send(step).await?;
         }
@@ -311,7 +315,10 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, O: OutputPin, D: DelayNs> Chai
     }
 
     /// ## Change the baudrate used by the chain to communicate
-    pub async fn change_baudrate(&mut self, baudrate: u32) -> Result<(), U::Error, O::Error> {
+    pub async fn change_baudrate(
+        &mut self,
+        baudrate: u32,
+    ) -> Result<(), U::Error, OB::Error, OR::Error> {
         while let Some(step) = self.asic.set_baudrate_next(
             baudrate,
             self.domain_cnt,
@@ -327,7 +334,7 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, O: OutputPin, D: DelayNs> Chai
     }
 
     /// ## Reset all cores of all chip in the chain
-    pub async fn reset_all_cores(&mut self) -> Result<(), U::Error, O::Error> {
+    pub async fn reset_all_cores(&mut self) -> Result<(), U::Error, OB::Error, OR::Error> {
         for asic_i in 0..self.asic_cnt {
             while let Some(step) = self
                 .asic
@@ -343,7 +350,10 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, O: OutputPin, D: DelayNs> Chai
     /// ## Set the SHA Hashing Frequency
     ///
     /// Will launch the sequence of frequencies ramp-up.
-    pub async fn set_hash_freq(&mut self, freq: HertzU64) -> Result<(), U::Error, O::Error> {
+    pub async fn set_hash_freq(
+        &mut self,
+        freq: HertzU64,
+    ) -> Result<(), U::Error, OB::Error, OR::Error> {
         while let Some(step) = self.asic.set_hash_freq_next(freq) {
             self.send(step).await?;
         }
@@ -354,7 +364,10 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, O: OutputPin, D: DelayNs> Chai
     /// ## Enable Version Rolling in chips
     ///
     /// Enable Hardware Version Rolling with the given version mask.
-    pub async fn enable_version_rolling(&mut self, mask: u32) -> Result<(), U::Error, O::Error> {
+    pub async fn enable_version_rolling(
+        &mut self,
+        mask: u32,
+    ) -> Result<(), U::Error, OB::Error, OR::Error> {
         if !self.asic.version_rolling_enabled() {
             while let Some(step) = self.asic.set_version_rolling_next(mask) {
                 self.send(step).await?;
@@ -374,7 +387,7 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, O: OutputPin, D: DelayNs> Chai
         merkle_root: [u8; 32],
         n_bits: u32,
         n_time: u32,
-    ) -> Result<u8, U::Error, O::Error> {
+    ) -> Result<u8, U::Error, OB::Error, OR::Error> {
         self.job_id = self.job_id.wrapping_add(self.asic.core_small_core_count());
         if self.asic.version_rolling_enabled() {
             let cmd = Command::job_header(

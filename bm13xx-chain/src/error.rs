@@ -2,11 +2,11 @@ use bm13xx_asic::register::ChipIdentification;
 use bm13xx_protocol::response::{RegisterResponse, ResponseType};
 use derive_more::From;
 
-pub type Result<T, IO, G> = core::result::Result<T, Error<IO, G>>;
+pub type Result<T, IO, B, R> = core::result::Result<T, Error<IO, B, R>>;
 
 #[derive(PartialEq, From)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
-pub enum Error<IO, G> {
+pub enum Error<IO, B, R> {
     /// We received a response from ASIC which does not correspond to the command sent
     UnexpectedResponse { resp: ResponseType },
     /// We received a register response which does not correspond to the register read command
@@ -23,23 +23,32 @@ pub enum Error<IO, G> {
     Protocol(bm13xx_protocol::Error),
     /// The serial interface returned an error
     Io(IO),
-    /// The gpio interface returned an error
-    Gpio(G),
+    /// The gpio interface returned an error on Busy signal
+    Busy(B),
+    /// The gpio interface returned an error on Reset signal
+    Reset(R),
     /// The serial interface returned an error while setting baudrate
     SetBaudrate,
 }
 
 #[rustversion::since(1.81)]
-impl<IO: core::fmt::Debug, G: core::fmt::Debug> core::error::Error for Error<IO, G> {}
+impl<IO: core::fmt::Debug, B: core::fmt::Debug, R: core::fmt::Debug> core::error::Error
+    for Error<IO, B, R>
+{
+}
 
 #[rustversion::since(1.81)]
-impl<IO: core::fmt::Debug, G: core::fmt::Debug> core::fmt::Display for Error<IO, G> {
+impl<IO: core::fmt::Debug, B: core::fmt::Debug, R: core::fmt::Debug> core::fmt::Display
+    for Error<IO, B, R>
+{
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{self:?}")
     }
 }
 
-impl<IO: core::fmt::Debug, G: core::fmt::Debug> core::fmt::Debug for Error<IO, G> {
+impl<IO: core::fmt::Debug, B: core::fmt::Debug, R: core::fmt::Debug> core::fmt::Debug
+    for Error<IO, B, R>
+{
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Error::UnexpectedResponse { resp } => f
@@ -64,7 +73,8 @@ impl<IO: core::fmt::Debug, G: core::fmt::Debug> core::fmt::Debug for Error<IO, G
                 .finish(),
             Error::Protocol(protocol_err) => f.debug_tuple("Protocol").field(protocol_err).finish(),
             Error::Io(io_err) => f.debug_tuple("Io").field(io_err).finish(),
-            Error::Gpio(gpio_err) => f.debug_tuple("Gpio").field(gpio_err).finish(),
+            Error::Busy(gpio_err) => f.debug_tuple("Busy").field(gpio_err).finish(),
+            Error::Reset(gpio_err) => f.debug_tuple("Reset").field(gpio_err).finish(),
             Error::SetBaudrate => f.debug_struct("SetBaudrate").finish(),
         }
     }
