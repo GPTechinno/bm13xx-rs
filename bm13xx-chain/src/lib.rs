@@ -17,16 +17,12 @@
 //! #![no_main]
 //!
 //! use embassy_executor::Spawner;
-//! use embassy_time::{Duration, Timer, Delay};
+//! use embassy_time::{Delay, Duration, Timer};
 //! use esp_backtrace as _;
 //! use esp_hal::{
-//!     clock::ClockControl,
-//!     gpio::Io,
-//!     peripherals::Peripherals,
-//!     prelude::*,
-//!     system::SystemControl,
+//!     gpio::Output,
 //!     timer::timg::TimerGroup,
-//!     uart::{config::Config, TxRxPins, Uart},
+//!     uart::{Config, Uart},
 //! };
 //! use esp_println::println;
 //! use bm1366::BM1366;
@@ -34,28 +30,29 @@
 //!
 //! #[main]
 //! async fn main(_s: Spawner) -> ! {
-//!     let peripherals = Peripherals::take();
-//!     let system = SystemControl::new(peripherals.SYSTEM);
-//!     let clocks = ClockControl::max(system.clock_control).freeze();
+//!     println!("Init!");
+//!     let peripherals = esp_hal::init(esp_hal::Config::default());
 //!
-//!     let timg0 = TimerGroup::new_async(peripherals.TIMG0, &clocks);
-//!     esp_hal_embassy::init(&clocks, timg0);
+//!     let timg0 = TimerGroup::new(peripherals.TIMG0);
+//!     esp_hal_embassy::init(timg0.timer0);
 //!
-//!     let io = Io::new(peripherals.GPIO, peripherals.IO_MUX);
-//!     let pins = TxRxPins::new_tx_rx(io.pins.gpio17, io.pins.gpio16);
+//!     let (tx_pin, rx_pin) = (peripherals.GPIO43, peripherals.GPIO44);
 //!
-//!     let mut uart0 = Uart::new_async_with_config(
+//!     let config = Config::default()
+//!         .baudrate(115_200).
+//!         rx_fifo_full_threshold(bm13xx_protocol::READ_BUF_SIZE as u16);
+//!     let mut uart0 = Uart::new_with_config(
 //!         peripherals.UART0,
-//!         Config::default().baudrate(115_200),
-//!         Some(pins),
-//!         &clocks,
-//!     );
-//!     uart0
-//!         .set_rx_fifo_full_threshold(bm13xx_protocol::READ_BUF_SIZE as u16)
-//!         .unwrap();
+//!         config,
+//!         rx_pin,
+//!         tx_pin,
+//!     ).unwrap().into_async();
+//!
+//!     let busy = Output::new(peripherals.GPIO0, Level::High);
+//!     let reset = Output::new(peripherals.GPIO2, Level::Low);
 //!
 //!     let bm1366 = BM1366::default();
-//!     let mut chain = Chain::new(1, bm1366, 1, &mut uart0, Delay);
+//!     let mut chain = Chain::new(1, bm1366, 1, &mut uart0, busy, reset, Delay);
 //!     chain.enumerate().await.unwrap();
 //!     println!("Enumerated {} asics", chain.asic_cnt);
 //!     println!("Interval: {}", chain.asic_addr_interval);
@@ -63,7 +60,6 @@
 //!     chain.set_baudrate(1_000_000).await.unwrap();
 //!
 //!     loop {
-//!
 //!         Timer::after(Duration::from_millis(30)).await;
 //!     }
 //! }
