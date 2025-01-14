@@ -9,6 +9,7 @@ in
     buildInputs = with pkgs; [
       clang
       cmake
+      libftdi1
       # Replace llvmPackages with llvmPackages_X, where X is the latest LLVM version (at the time of writing, 16)
       llvmPackages.bintools
       openssl
