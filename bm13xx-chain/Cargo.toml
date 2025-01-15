@@ -33,7 +33,7 @@ defmt-03 = [
 
 [dev-dependencies]
 bm1366 = { path = "../bm1366" }
-
+embedded-hal-bus = { version = "0.2.0", features = ["std", "async"] }
 embedded-io = { version = "0.6", features = ["std"] }
 env_logger = "0.11"
 ftdi-embedded-hal = { version = "0.22.1", features = ["ftdi"] }

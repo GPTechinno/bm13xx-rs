@@ -5,8 +5,9 @@ use bm13xx_chain::Chain;
 
 use embedded_hal::digital::{ErrorType, OutputPin};
 use embedded_hal_async::delay::DelayNs;
+use embedded_hal_bus::i2c::MutexDevice;
 use inquire::Select;
-use std::{env, error::Error, time::Duration};
+use std::{env, error::Error, sync::Mutex, time::Duration};
 use tokio::time::sleep;
 use tokio_adapter::FromTokio;
 use tokio_serial::SerialStream;
@@ -41,7 +42,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut args: Vec<String> = env::args().collect();
 
     // use the first arg as serial port, query interactively if not given
-    let port = if args.len() == 2 {
+    let hb0_port = if args.len() == 2 {
         args.pop().unwrap()
     } else {
         let ports = tokio_serial::available_ports()?;
@@ -49,46 +50,56 @@ async fn main() -> Result<(), Box<dyn Error>> {
         Select::new("Which serial port should be used?", ports).prompt()?
     };
 
-    let builder = tokio_serial::new(port, 115_200).timeout(Duration::from_millis(50));
-    let serial = SerialStream::open(&builder)?;
-    let uart = FromTokio::new(serial);
+    let hb0_builder = tokio_serial::new(hb0_port, 115_200).timeout(Duration::from_millis(50));
+    let hb0_serial = SerialStream::open(&hb0_builder)?;
+    let hb0_uart = FromTokio::new(hb0_serial);
 
-    let bm1366 = BM1366::default(); // will change it to BM1362 later
-
-    // let bitcrane = ftdi::find_by_vid_pid(0x0403, 0x6011);
+    let bm1362 = BM1366::default(); // TODO: change it to BM1362 when implemented
 
     // Open FTDI FT4232H channel A from Bitcrane for APW connection
-    let apw_dev = ftdi::find_by_vid_pid(0x0403, 0x6011)
+    let channel_a = ftdi::find_by_vid_pid(0x0403, 0x6011)
         .interface(ftdi::Interface::A)
         .open()?;
-    let apw = ftdi_embedded_hal::FtHal::init_freq(apw_dev, 400_000)?;
-    let _i2c = apw.i2c()?;
-    let _psu_en = apw.ad4()?;
-    let _fan_alert = apw.adi6()?;
+    let hal_ch_a = ftdi_embedded_hal::FtHal::init_freq(channel_a, 400_000)?;
+    let i2c = hal_ch_a.i2c()?;
+    let _psu_en = hal_ch_a.ad4()?;
+    let _apw12_i2c = MutexDevice::new(&Mutex::new(&i2c));
+    // TODO: use a apw device driver using apw12_i2c i2c@16
+    let _fan_alert = hal_ch_a.adi6()?;
+    let _emc2305_i2c = MutexDevice::new(&Mutex::new(&i2c));
+    // TODO: use a emc2305 device driver using emc2305_i2c i2c@0x4d
 
     // Open FTDI FT4232H channel B from Bitcrane for HB0 connection
-    let hb0_dev = ftdi::find_by_vid_pid(0x0403, 0x6011)
+    let channel_b = ftdi::find_by_vid_pid(0x0403, 0x6011)
         .interface(ftdi::Interface::B)
         .open()?;
-    let hb0 = ftdi_embedded_hal::FtHal::init_default(hb0_dev)?;
+    let hal_ch_b = ftdi_embedded_hal::FtHal::init_default(channel_b)?;
 
     // Only use HB0 for now
-    let fake_busy = FakeOutputPin;
-    let reset = hb0.ad2()?;
-    let _plug0 = hb0.ad3()?;
+    let hb0_busy = FakeOutputPin;
+    let hb0_reset = hal_ch_b.ad2()?;
+    let _hb0_plug0 = hal_ch_b.ad3()?;
+    let _hb0_pic_i2c = MutexDevice::new(&Mutex::new(&i2c));
+    // TODO: use a pic1704 device driver using hb0_pic_i2c i2c@32
+    let _hb0_temp_a_i2c = MutexDevice::new(&Mutex::new(&i2c));
+    // TODO: use a lm75a device driver using hb0_temp_a_i2c i2c@72
+    let _hb0_temp_b_i2c = MutexDevice::new(&Mutex::new(&i2c));
+    // TODO: use a lm75a device driver using hb0_temp_b_i2c i2c@76
 
-    let mut chain = Chain::new(1, bm1366, 1, uart, fake_busy, reset, Delay);
-    chain.enumerate().await?;
-    println!("Enumerated {} asics", chain.asic_cnt);
-    println!("Interval: {}", chain.asic_addr_interval);
-    chain.init(256).await?;
-    chain.change_baudrate(1_000_000).await?;
-    // chain.enumerate().await?; // just to be sure the new baudrate is well setup
-    // println!("Enumerated {} asics", chain.asic_cnt);
-    // println!("Interval: {}", chain.asic_addr_interval);
-    chain.reset_all_cores().await?;
-    // chain.set_hash_freq(HertzU64::MHz(525)).await?;
-    // chain.enable_version_rolling(0x1fff_e000).await?;
+    // TODO: declare HB1 and HB2
+
+    let mut chain0 = Chain::new(126, bm1362, 42, hb0_uart, hb0_busy, hb0_reset, Delay);
+    chain0.enumerate().await?;
+    println!("Enumerated {} asics", chain0.asic_cnt);
+    println!("Interval: {}", chain0.asic_addr_interval);
+    chain0.init(256).await?;
+    chain0.change_baudrate(1_000_000).await?;
+    // chain0.enumerate().await?; // just to be sure the new baudrate is well setup
+    // println!("Enumerated {} asics", chain0.asic_cnt);
+    // println!("Interval: {}", chain0.asic_addr_interval);
+    chain0.reset_all_cores().await?;
+    // chain0.set_hash_freq(HertzU64::MHz(525)).await?;
+    // chain0.enable_version_rolling(0x1fff_e000).await?;
     Ok(())
 }
 
