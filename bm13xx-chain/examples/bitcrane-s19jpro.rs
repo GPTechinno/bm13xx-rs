@@ -84,10 +84,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let hb0_serial = SerialStream::open(&hb0_builder)?;
         let hb0_uart = FromTokio::new(hb0_serial);
 
-        let mut chain0 = Chain::new(126, bm1362, 42, hb0_uart, hb0_busy, hb0_reset, Delay);
-        chain0.enumerate().await?;
+        let mut chain0 = Chain::enumerate(bm1362, hb0_uart, hb0_busy, hb0_reset, Delay).await?;
         println!("Enumerated {} asics", chain0.asic_cnt);
         println!("Interval: {}", chain0.asic_addr_interval);
+        chain0.set_domain_cnt(42);
         chain0.init(256).await?;
         chain0.change_baudrate(1_000_000).await?;
         // chain0.enumerate().await?; // just to be sure the new baudrate is well setup
