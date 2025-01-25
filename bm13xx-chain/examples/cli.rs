@@ -43,15 +43,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let fake_busy = SysfsPin::new(127);
     let fake_reset = SysfsPin::new(128);
 
-    let mut chain = Chain::new(1, bm1366, 1, uart, fake_busy, fake_reset, Delay);
-    chain.enumerate().await?;
+    let mut chain = Chain::enumerate(bm1366, uart, fake_busy, fake_reset, Delay).await?;
     println!("Enumerated {} asics", chain.asic_cnt);
     println!("Interval: {}", chain.asic_addr_interval);
     chain.init(256).await?;
     chain.change_baudrate(1_000_000).await?;
-    // chain.enumerate().await?; // just to be sure the new baudrate is well setup
-    // println!("Enumerated {} asics", chain.asic_cnt);
-    // println!("Interval: {}", chain.asic_addr_interval);
     chain.reset_all_cores().await?;
     chain.set_hash_freq(HertzU64::MHz(525)).await?;
     chain.enable_version_rolling(0x1fff_e000).await?;

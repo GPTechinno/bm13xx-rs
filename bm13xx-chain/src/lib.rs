@@ -9,7 +9,7 @@
 //! The crate ships with a CLI example that utilize the library from your host computer:
 //! * [`bm13xx-cli.rs`](examples/cli.rs) uses the asynchronous interface (embedded-io-async).
 //!
-//! The example below demonstrates how to use it with an ESP32,
+//! The example below demonstrates how to use it with an ESP32S3,
 //! showcasing the strength of the embedded-hal abstractions.
 //!
 //! ```ignore
@@ -28,8 +28,8 @@
 //! use bm1366::BM1366;
 //! use bm13xx_chain::{Baud, Chain};
 //!
-//! #[main]
-//! async fn main(_s: Spawner) -> ! {
+//! #[esp_hal_embassy::main]
+//! async fn main(_s: Spawner) {
 //!     println!("Init!");
 //!     let peripherals = esp_hal::init(esp_hal::Config::default());
 //!
@@ -39,21 +39,19 @@
 //!     let (tx_pin, rx_pin) = (peripherals.GPIO43, peripherals.GPIO44);
 //!
 //!     let config = Config::default()
-//!         .baudrate(115_200).
-//!         rx_fifo_full_threshold(bm13xx_protocol::READ_BUF_SIZE as u16);
-//!     let mut uart0 = Uart::new_with_config(
-//!         peripherals.UART0,
-//!         config,
-//!         rx_pin,
-//!         tx_pin,
-//!     ).unwrap().into_async();
+//!         .baudrate(115_200)
+//!         .with_rx_fifo_full_threshold(bm13xx_protocol::READ_BUF_SIZE as u16);
+//!     let mut uart0 = Uart::new(peripherals.UART0, config)
+//!         .unwrap()
+//!         .with_tx(tx_pin)
+//!         .with_rx(rx_pin)
+//!         .into_async();
 //!
 //!     let busy = Output::new(peripherals.GPIO0, Level::High);
 //!     let reset = Output::new(peripherals.GPIO2, Level::Low);
 //!
 //!     let bm1366 = BM1366::default();
-//!     let mut chain = Chain::new(1, bm1366, 1, &mut uart0, busy, reset, Delay);
-//!     chain.enumerate().await.unwrap();
+//!     let mut chain = Chain::enumerate(bm1366,&mut uart0, busy, reset, Delay).await.unwrap();
 //!     println!("Enumerated {} asics", chain.asic_cnt);
 //!     println!("Interval: {}", chain.asic_addr_interval);
 //!     chain.init(256).await.unwrap();
@@ -110,30 +108,6 @@ pub struct Chain<A, U, OB, OR, D> {
 impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, D: DelayNs>
     Chain<A, U, OB, OR, D>
 {
-    pub fn new(
-        asic_cnt: u8,
-        asic: A,
-        domain_cnt: u8,
-        uart: U,
-        busy: OB,
-        reset: OR,
-        delay: D,
-    ) -> Self {
-        Chain::<A, U, OB, OR, D> {
-            asic_cnt,
-            asic,
-            asic_addr_interval: 0,
-            domain_cnt,
-            uart,
-            rx_buf: [0; RX_BUF_SIZE],
-            rx_free_pos: 0,
-            busy,
-            reset,
-            delay,
-            job_id: 0,
-        }
-    }
-
     async fn send(&mut self, step: CmdDelay) -> Result<(), U::Error, OB::Error, OR::Error> {
         self.uart.write_all(&step.cmd).await.map_err(Error::Io)?;
         self.delay.delay_ms(step.delay_ms).await;
@@ -218,24 +192,39 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
     /// - Bad register response
     /// - Unexpected asic
     /// - Protocol error
-    /// - Unexpected asic count
-    pub async fn enumerate(&mut self) -> Result<(), U::Error, OB::Error, OR::Error> {
-        self.reset.set_high().map_err(Error::Reset)?;
-        self.delay.delay_ms(10).await;
-        self.busy.set_low().map_err(Error::Busy)?;
+    /// - Empty chain
+    pub async fn enumerate(
+        asic: A,
+        uart: U,
+        busy: OB,
+        reset: OR,
+        delay: D,
+    ) -> Result<Self, U::Error, OB::Error, OR::Error> {
+        let mut chain = Chain::<A, U, OB, OR, D> {
+            asic_cnt: 0,
+            asic,
+            asic_addr_interval: 0,
+            domain_cnt: 1,
+            uart,
+            rx_buf: [0; RX_BUF_SIZE],
+            rx_free_pos: 0,
+            busy,
+            reset,
+            delay,
+            job_id: 0,
+        };
+
+        chain.reset.set_high().map_err(Error::Reset)?;
+        chain.delay.delay_ms(10).await;
+        chain.busy.set_low().map_err(Error::Busy)?;
         let cmd = Command::read_reg(ChipIdentification::ADDR, Destination::All);
-        self.uart.write_all(&cmd).await.map_err(Error::Io)?;
+        chain.uart.write_all(&cmd).await.map_err(Error::Io)?;
 
         let mut asic_cnt = 0;
         let mut post_s19jpro = false;
         loop {
-            debug!("Enumerating asic: {}", asic_cnt);
-            // FIXME: This is a workaround for the Timeout based loop
-            if asic_cnt == self.asic_cnt {
-                break;
-            }
-            // TODO: fix the Timeout based loop
-            if let Some(resp) = self.poll_response().await? {
+            chain.delay.delay_ms(10).await;
+            if let Some(resp) = chain.poll_response().await? {
                 if let ResponseType::Reg(reg_resp) = resp {
                     if reg_resp.chip_addr != 0 || reg_resp.reg_addr != ChipIdentification::ADDR {
                         warn!("reg_resp: {:#?}, {}", reg_resp, ChipIdentification::ADDR);
@@ -245,48 +234,56 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
                     if chip_ident.core_num() == 0 {
                         post_s19jpro = true;
                     }
-                    if chip_ident.chip_id() == self.asic.chip_id() {
+                    if chip_ident.chip_id() == chain.asic.chip_id() {
                         asic_cnt += 1;
                     } else {
+                        // Heterogeneous chain is forbidden
                         return Err(Error::UnexpectedAsic { chip_ident });
                     }
                 } else {
                     return Err(Error::UnexpectedResponse { resp });
                 };
+            } else {
+                break;
             }
         }
-        if asic_cnt > 0 {
-            self.asic_addr_interval = 256 / (asic_cnt as u16);
+        if asic_cnt == 0 {
+            return Err(Error::EmptyChain);
         }
-        if asic_cnt != self.asic_cnt {
-            return Err(Error::UnexpectedAsicCount {
-                expected_asic_cnt: self.asic_cnt,
-                actual_asic_cnt: asic_cnt,
-            });
-        }
-        self.delay.delay_ms(50).await;
+        debug!("Enumerated {} asics", asic_cnt);
+        chain.asic_addr_interval = 256 / (asic_cnt as u16);
+        chain.asic_cnt = asic_cnt;
+        // TODO: try to determine domain_cnt according to known topologies
+        chain.delay.delay_ms(50).await;
         if post_s19jpro {
-            self.delay.delay_ms(100).await;
-            while let Some(step) = self.asic.reset_core_next(Destination::All) {
-                self.send(step).await?;
+            chain.delay.delay_ms(100).await;
+            while let Some(step) = chain.asic.reset_core_next(Destination::All) {
+                chain.send(step).await?;
             }
         }
         let cmd = Command::chain_inactive();
-        self.uart.write_all(&cmd).await.map_err(Error::Io)?;
+        chain.uart.write_all(&cmd).await.map_err(Error::Io)?;
         if !post_s19jpro {
-            self.delay.delay_ms(2).await;
-            self.uart.write_all(&cmd).await.map_err(Error::Io)?;
-            self.delay.delay_ms(2).await;
-            self.uart.write_all(&cmd).await.map_err(Error::Io)?;
+            chain.delay.delay_ms(2).await;
+            chain.uart.write_all(&cmd).await.map_err(Error::Io)?;
+            chain.delay.delay_ms(2).await;
+            chain.uart.write_all(&cmd).await.map_err(Error::Io)?;
         }
-        self.delay.delay_ms(30).await;
+        chain.delay.delay_ms(30).await;
         for i in 0..asic_cnt {
-            let cmd = Command::set_chip_addr((i as u16 * self.asic_addr_interval) as u8);
-            self.uart.write_all(&cmd).await.map_err(Error::Io)?;
-            self.delay.delay_ms(10).await;
+            let cmd = Command::set_chip_addr((i as u16 * chain.asic_addr_interval) as u8);
+            chain.uart.write_all(&cmd).await.map_err(Error::Io)?;
+            chain.delay.delay_ms(10).await;
         }
-        self.delay.delay_ms(100).await;
-        Ok(())
+        chain.delay.delay_ms(100).await;
+        Ok(chain)
+    }
+
+    /// ## Set the number of domains in the chain
+    ///
+    /// In case we enumarted an unknown topology (custom HB?), this function is mandatory to set the number of domains.
+    pub fn set_domain_cnt(&mut self, domain_cnt: u8) {
+        self.domain_cnt = domain_cnt;
     }
 
     /// ## Reset all asics on the chain

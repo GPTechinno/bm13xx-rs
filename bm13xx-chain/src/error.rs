@@ -13,11 +13,8 @@ pub enum Error<IO, B, R> {
     BadRegisterResponse { reg_resp: RegisterResponse },
     /// We enumerated an ASIC which does not correspond to the chip we are looking for
     UnexpectedAsic { chip_ident: ChipIdentification },
-    /// We enumerated an incorrect number of asics
-    UnexpectedAsicCount {
-        expected_asic_cnt: u8,
-        actual_asic_cnt: u8,
-    },
+    /// We enumerated an empty chain
+    EmptyChain,
     /// The BM13xx protocol returned an error
     #[from]
     Protocol(bm13xx_protocol::Error),
@@ -63,14 +60,7 @@ impl<IO: core::fmt::Debug, B: core::fmt::Debug, R: core::fmt::Debug> core::fmt::
                 .debug_struct("UnexpectedAsic")
                 .field("chip_ident", &format_args!("{:x?}", chip_ident))
                 .finish(),
-            Error::UnexpectedAsicCount {
-                expected_asic_cnt,
-                actual_asic_cnt,
-            } => f
-                .debug_struct("UnexpectedAsicCount")
-                .field("expected_asic_cnt", &expected_asic_cnt)
-                .field("actual_asic_cnt", &actual_asic_cnt)
-                .finish(),
+            Error::EmptyChain => f.debug_struct("EmptyChain").finish(),
             Error::Protocol(protocol_err) => f.debug_tuple("Protocol").field(protocol_err).finish(),
             Error::Io(io_err) => f.debug_tuple("Io").field(io_err).finish(),
             Error::Busy(gpio_err) => f.debug_tuple("Busy").field(gpio_err).finish(),
