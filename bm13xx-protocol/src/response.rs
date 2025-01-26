@@ -24,7 +24,8 @@ pub struct JobResponse {
 pub struct JobVersionResponse {
     pub nonce: u32,
     pub unknown: u8,
-    pub job_id_small_core_id: u8,
+    pub job_id: u8,
+    pub small_core_id: u8,
     pub version_bit: u32,
 }
 
@@ -146,25 +147,25 @@ impl Response {
     /// use bm13xx_protocol::response::{Response, ResponseType};
     ///
     /// // Error::InvalidPreamble
-    /// let resp = Response::parse_version(&[0x00,0x55,0x13,0x97,0x18,0x00,0x00,0x00,0x00,0x00,0x06]);
+    /// let resp = Response::parse_version(&[0x00,0x55,0x13,0x97,0x18,0x00,0x00,0x00,0x00,0x00,0x06], 8);
     /// assert!(resp.is_err());
     /// assert_eq!(resp.unwrap_err(), Error::InvalidPreamble);
     ///
-    /// let resp = Response::parse_version(&[0xAA,0x00,0x13,0x97,0x18,0x00,0x00,0x00,0x00,0x00,0x06]);
+    /// let resp = Response::parse_version(&[0xAA,0x00,0x13,0x97,0x18,0x00,0x00,0x00,0x00,0x00,0x06], 8);
     /// assert!(resp.is_err());
     /// assert_eq!(resp.unwrap_err(), Error::InvalidPreamble);
     ///
-    /// let resp = Response::parse_version(&[0x00,0x00,0x13,0x97,0x18,0x00,0x00,0x00,0x00,0x00,0x06]);
+    /// let resp = Response::parse_version(&[0x00,0x00,0x13,0x97,0x18,0x00,0x00,0x00,0x00,0x00,0x06], 8);
     /// assert!(resp.is_err());
     /// assert_eq!(resp.unwrap_err(), Error::InvalidPreamble);
     ///
     /// // Error::InvalidCrc
-    /// let resp = Response::parse_version(&[0xAA,0x55,0x13,0x66,0x00,0x00,0x00,0x00,0x00,0x00,0x00]); // should be 0x05
+    /// let resp = Response::parse_version(&[0xAA,0x55,0x13,0x66,0x00,0x00,0x00,0x00,0x00,0x00,0x00], 8); // should be 0x05
     /// assert!(resp.is_err());
     /// assert_eq!(resp.unwrap_err(), Error::InvalidCrc { expected: 0x05, actual: 0x00 });
     ///
     /// // ChipIdentification == 0x13660000
-    /// let resp = Response::parse_version(&[0xAA,0x55,0x13,0x62,0x03,0x00,0x00,0x00,0x00,0x00,0x1E]);
+    /// let resp = Response::parse_version(&[0xAA,0x55,0x13,0x62,0x03,0x00,0x00,0x00,0x00,0x00,0x1E], 8);
     /// assert!(resp.is_ok());
     /// match resp.unwrap() {
     ///     ResponseType::Reg(r) => {
@@ -175,19 +176,23 @@ impl Response {
     ///     _ => panic!(),
     /// };
     ///
-    /// let resp = Response::parse_version(&[0xAA,0x55,0x2F,0xD5,0x96,0xCE,0x02,0x93,0x94,0xFB,0x86]);
+    /// let resp = Response::parse_version(&[0xAA,0x55,0x2F,0xD5,0x96,0xCE,0x02,0x93,0x94,0xFB,0x86], 8);
     /// assert!(resp.is_ok());
     /// match resp.unwrap() {
     ///     ResponseType::JobVer(j) => {
     ///         assert_eq!(j.nonce, 0xCE96_D52F);
     ///         assert_eq!(j.unknown, 2);
-    ///         assert_eq!(j.job_id_small_core_id, 0x93);
+    ///         assert_eq!(j.job_id, 0x90);
+    ///         assert_eq!(j.small_core_id, 3);
     ///         assert_eq!(j.version_bit, 0x129F_6000);
     ///     },
     ///     _ => panic!(),
     /// };
     /// ```
-    pub fn parse_version(data: &[u8; FRAME_SIZE_VER]) -> Result<ResponseType> {
+    pub fn parse_version(
+        data: &[u8; FRAME_SIZE_VER],
+        core_small_core_cnt: u8,
+    ) -> Result<ResponseType> {
         if data[0] != 0xAA || data[1] != 0x55 {
             return Err(Error::InvalidPreamble);
         }
@@ -198,10 +203,12 @@ impl Response {
             });
         }
         if data[10] & 0x80 == 0x80 {
+            let small_core_mask = (core_small_core_cnt - 1).count_ones() as u8;
             return Ok(ResponseType::JobVer(JobVersionResponse {
                 nonce: u32::from_le_bytes(data[2..6].try_into().unwrap()),
                 unknown: data[6],
-                job_id_small_core_id: data[7],
+                job_id: data[7] & !small_core_mask,
+                small_core_id: data[7] & small_core_mask,
                 version_bit: (u16::from_be_bytes(data[8..10].try_into().unwrap()) as u32) << 13,
             }));
         }

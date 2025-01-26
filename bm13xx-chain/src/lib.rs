@@ -134,7 +134,10 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
         if self.rx_free_pos >= expected_frame_size {
             let frame = &self.rx_buf[..expected_frame_size];
             let used = match if self.asic.version_rolling_enabled() {
-                Response::parse_version(frame.try_into().unwrap())
+                Response::parse_version(
+                    frame.try_into().unwrap(),
+                    self.asic.core_small_core_count(),
+                )
             } else {
                 Response::parse(frame.try_into().unwrap())
             } {

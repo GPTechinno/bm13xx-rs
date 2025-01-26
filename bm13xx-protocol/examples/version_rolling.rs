@@ -49,7 +49,7 @@ fn main() {
     let mut resp = [0u8; 11];
     port.read_exact(&mut resp).expect("Found no data!");
     println!("<< {:x?}", resp);
-    match Response::parse_version(&resp).expect("Error parsing") {
+    match Response::parse_version(&resp, 8).expect("Error parsing") {
         ResponseType::Reg(reg) => println!("{:x?}", reg),
         ResponseType::Job(job) => println!("{:x?}", job),
         ResponseType::JobVer(job) => println!("{:x?}", job),
