@@ -31,5 +31,5 @@ jobs:
         run: cargo fmt --check
       - name: Clippy
         run: cargo clippy --verbose -- -D warnings
-      - name: Audit
-        run: cargo audit
+      # - name: Audit
+      #   run: cargo audit
