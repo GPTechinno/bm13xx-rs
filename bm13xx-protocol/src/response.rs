@@ -23,8 +23,8 @@ pub struct JobResponse {
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 pub struct JobVersionResponse {
     pub nonce: u32,
-    pub job_id: u8,
-    pub midstate_id: u8,
+    pub unknown: u8,
+    pub job_id_small_core_id: u8,
     pub version_bit: u32,
 }
 
@@ -96,7 +96,7 @@ impl Response {
     /// assert!(resp.is_ok());
     /// match resp.unwrap() {
     ///     ResponseType::Job(j) => {
-    ///         assert_eq!(j.nonce, 0x97C3_28B6);
+    ///         assert_eq!(j.nonce, 0xB628_C397);
     ///         assert_eq!(j.midstate_id, 1);
     ///         assert_eq!(j.job_id, 0x63);
     ///     },
@@ -115,7 +115,7 @@ impl Response {
         }
         if data[8] & 0x80 == 0x80 {
             return Ok(ResponseType::Job(JobResponse {
-                nonce: u32::from_be_bytes(data[2..6].try_into().unwrap()),
+                nonce: u32::from_le_bytes(data[2..6].try_into().unwrap()),
                 midstate_id: data[6],
                 job_id: data[7],
             }));
@@ -179,9 +179,9 @@ impl Response {
     /// assert!(resp.is_ok());
     /// match resp.unwrap() {
     ///     ResponseType::JobVer(j) => {
-    ///         assert_eq!(j.nonce, 0x2FD5_96CE);
-    ///         assert_eq!(j.midstate_id, 2);
-    ///         assert_eq!(j.job_id, 0x93);
+    ///         assert_eq!(j.nonce, 0xCE96_D52F);
+    ///         assert_eq!(j.unknown, 2);
+    ///         assert_eq!(j.job_id_small_core_id, 0x93);
     ///         assert_eq!(j.version_bit, 0x129F_6000);
     ///     },
     ///     _ => panic!(),
@@ -199,9 +199,9 @@ impl Response {
         }
         if data[10] & 0x80 == 0x80 {
             return Ok(ResponseType::JobVer(JobVersionResponse {
-                nonce: u32::from_be_bytes(data[2..6].try_into().unwrap()),
-                midstate_id: data[6],
-                job_id: data[7],
+                nonce: u32::from_le_bytes(data[2..6].try_into().unwrap()),
+                unknown: data[6],
+                job_id_small_core_id: data[7],
                 version_bit: (u16::from_be_bytes(data[8..10].try_into().unwrap()) as u32) << 13,
             }));
         }
