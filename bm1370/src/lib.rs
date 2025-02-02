@@ -7,7 +7,7 @@ pub(crate) mod fmt;
 use bm13xx_asic::{core_register::*, register::*, Asic, CmdDelay, SequenceStep};
 use bm13xx_protocol::command::{Command, Destination};
 
-use core::time::Duration;
+// use core::time::Duration;
 use fugit::HertzU64;
 use heapless::FnvIndexMap;
 
@@ -21,14 +21,12 @@ pub const BM1370_PLL_ID_HASH: usize = 0; // PLL0 is used for Hashing
 pub const BM1370_PLL_OUT_HASH: usize = 0; // specifically PLL0_OUT0 is used for Hashing
 pub const BM1370_PLL_ID_UART: usize = 3; // PLL3 can be used for UART Baudrate
 pub const BM1370_PLL_OUT_UART: usize = 4; // specifically PLL3_OUT4 can be used for UART Baudrate
-pub const BM1370_NONCE_CORES_BITS: usize = 7; // TODO: Check if is correct
-pub const BM1370_NONCE_CORES_MASK: u32 = 0b111_1111; // TODO: Check if is correct
-pub const BM1370_NONCE_SMALL_CORES_BITS: usize = 3; // TODO: Check if is correct
-pub const BM1370_NONCE_SMALL_CORES_MASK: u32 = 0b111; // TODO: Check if is correct
+pub const BM1370_NONCE_CORES_BITS: usize = 7; // Core ID is hardcoded on Nonce[31:25] -> 7 bits
+pub const BM1370_NONCE_CORES_MASK: u32 = 0b111_1111;
+pub const BM1370_NONCE_CHIP_BITS: usize = 16; // Chip ID is hardcoded left-aligned on Nonce[24:9] -> 16 bits
+pub const BM1370_NONCE_CHIP_MASK: u32 = 0b1111_1111_1111_1111;
 
 const NONCE_BITS: usize = 32;
-const CHIP_ADDR_BITS: usize = 8;
-const CHIP_ADDR_MASK: u32 = 0b1111_1111;
 
 /// # BM1370
 #[derive(Debug)]
@@ -86,10 +84,6 @@ impl BM1370 {
     pub fn enable_version_rolling(&mut self, version_mask: u32) {
         self.version_rolling_enabled = true;
         self.version_mask = version_mask;
-    }
-
-    fn version_mask_bits(&self) -> usize {
-        self.version_mask.count_ones() as usize
     }
 
     /// ## Get the SHA Hashing Frequency
@@ -150,28 +144,26 @@ impl BM1370 {
     /// So only the Nonce\[16:0\] and Version\[28:16\] are rolled for each Chip Address.
     ///
     /// ### Example
-    /// ```
-    /// use bm1370::BM1370;
-    /// use core::time::Duration;
-    ///
-    /// let mut bm1370 = BM1370::default();
-    /// assert_eq!(bm1370.rolling_duration(), Duration::from_secs_f32(0.00032768));
-    /// bm1370.enable_version_rolling(0x1fffe000);
-    /// assert_eq!(bm1370.rolling_duration(), Duration::from_secs_f32(21.474836349));
-    /// ```
-    pub fn rolling_duration(&self) -> Duration {
-        let space = if self.version_rolling_enabled {
-            (1 << (NONCE_BITS - BM1370_NONCE_CORES_BITS - CHIP_ADDR_BITS
-                + self.version_mask_bits()
-                - BM1370_NONCE_SMALL_CORES_BITS)) as f32
-        } else {
-            (1 << (NONCE_BITS
-                - BM1370_NONCE_CORES_BITS
-                - BM1370_NONCE_SMALL_CORES_BITS
-                - CHIP_ADDR_BITS)) as f32
-        };
-        Duration::from_secs_f32(space / (self.hash_freq().raw() as f32))
-    }
+    // ```
+    // use bm1370::BM1370;
+    // use core::time::Duration;
+    //
+    // let mut bm1370 = BM1370::default();
+    // assert_eq!(bm1370.rolling_duration(), Duration::from_secs_f32(0.00032768));
+    // bm1370.enable_version_rolling(0x1fffe000);
+    // assert_eq!(bm1370.rolling_duration(), Duration::from_secs_f32(21.474836349));
+    // ```
+    // pub fn rolling_duration(&self) -> Duration { // TODO
+    //     let space = if self.version_rolling_enabled {
+    //         (1 << (NONCE_BITS - BM1370_NONCE_CORES_BITS - CHIP_ADDR_BITS
+    //             + self.version_mask.count_ones() as usize
+    //             - BM1370_NONCE_CHIP_BITS)) as f32
+    //     } else {
+    //         (1 << (NONCE_BITS - BM1370_NONCE_CORES_BITS - BM1370_NONCE_CHIP_BITS - CHIP_ADDR_BITS))
+    //             as f32
+    //     };
+    //     Duration::from_secs_f32(space / (self.hash_freq().raw() as f32))
+    // }
 
     /// ## Get the Core ID that produced a given Nonce
     ///
@@ -198,71 +190,20 @@ impl BM1370 {
     /// use bm1370::BM1370;
     ///
     /// let bm1370 = BM1370::default();
-    /// assert_eq!(bm1370.nonce2small_core_id(0x12045678), 0);
-    /// assert_eq!(bm1370.nonce2small_core_id(0x12445678), 1);
-    /// assert_eq!(bm1370.nonce2small_core_id(0x12845678), 2);
-    /// assert_eq!(bm1370.nonce2small_core_id(0x12c45678), 3);
-    /// assert_eq!(bm1370.nonce2small_core_id(0x13045678), 4);
-    /// assert_eq!(bm1370.nonce2small_core_id(0x13445678), 5);
-    /// assert_eq!(bm1370.nonce2small_core_id(0x13845678), 6);
-    /// assert_eq!(bm1370.nonce2small_core_id(0x13c45678), 7);
+    /// assert_eq!(bm1370.nonce2chip_id(0xfe00_01ff, 65), 0);
+    /// assert_eq!(bm1370.nonce2chip_id(0xfe07_e1ff, 65), 0);
+    /// assert_eq!(bm1370.nonce2chip_id(0xfe07_e3ff, 65), 1);
+    /// assert_eq!(bm1370.nonce2chip_id(0xfe0f_c1ff, 65), 1);
+    /// assert_eq!(bm1370.nonce2chip_id(0xfe0f_c3ff, 65), 2);
+    /// assert_eq!(bm1370.nonce2chip_id(0xfe17_a1ff, 65), 2);
+    /// assert_eq!(bm1370.nonce2chip_id(0xfe17_a3ff, 65), 3);
     /// ```
-    pub fn nonce2small_core_id(&self, nonce: u32) -> usize {
-        ((nonce >> (NONCE_BITS - BM1370_NONCE_CORES_BITS - BM1370_NONCE_SMALL_CORES_BITS))
-            & BM1370_NONCE_SMALL_CORES_MASK) as usize
-    }
-
-    /// ## Get the Small Core ID that produced a given Version
-    ///
-    /// If the Hardware Version Rolling is enabled, the Small Core ID is hardcoded in Version\[15:13\]
-    /// (assuming the Version Mask is 0x1fffe000).
-    ///
-    /// ### Example
-    /// ```
-    /// use bm1370::BM1370;
-    ///
-    /// let mut bm1370 = BM1370::default();
-    /// bm1370.enable_version_rolling(0x1fffe000);
-    /// assert_eq!(bm1370.version2small_core_id(0x1fff0000), 0);
-    /// assert_eq!(bm1370.version2small_core_id(0x1fff2000), 1);
-    /// assert_eq!(bm1370.version2small_core_id(0x1fff4000), 2);
-    /// assert_eq!(bm1370.version2small_core_id(0x1fff6000), 3);
-    /// assert_eq!(bm1370.version2small_core_id(0x1fff8000), 4);
-    /// assert_eq!(bm1370.version2small_core_id(0x1fffa000), 5);
-    /// assert_eq!(bm1370.version2small_core_id(0x1fffd000), 6);
-    /// assert_eq!(bm1370.version2small_core_id(0x1fffe000), 7);
-    /// assert_eq!(bm1370.version2small_core_id(0x00f94000), 2); // first Bitaxe Block 853742
-    /// ```
-    pub fn version2small_core_id(&self, version: u32) -> usize {
-        ((version >> self.version_mask.trailing_zeros()) & BM1370_NONCE_SMALL_CORES_MASK) as usize
-    }
-
-    /// ## Get the Chip Address that produced a given Nonce
-    ///
-    /// If the Hardware Version Rolling is enabled, the Chip Address is hardcoded in Nonce\[24:17\],
-    /// else it is hardcoded in Nonce\[21:14\].
-    ///
-    /// ### Example
-    /// ```
-    /// use bm1370::BM1370;
-    ///
-    /// let mut bm1370 = BM1370::default();
-    /// assert_eq!(bm1370.nonce2chip_addr(0x12345678), 0xD1);
-    /// bm1370.enable_version_rolling(0x1fffe000);
-    /// assert_eq!(bm1370.nonce2chip_addr(0x12345679), 0x1A);
-    /// ```
-    pub fn nonce2chip_addr(&self, nonce: u32) -> usize {
-        if self.version_rolling_enabled {
-            ((nonce >> (NONCE_BITS - BM1370_NONCE_CORES_BITS - CHIP_ADDR_BITS)) & CHIP_ADDR_MASK)
-                as usize
-        } else {
-            ((nonce
-                >> (NONCE_BITS
-                    - BM1370_NONCE_CORES_BITS
-                    - BM1370_NONCE_SMALL_CORES_BITS
-                    - CHIP_ADDR_BITS))
-                & CHIP_ADDR_MASK) as usize
-        }
+    pub fn nonce2chip_id(&self, nonce: u32, chain_asic_num: usize) -> usize {
+        (((nonce >> (NONCE_BITS - BM1370_NONCE_CORES_BITS - BM1370_NONCE_CHIP_BITS))
+            & BM1370_NONCE_CHIP_MASK) as usize
+        // ((((nonce as usize) << 7) >> 16) 
+        * 256 * chain_asic_num)
+            >> 24 // Formula from S21Pro official FW
     }
 }
 
