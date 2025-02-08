@@ -159,6 +159,11 @@ impl Response {
     /// assert!(resp.is_err());
     /// assert_eq!(resp.unwrap_err(), Error::InvalidPreamble);
     ///
+    /// // Error::UnsupportedCoreSmallCoreCnt
+    /// let resp = Response::parse_version(&[0xAA,0x55,0x2F,0xD5,0x96,0xCE,0x02,0x93,0x94,0xFB,0x86], 9);
+    /// assert!(resp.is_err());
+    /// assert_eq!(resp.unwrap_err(), Error::UnsupportedCoreSmallCoreCnt);
+    ///
     /// // Error::InvalidCrc
     /// let resp = Response::parse_version(&[0xAA,0x55,0x13,0x66,0x00,0x00,0x00,0x00,0x00,0x00,0x00], 8); // should be 0x05
     /// assert!(resp.is_err());
@@ -182,9 +187,22 @@ impl Response {
     ///     ResponseType::JobVer(j) => {
     ///         assert_eq!(j.nonce, 0xCE96_D52F);
     ///         assert_eq!(j.unknown, 2);
-    ///         assert_eq!(j.job_id, 0x90);
+    ///         assert_eq!(j.job_id, 18);
     ///         assert_eq!(j.small_core_id, 3);
     ///         assert_eq!(j.version_bit, 0x129F_6000);
+    ///     },
+    ///     _ => panic!(),
+    /// };
+    ///
+    /// let resp = Response::parse_version(&[0xAA,0x55,0x07,0x35,0xCD,0xCF,0x02,0x5E,0x00,0x2E,0x96], 16);
+    /// assert!(resp.is_ok());
+    /// match resp.unwrap() {
+    ///     ResponseType::JobVer(j) => {
+    ///         assert_eq!(j.nonce, 0xCFCD_3507);
+    ///         assert_eq!(j.unknown, 1);
+    ///         assert_eq!(j.job_id, 5);
+    ///         assert_eq!(j.small_core_id, 14);
+    ///         assert_eq!(j.version_bit, 0x0005_C000);
     ///     },
     ///     _ => panic!(),
     /// };
@@ -196,6 +214,9 @@ impl Response {
         if data[0] != 0xAA || data[1] != 0x55 {
             return Err(Error::InvalidPreamble);
         }
+        if core_small_core_cnt != 8 && core_small_core_cnt != 16 {
+            return Err(Error::UnsupportedCoreSmallCoreCnt);
+        }
         if crc5(&data[2..11]) != 0x00 {
             return Err(Error::InvalidCrc {
                 expected: crc5_bits(&data[2..11]),
@@ -203,11 +224,16 @@ impl Response {
             });
         }
         if data[10] & 0x80 == 0x80 {
-            let small_core_mask = (core_small_core_cnt - 1).count_ones() as u8;
+            let small_core_mask = core_small_core_cnt - 1;
+            let small_core_bits = core_small_core_cnt.trailing_zeros() as u8;
             return Ok(ResponseType::JobVer(JobVersionResponse {
                 nonce: u32::from_le_bytes(data[2..6].try_into().unwrap()),
-                unknown: data[6],
-                job_id: data[7] & !small_core_mask,
+                unknown: (data[6] >> if core_small_core_cnt > 8 { 1 } else { 0 }) & 0x7f,
+                job_id: if core_small_core_cnt > 8 {
+                    (data[6] & 0x01) << 7
+                } else {
+                    0
+                } + (data[7] >> small_core_bits),
                 small_core_id: data[7] & small_core_mask,
                 version_bit: (u16::from_be_bytes(data[8..10].try_into().unwrap()) as u32) << 13,
             }));

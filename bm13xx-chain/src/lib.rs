@@ -163,6 +163,14 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
                     );
                     offset
                 }
+                Err(bm13xx_protocol::Error::UnsupportedCoreSmallCoreCnt) => {
+                    error!(
+                        "Ignoring Frame {:x} because bad CoreSmallCoreCnt {}",
+                        frame,
+                        self.asic.core_small_core_count()
+                    );
+                    expected_frame_size
+                }
             };
             if self.rx_free_pos > used {
                 debug!("copy reminder {} bytes @0", self.rx_free_pos - used);

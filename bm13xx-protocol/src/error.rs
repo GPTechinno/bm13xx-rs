@@ -7,6 +7,7 @@ pub type Result<T> = core::result::Result<T, Error>;
 pub enum Error {
     // -- response
     InvalidPreamble,
+    UnsupportedCoreSmallCoreCnt,
     InvalidCrc { expected: u8, actual: u8 },
 }
 
