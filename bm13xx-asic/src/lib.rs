@@ -32,6 +32,7 @@ pub enum SequenceStep {
     Baudrate(usize),
     ResetCore(usize),
     HashFreq(usize),
+    SplitNonce(usize),
     VersionRolling(usize),
 }
 
@@ -39,16 +40,22 @@ pub trait Asic {
     fn reset(&mut self);
     fn chip_id(&self) -> u16;
     fn core_small_core_count(&self) -> u8;
+    fn chip_nonce_offset_used(&self) -> bool;
     fn version_rolling_enabled(&self) -> bool;
     fn init_next(&mut self, diffculty: u32) -> Option<CmdDelay>;
     fn set_baudrate_next(
         &mut self,
         baudrate: u32,
-        chain_domain_cnt: u8,
-        domain_asic_cnt: u8,
-        asic_addr_interval: u16,
+        chain_domain_cnt: usize,
+        domain_asic_cnt: usize,
+        asic_addr_interval: usize,
     ) -> Option<CmdDelay>;
     fn reset_core_next(&mut self, dest: Destination) -> Option<CmdDelay>;
     fn set_hash_freq_next(&mut self, target_freq: HertzU64) -> Option<CmdDelay>;
+    fn split_nonce_between_chips_next(
+        &mut self,
+        chain_asic_num: usize,
+        asic_addr_interval: usize,
+    ) -> Option<CmdDelay>;
     fn set_version_rolling_next(&mut self, mask: u32) -> Option<CmdDelay>;
 }

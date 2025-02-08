@@ -46,6 +46,7 @@ pub struct BM1397 {
     pub chip_addr: u8,
     pub registers: FnvIndexMap<u8, u32, 64>,
     pub core_registers: FnvIndexMap<u8, u8, 16>,
+    pub chip_nonce_offset_used: bool,
 }
 
 impl BM1397 {
@@ -193,6 +194,7 @@ impl Default for BM1397 {
             chip_addr: 0,
             registers: FnvIndexMap::<_, _, 64>::new(),
             core_registers: FnvIndexMap::<_, _, 16>::new(),
+            chip_nonce_offset_used: false,
         };
         bm1397.reset();
         bm1397
@@ -209,6 +211,7 @@ impl Asic for BM1397 {
         self.chip_addr = 0;
         self.registers = FnvIndexMap::<_, _, 64>::new();
         self.core_registers = FnvIndexMap::<_, _, 16>::new();
+        self.chip_nonce_offset_used = false;
 
         // Default PLLs Parameter
         self.plls[0].set_parameter(0xC060_0161);
@@ -377,6 +380,20 @@ impl Asic for BM1397 {
     /// ```
     fn core_small_core_count(&self) -> u8 {
         self.sha.core_small_core_count() as u8
+    }
+
+    /// ## Is Chip Nonce Offset used
+    ///
+    /// ### Example
+    /// ```
+    /// use bm1397::BM1397;
+    /// use bm13xx_asic::Asic;
+    ///
+    /// let bm1397 = BM1397::default();
+    /// assert!(!bm1397.chip_nonce_offset_used());
+    /// ```
+    fn chip_nonce_offset_used(&self) -> bool {
+        self.chip_nonce_offset_used
     }
 
     /// ## Is Hardware Version Rolling enabled
@@ -592,9 +609,9 @@ impl Asic for BM1397 {
     fn set_baudrate_next(
         &mut self,
         baudrate: u32,
-        _chain_domain_cnt: u8,
-        _domain_asic_cnt: u8,
-        _asic_addr_interval: u16,
+        _chain_domain_cnt: usize,
+        _domain_asic_cnt: usize,
+        _asic_addr_interval: usize,
     ) -> Option<CmdDelay> {
         if baudrate <= self.input_clock_freq.raw() as u32 / 8 {
             let fbase = self.input_clock_freq.raw() as u32;
@@ -849,6 +866,25 @@ impl Asic for BM1397 {
         // self.set_hash_freq(target_freq); // TODO: finish with the closest value
          */
         None // TODO: impl
+    }
+
+    /// ## Send Split Nonce Between Chips command list
+    ///
+    /// ### Example
+    /// ```
+    /// use bm1397::BM1397;
+    /// use bm13xx_asic::Asic;
+    ///
+    /// let mut bm1397 = BM1397::default();
+    /// assert_eq!(bm1397.split_nonce_between_chips_next(30, 8), None);
+    /// ```
+    fn split_nonce_between_chips_next(
+        &mut self,
+        _chain_asic_num: usize,
+        _asic_addr_interval: usize,
+    ) -> Option<CmdDelay> {
+        self.chip_nonce_offset_used = true;
+        None
     }
 
     /// ## Send Enable Version Rolling command list

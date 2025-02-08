@@ -46,6 +46,7 @@ pub struct BM1366 {
     pub chip_addr: u8,
     pub registers: FnvIndexMap<u8, u32, 64>,
     pub core_registers: FnvIndexMap<u8, u8, 16>,
+    pub chip_nonce_offset_used: bool,
     pub version_rolling_enabled: bool,
     pub version_mask: u32,
 }
@@ -70,22 +71,6 @@ impl BM1366 {
     /// ```
     pub fn set_chip_addr(&mut self, chip_addr: u8) {
         self.chip_addr = chip_addr;
-    }
-
-    /// ## Enable the Hardware Version Rolling
-    ///
-    /// ### Example
-    /// ```
-    /// use bm1366::BM1366;
-    ///
-    /// let mut bm1366 = BM1366::default();
-    /// bm1366.enable_version_rolling(0x1fffe000);
-    /// assert!(bm1366.version_rolling_enabled);
-    /// assert_eq!(bm1366.version_mask, 0x1fffe000);
-    /// ```
-    pub fn enable_version_rolling(&mut self, version_mask: u32) {
-        self.version_rolling_enabled = true;
-        self.version_mask = version_mask;
     }
 
     fn version_mask_bits(&self) -> usize {
@@ -156,8 +141,8 @@ impl BM1366 {
     ///
     /// let mut bm1366 = BM1366::default();
     /// assert_eq!(bm1366.rolling_duration(), Duration::from_secs_f32(0.00032768));
-    /// bm1366.enable_version_rolling(0x1fffe000);
-    /// assert_eq!(bm1366.rolling_duration(), Duration::from_secs_f32(21.474836349));
+    // bm1366.enable_version_rolling(0x1fffe000);
+    // assert_eq!(bm1366.rolling_duration(), Duration::from_secs_f32(21.474836349));
     /// ```
     pub fn rolling_duration(&self) -> Duration {
         let space = if self.version_rolling_enabled {
@@ -222,16 +207,16 @@ impl BM1366 {
     /// use bm1366::BM1366;
     ///
     /// let mut bm1366 = BM1366::default();
-    /// bm1366.enable_version_rolling(0x1fffe000);
-    /// assert_eq!(bm1366.version2small_core_id(0x1fff0000), 0);
-    /// assert_eq!(bm1366.version2small_core_id(0x1fff2000), 1);
-    /// assert_eq!(bm1366.version2small_core_id(0x1fff4000), 2);
-    /// assert_eq!(bm1366.version2small_core_id(0x1fff6000), 3);
-    /// assert_eq!(bm1366.version2small_core_id(0x1fff8000), 4);
-    /// assert_eq!(bm1366.version2small_core_id(0x1fffa000), 5);
-    /// assert_eq!(bm1366.version2small_core_id(0x1fffd000), 6);
-    /// assert_eq!(bm1366.version2small_core_id(0x1fffe000), 7);
-    /// assert_eq!(bm1366.version2small_core_id(0x00f94000), 2); // first Bitaxe Block 853742
+    // bm1366.enable_version_rolling(0x1fffe000);
+    // assert_eq!(bm1366.version2small_core_id(0x1fff0000), 0);
+    // assert_eq!(bm1366.version2small_core_id(0x1fff2000), 1);
+    // assert_eq!(bm1366.version2small_core_id(0x1fff4000), 2);
+    // assert_eq!(bm1366.version2small_core_id(0x1fff6000), 3);
+    // assert_eq!(bm1366.version2small_core_id(0x1fff8000), 4);
+    // assert_eq!(bm1366.version2small_core_id(0x1fffa000), 5);
+    // assert_eq!(bm1366.version2small_core_id(0x1fffd000), 6);
+    // assert_eq!(bm1366.version2small_core_id(0x1fffe000), 7);
+    // assert_eq!(bm1366.version2small_core_id(0x00f94000), 2); // first Bitaxe Block 853742
     /// ```
     pub fn version2small_core_id(&self, version: u32) -> usize {
         ((version >> self.version_mask.trailing_zeros()) & BM1366_NONCE_SMALL_CORES_MASK) as usize
@@ -248,8 +233,8 @@ impl BM1366 {
     ///
     /// let mut bm1366 = BM1366::default();
     /// assert_eq!(bm1366.nonce2chip_addr(0x12345678), 0xD1);
-    /// bm1366.enable_version_rolling(0x1fffe000);
-    /// assert_eq!(bm1366.nonce2chip_addr(0x12345679), 0x1A);
+    // bm1366.enable_version_rolling(0x1fffe000);
+    // assert_eq!(bm1366.nonce2chip_addr(0x12345679), 0x1A);
     /// ```
     pub fn nonce2chip_addr(&self, nonce: u32) -> usize {
         if self.version_rolling_enabled {
@@ -276,6 +261,7 @@ impl Default for BM1366 {
             chip_addr: 0,
             registers: FnvIndexMap::<_, _, 64>::new(),
             core_registers: FnvIndexMap::<_, _, 16>::new(),
+            chip_nonce_offset_used: false,
             version_rolling_enabled: false,
             version_mask: 0x1fffe000,
         };
@@ -294,6 +280,7 @@ impl Asic for BM1366 {
         self.chip_addr = 0;
         self.registers = FnvIndexMap::<_, _, 64>::new();
         self.core_registers = FnvIndexMap::<_, _, 16>::new();
+        self.chip_nonce_offset_used = false;
         self.version_rolling_enabled = false;
         self.version_mask = 0x1fffe000;
 
@@ -472,6 +459,20 @@ impl Asic for BM1366 {
         self.sha.core_small_core_count() as u8
     }
 
+    /// ## Is Chip Nonce Offset used
+    ///
+    /// ### Example
+    /// ```
+    /// use bm1366::BM1366;
+    /// use bm13xx_asic::Asic;
+    ///
+    /// let bm1366 = BM1366::default();
+    /// assert!(!bm1366.chip_nonce_offset_used());
+    /// ```
+    fn chip_nonce_offset_used(&self) -> bool {
+        self.chip_nonce_offset_used
+    }
+
     /// ## Is Hardware Version Rolling enabled
     ///
     /// ### Example
@@ -647,14 +648,14 @@ impl Asic for BM1366 {
     fn set_baudrate_next(
         &mut self,
         baudrate: u32,
-        chain_domain_cnt: u8,
-        domain_asic_cnt: u8,
-        asic_addr_interval: u16,
+        chain_domain_cnt: usize,
+        domain_asic_cnt: usize,
+        asic_addr_interval: usize,
     ) -> Option<CmdDelay> {
         let sub_seq1_start = 0;
-        let sub_seq2_start = sub_seq1_start + chain_domain_cnt as usize;
-        let sub_seq3_start = sub_seq2_start + chain_domain_cnt as usize;
-        let sub_seq4_start = sub_seq3_start + chain_domain_cnt as usize;
+        let sub_seq2_start = sub_seq1_start + chain_domain_cnt;
+        let sub_seq3_start = sub_seq2_start + chain_domain_cnt;
+        let sub_seq4_start = sub_seq3_start + chain_domain_cnt;
         let sub_seq5_start = sub_seq4_start + 1;
         let end = sub_seq5_start + 1;
         let pll1_div4 = 6;
@@ -664,7 +665,7 @@ impl Asic for BM1366 {
                     self.seq_step = SequenceStep::Baudrate(step + 1);
                     // last chip of each voltage domain should have IoDriverStrenghtConfiguration set to 0x0211_f111
                     // (iterating voltage domain in decreasing chip address order)
-                    let dom = (sub_seq2_start - step - 1) as u8;
+                    let dom = sub_seq2_start - step - 1;
                     let io_drv_st_cfg = IoDriverStrenghtConfiguration(
                         *self
                             .registers
@@ -679,7 +680,7 @@ impl Asic for BM1366 {
                             IoDriverStrenghtConfiguration::ADDR,
                             io_drv_st_cfg,
                             Destination::Chip(
-                                ((dom + 1) * domain_asic_cnt - 1) * asic_addr_interval as u8,
+                                (((dom + 1) * domain_asic_cnt - 1) * asic_addr_interval) as u8,
                             ),
                         ),
                         delay_ms: 0,
@@ -689,9 +690,9 @@ impl Asic for BM1366 {
                     // GAP_CNT=domain_asic_num*(chain_domain_num-domain_i)+14
                     // RO_REL_EN=CO_REL_EN=1
                     // (iterating voltage domain in decreasing chip address order)
-                    self.seq_step = SequenceStep::Baudrate(step + chain_domain_cnt as usize);
+                    self.seq_step = SequenceStep::Baudrate(step + chain_domain_cnt);
                     // jump to next sub-seq to alternate
-                    let dom = (sub_seq3_start - step - 1) as u8;
+                    let dom = sub_seq3_start - step - 1;
                     let uart_delay = UARTRelay(*self.registers.get(&UARTRelay::ADDR).unwrap())
                         .set_gap_cnt(
                             (domain_asic_cnt as u16) * ((chain_domain_cnt as u16) - (dom as u16))
@@ -705,7 +706,7 @@ impl Asic for BM1366 {
                         cmd: Command::write_reg(
                             UARTRelay::ADDR,
                             uart_delay,
-                            Destination::Chip(dom * domain_asic_cnt * asic_addr_interval as u8),
+                            Destination::Chip((dom * domain_asic_cnt * asic_addr_interval) as u8),
                         ),
                         delay_ms: 0,
                     })
@@ -714,10 +715,10 @@ impl Asic for BM1366 {
                     self.seq_step = SequenceStep::Baudrate(if step == sub_seq4_start - 1 {
                         sub_seq4_start
                     } else {
-                        step - chain_domain_cnt as usize + 1
+                        step - chain_domain_cnt + 1
                     });
                     // jump back to previous sub-seq to alternate
-                    let dom = (sub_seq4_start - step - 1) as u8;
+                    let dom = sub_seq4_start - step - 1;
                     let uart_delay = UARTRelay(*self.registers.get(&UARTRelay::ADDR).unwrap())
                         .set_gap_cnt(
                             (domain_asic_cnt as u16) * ((chain_domain_cnt as u16) - (dom as u16))
@@ -732,7 +733,7 @@ impl Asic for BM1366 {
                             UARTRelay::ADDR,
                             uart_delay,
                             Destination::Chip(
-                                ((dom + 1) * domain_asic_cnt - 1) * asic_addr_interval as u8,
+                                (((dom + 1) * domain_asic_cnt - 1) * asic_addr_interval) as u8,
                             ),
                         ),
                         delay_ms: if step == sub_seq4_start - 1 { 130 } else { 0 },
@@ -1182,6 +1183,25 @@ impl Asic for BM1366 {
         }
     }
 
+    /// ## Send Split Nonce Between Chips command list
+    ///
+    /// ### Example
+    /// ```
+    /// use bm1366::BM1366;
+    /// use bm13xx_asic::Asic;
+    ///
+    /// let mut bm1366 = BM1366::default();
+    /// assert_eq!(bm1366.split_nonce_between_chips_next(77, 2), None);
+    /// ```
+    fn split_nonce_between_chips_next(
+        &mut self,
+        _chain_asic_num: usize,
+        _asic_addr_interval: usize,
+    ) -> Option<CmdDelay> {
+        self.chip_nonce_offset_used = true;
+        None // TODO if needed
+    }
+
     /// ## Send Enable Version Rolling command list
     ///
     /// ### Example
@@ -1207,7 +1227,6 @@ impl Asic for BM1366 {
                     self.registers
                         .insert(VersionRolling::ADDR, vers_roll)
                         .unwrap();
-                    self.enable_version_rolling(mask);
                     Some(CmdDelay {
                         cmd: Command::write_reg(VersionRolling::ADDR, vers_roll, Destination::All),
                         delay_ms: 1,
@@ -1215,6 +1234,8 @@ impl Asic for BM1366 {
                 }
                 1 => {
                     self.seq_step = SequenceStep::None;
+                    self.version_rolling_enabled = true;
+                    self.version_mask = mask;
                     None
                 }
                 _ => unreachable!(),

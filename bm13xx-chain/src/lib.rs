@@ -92,10 +92,10 @@ const RX_BUF_SIZE: usize = 256;
 #[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 pub struct Chain<A, U, OB, OR, D> {
-    pub asic_cnt: u8,
+    pub asic_cnt: usize,
     asic: A,
-    pub asic_addr_interval: u16,
-    domain_cnt: u8,
+    pub asic_addr_interval: usize,
+    domain_cnt: usize,
     uart: U,
     rx_buf: [u8; RX_BUF_SIZE],
     rx_free_pos: usize,
@@ -254,7 +254,7 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
             return Err(Error::EmptyChain);
         }
         debug!("Enumerated {} asics", asic_cnt);
-        chain.asic_addr_interval = 256 / (asic_cnt as u16);
+        chain.asic_addr_interval = 256 / asic_cnt;
         chain.asic_cnt = asic_cnt;
         // TODO: try to determine domain_cnt according to known topologies
         chain.delay.delay_ms(50).await;
@@ -274,7 +274,7 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
         }
         chain.delay.delay_ms(30).await;
         for i in 0..asic_cnt {
-            let cmd = Command::set_chip_addr((i as u16 * chain.asic_addr_interval) as u8);
+            let cmd = Command::set_chip_addr((i * chain.asic_addr_interval) as u8);
             chain.uart.write_all(&cmd).await.map_err(Error::Io)?;
             chain.delay.delay_ms(10).await;
         }
@@ -285,7 +285,7 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
     /// ## Set the number of domains in the chain
     ///
     /// In case we enumarted an unknown topology (custom HB?), this function is mandatory to set the number of domains.
-    pub fn set_domain_cnt(&mut self, domain_cnt: u8) {
+    pub fn set_domain_cnt(&mut self, domain_cnt: usize) {
         self.domain_cnt = domain_cnt;
     }
 
@@ -334,7 +334,7 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
         for asic_i in 0..self.asic_cnt {
             while let Some(step) = self
                 .asic
-                .reset_core_next(Destination::Chip(asic_i * self.asic_addr_interval as u8))
+                .reset_core_next(Destination::Chip((asic_i * self.asic_addr_interval) as u8))
             {
                 self.send(step).await?;
             }
@@ -354,6 +354,19 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
             self.send(step).await?;
         }
         self.delay.delay_ms(100).await;
+        Ok(())
+    }
+
+    /// ## Split some Nonce space between chips
+    pub async fn split_nonce_between_chips(
+        &mut self,
+    ) -> Result<(), U::Error, OB::Error, OR::Error> {
+        while let Some(step) = self
+            .asic
+            .split_nonce_between_chips_next(self.asic_cnt, self.asic_addr_interval)
+        {
+            self.send(step).await?;
+        }
         Ok(())
     }
 
