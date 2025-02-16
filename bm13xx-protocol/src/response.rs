@@ -127,7 +127,7 @@ impl Response {
         }
         if data[8] & 0x80 == 0x80 {
             let small_core_mask = core_small_core_cnt - 1;
-            let small_core_bits = core_small_core_cnt.trailing_zeros() as u8;
+            let small_core_bits = small_core_mask.count_ones();
             return Ok(ResponseType::Job(JobResponse {
                 nonce: u32::from_le_bytes(data[2..6].try_into().unwrap()),
                 midstate_id: data[6] as usize,
@@ -240,7 +240,7 @@ impl Response {
         }
         if data[10] & 0x80 == 0x80 {
             let small_core_mask = core_small_core_cnt - 1;
-            let small_core_bits = core_small_core_cnt.trailing_zeros() as u8;
+            let small_core_bits = small_core_mask.count_ones();
             let chunk = ((data[6] as u16) << 8) | data[7] as u16;
             return Ok(ResponseType::JobVer(JobVersionResponse {
                 nonce: u32::from_le_bytes(data[2..6].try_into().unwrap()),

@@ -7,7 +7,6 @@ pub(crate) mod fmt;
 use bm13xx_asic::{core_register::*, register::*, Asic, CmdDelay, SequenceStep};
 use bm13xx_protocol::command::{Command, Destination};
 
-use core::time::Duration;
 use fugit::HertzU64;
 use heapless::FnvIndexMap;
 
@@ -21,14 +20,6 @@ pub const BM1397_PLL_ID_HASH: usize = 0; // PLL0 is used for Hashing
 pub const BM1397_PLL_OUT_HASH: usize = 0; // specifically PLL0_OUT0 is used for Hashing
 pub const BM1397_PLL_ID_UART: usize = 3; // PLL3 can be used for UART Baudrate
 pub const BM1397_PLL_OUT_UART: usize = 4; // specifically PLL3_OUT4 can be used for UART Baudrate
-pub const BM1397_NONCE_CORES_BITS: usize = 8; // Core ID is hardcoded on Nonce[31:24] -> 8 bits
-pub const BM1397_NONCE_CORES_MASK: u32 = 0b1111_1111;
-pub const BM1397_NONCE_SMALL_CORES_BITS: usize = 2; // Small Core ID is hardcoded on Nonce[23:22] -> 2 bits
-pub const BM1397_NONCE_SMALL_CORES_MASK: u32 = 0b11;
-
-const NONCE_BITS: usize = 32;
-const CHIP_ADDR_BITS: usize = 8;
-const CHIP_ADDR_MASK: u32 = 0b1111_1111;
 
 /// # BM1397
 #[derive(Debug)]
@@ -46,7 +37,6 @@ pub struct BM1397 {
     pub chip_addr: u8,
     pub registers: FnvIndexMap<u8, u32, 64>,
     pub core_registers: FnvIndexMap<u8, u8, 16>,
-    pub chip_nonce_offset_used: bool,
 }
 
 impl BM1397 {
@@ -71,20 +61,6 @@ impl BM1397 {
         self.chip_addr = chip_addr;
     }
 
-    /// ## Get the SHA Hashing Frequency
-    ///
-    /// ### Example
-    /// ```
-    /// use bm1397::BM1397;
-    /// use fugit::HertzU64;
-    ///
-    /// let mut bm1397 = BM1397::default();
-    /// assert_eq!(bm1397.hash_freq(), HertzU64::Hz(21428571));
-    /// assert_eq!(bm1397.set_hash_freq(HertzU64::MHz(425)).hash_freq(), HertzU64::MHz(425));
-    /// ```
-    pub fn hash_freq(&self) -> HertzU64 {
-        self.plls[BM1397_PLL_ID_HASH].frequency(self.input_clock_freq, BM1397_PLL_OUT_HASH)
-    }
     pub fn set_hash_freq(&mut self, freq: HertzU64) -> &mut Self {
         self.plls[BM1397_PLL_ID_HASH].set_frequency(
             self.input_clock_freq,
@@ -95,45 +71,11 @@ impl BM1397 {
         self
     }
 
-    /// ## Get the theoretical Hashrate in GH/s
-    ///
-    /// ### Example
-    /// ```
-    /// use bm1397::BM1397;
-    /// use fugit::HertzU64;
-    ///
-    /// let bm1397 = BM1397::default();
-    /// assert_eq!(bm1397.theoretical_hashrate_ghs(), 14.4);
-    /// ```
-    pub fn theoretical_hashrate_ghs(&self) -> f32 {
-        self.hash_freq().raw() as f32 * self.sha.small_core_count() as f32 / 1_000_000_000.0
-    }
-
-    /// ## Get the rolling duration
-    ///
-    /// BM1397 only roll the Nonce Space (32 bits), but:
-    /// - Nonce\[31:24\] is used to hardcode the Core ID.
-    /// - Nonce\[23:22\] is used to hardcode the Small Core ID.
-    /// - Nonce\[21:14\] is used to hardcode the Chip Address.
-    ///
-    /// So only the Nonce\[13:0\] are rolled for each Chip Address.
-    ///
-    /// ### Example
-    /// ```
-    /// use bm1397::BM1397;
-    /// use core::time::Duration;
-    ///
-    /// let bm1397 = BM1397::default();
-    /// assert_eq!(bm1397.rolling_duration(), Duration::from_secs_f32(0.000764587));
-    /// ```
-    pub fn rolling_duration(&self) -> Duration {
-        let space = (1
-            << (NONCE_BITS
-                - BM1397_NONCE_CORES_BITS
-                - BM1397_NONCE_SMALL_CORES_BITS
-                - CHIP_ADDR_BITS)) as f32;
-        Duration::from_secs_f32(space / (self.hash_freq().raw() as f32))
-    }
+    /*
+    const BM1397_NONCE_CORES_BITS: usize = 8; // Core ID is hardcoded on Nonce[31:24] -> 8 bits
+    const BM1397_NONCE_CORES_MASK: u32 = 0b1111_1111;
+    const BM1397_NONCE_SMALL_CORES_BITS: usize = 2; // Small Core ID is hardcoded on Nonce[23:22] -> 2 bits
+    const BM1397_NONCE_SMALL_CORES_MASK: u32 = 0b11;
 
     /// ## Get the Core ID that produced a given Nonce
     ///
@@ -182,6 +124,7 @@ impl BM1397 {
                 - CHIP_ADDR_BITS))
             & CHIP_ADDR_MASK) as usize
     }
+    */
 }
 
 impl Default for BM1397 {
@@ -194,7 +137,6 @@ impl Default for BM1397 {
             chip_addr: 0,
             registers: FnvIndexMap::<_, _, 64>::new(),
             core_registers: FnvIndexMap::<_, _, 16>::new(),
-            chip_nonce_offset_used: false,
         };
         bm1397.reset();
         bm1397
@@ -211,7 +153,6 @@ impl Asic for BM1397 {
         self.chip_addr = 0;
         self.registers = FnvIndexMap::<_, _, 64>::new();
         self.core_registers = FnvIndexMap::<_, _, 16>::new();
-        self.chip_nonce_offset_used = false;
 
         // Default PLLs Parameter
         self.plls[0].set_parameter(0xC060_0161);
@@ -372,42 +313,66 @@ impl Asic for BM1397 {
     ///
     /// ### Example
     /// ```
+    /// use bm1397::{BM1397, BM1397_CORE_CNT};
+    /// use bm13xx_asic::Asic;
+    ///
+    /// let bm1397 = BM1397::default();
+    /// assert_eq!(bm1397.core_count(), BM1397_CORE_CNT);
+    /// ```
+    fn core_count(&self) -> usize {
+        self.sha.core_count()
+    }
+
+    /// ## Get the Chip Small Core count per Core
+    ///
+    /// ### Example
+    /// ```
     /// use bm1397::{BM1397, BM1397_CORE_SMALL_CORE_CNT};
     /// use bm13xx_asic::Asic;
     ///
     /// let bm1397 = BM1397::default();
-    /// assert_eq!(bm1397.core_small_core_count(), BM1397_CORE_SMALL_CORE_CNT as u8);
+    /// assert_eq!(bm1397.core_small_core_count(), BM1397_CORE_SMALL_CORE_CNT);
     /// ```
-    fn core_small_core_count(&self) -> u8 {
-        self.sha.core_small_core_count() as u8
+    fn core_small_core_count(&self) -> usize {
+        self.sha.core_small_core_count()
     }
 
-    /// ## Is Chip Nonce Offset used
+    /// ## Get the Chip Small Core count
+    ///
+    /// ### Example
+    /// ```
+    /// use bm1397::{BM1397, BM1397_SMALL_CORE_CNT};
+    /// use bm13xx_asic::Asic;
+    ///
+    /// let bm1397 = BM1397::default();
+    /// assert_eq!(bm1397.small_core_count(), BM1397_SMALL_CORE_CNT);
+    /// ```
+    fn small_core_count(&self) -> usize {
+        self.sha.small_core_count()
+    }
+
+    fn cno_interval(&self) -> usize {
+        0
+    }
+
+    fn cno_bits(&self) -> u32 {
+        ChipNonceOffset::CNO_MASK.count_ones()
+    }
+
+    /// ## Get the SHA Hashing Frequency
     ///
     /// ### Example
     /// ```
     /// use bm1397::BM1397;
     /// use bm13xx_asic::Asic;
+    /// use fugit::HertzU64;
     ///
-    /// let bm1397 = BM1397::default();
-    /// assert!(!bm1397.chip_nonce_offset_used());
+    /// let mut bm1397 = BM1397::default();
+    /// assert_eq!(bm1397.hash_freq(), HertzU64::Hz(21428571));
+    /// assert_eq!(bm1397.set_hash_freq(HertzU64::MHz(425)).hash_freq(), HertzU64::MHz(425));
     /// ```
-    fn chip_nonce_offset_used(&self) -> bool {
-        self.chip_nonce_offset_used
-    }
-
-    /// ## Is Hardware Version Rolling enabled
-    ///
-    /// ### Example
-    /// ```
-    /// use bm1397::BM1397;
-    /// use bm13xx_asic::Asic;
-    ///
-    /// let bm1397 = BM1397::default();
-    /// assert!(!bm1397.version_rolling_enabled());
-    /// ```
-    fn version_rolling_enabled(&self) -> bool {
-        false
+    fn hash_freq(&self) -> HertzU64 {
+        self.plls[BM1397_PLL_ID_HASH].frequency(self.input_clock_freq, BM1397_PLL_OUT_HASH)
     }
 
     /// ## Init the Chip command list
@@ -431,7 +396,7 @@ impl Asic for BM1397 {
     /// assert_eq!(bm1397.core_registers.get(&ClockDelayCtrl::ID).unwrap(), &0xb4);
     /// assert_eq!(bm1397.registers.get(&TicketMask::ADDR).unwrap(), &0x0000_00fc);
     /// ```
-    fn init_next(&mut self, diffculty: u32) -> Option<CmdDelay> {
+    fn init_next(&mut self, difficulty: u32) -> Option<CmdDelay> {
         match self.seq_step {
             SequenceStep::Init(step) => {
                 match step {
@@ -532,7 +497,7 @@ impl Asic for BM1397 {
                     }
                     4 => {
                         self.seq_step = SequenceStep::Init(5);
-                        let tck_mask = TicketMask::from_difficulty(diffculty).val();
+                        let tck_mask = TicketMask::from_difficulty(difficulty).val();
                         self.registers.insert(TicketMask::ADDR, tck_mask).unwrap();
                         Some(CmdDelay {
                             cmd: Command::write_reg(TicketMask::ADDR, tck_mask, Destination::All),
@@ -883,7 +848,6 @@ impl Asic for BM1397 {
         _chain_asic_num: usize,
         _asic_addr_interval: usize,
     ) -> Option<CmdDelay> {
-        self.chip_nonce_offset_used = true;
         None
     }
 

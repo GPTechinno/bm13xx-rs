@@ -12,7 +12,7 @@ impl ChipNonceOffset {
     // const CNO_OFFSET: u8 = 0;
 
     // const CNOV_MASK: u32 = 0b1;
-    // const CNO_MASK: u32 = 0b111;
+    pub const CNO_MASK: u32 = 0b111;
 }
 
 impl core::fmt::Display for ChipNonceOffset {
@@ -40,7 +40,7 @@ impl ChipNonceOffsetV2 {
     const CNO_OFFSET: u8 = 0;
 
     const CNOV_MASK: u32 = 0b1;
-    const CNO_MASK: u32 = 0xffff;
+    pub const CNO_MASK: u32 = 0xffff;
 
     /// ## Create a chip nonce offset for a given asic in a given chain.
     ///

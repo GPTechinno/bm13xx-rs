@@ -39,10 +39,13 @@ pub enum SequenceStep {
 pub trait Asic {
     fn reset(&mut self);
     fn chip_id(&self) -> u16;
-    fn core_small_core_count(&self) -> u8;
-    fn chip_nonce_offset_used(&self) -> bool;
-    fn version_rolling_enabled(&self) -> bool;
-    fn init_next(&mut self, diffculty: u32) -> Option<CmdDelay>;
+    fn core_count(&self) -> usize;
+    fn core_small_core_count(&self) -> usize;
+    fn small_core_count(&self) -> usize;
+    fn cno_interval(&self) -> usize;
+    fn cno_bits(&self) -> u32;
+    fn hash_freq(&self) -> HertzU64;
+    fn init_next(&mut self, difficulty: u32) -> Option<CmdDelay>;
     fn set_baudrate_next(
         &mut self,
         baudrate: u32,

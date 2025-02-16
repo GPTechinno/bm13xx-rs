@@ -69,6 +69,8 @@ pub(crate) mod fmt;
 
 mod error;
 
+use core::time::Duration;
+
 pub use self::error::{Error, Result};
 
 use bm13xx_asic::{register::ChipIdentification, Asic, CmdDelay};
@@ -89,6 +91,9 @@ pub trait Baud {
 
 const RX_BUF_SIZE: usize = 256;
 
+const NONCE_BITS: u32 = u32::BITS;
+const CHIP_ADDR_BITS: u32 = u8::BITS;
+
 #[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 pub struct Chain<A, U, OB, OR, D> {
@@ -103,6 +108,8 @@ pub struct Chain<A, U, OB, OR, D> {
     reset: OR,
     delay: D,
     job_id: u8,
+    version_rolling_mask: Option<u32>,
+    chip_nonce_space: usize,
 }
 
 impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, D: DelayNs>
@@ -112,6 +119,26 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
         self.uart.write_all(&step.cmd).await.map_err(Error::Io)?;
         self.delay.delay_ms(step.delay_ms).await;
         Ok(())
+    }
+
+    /// ## Get the rolling duration
+    ///
+    /// Total time to roll the Nonce space and Version space (if HW version rolling is enabled) for the full chain at current Hash frequency.
+    /// A new job should be sent every `rolling_duration`.
+    pub fn rolling_duration(&self) -> Duration {
+        let space = self.chip_nonce_space as f32
+            * if let Some(mask) = self.version_rolling_mask {
+                (mask.count_ones() - 1) as f32
+            } else {
+                1.0
+            };
+        Duration::from_secs_f32(space / (self.asic.hash_freq().raw() as f32))
+    }
+
+    /// ## Get the theoretical Hashrate in GH/s
+    pub fn theoretical_hashrate_ghs(&self) -> f32 {
+        (self.asic.hash_freq().raw() as f32 * self.asic.small_core_count() as f32 / 1_000_000_000.0)
+            * self.asic_cnt as f32
     }
 
     /// ## Poll for a response
@@ -126,20 +153,20 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
         &mut self,
     ) -> Result<Option<ResponseType>, U::Error, OB::Error, OR::Error> {
         let mut resp = None;
-        let expected_frame_size = if self.asic.version_rolling_enabled() {
+        let expected_frame_size = if self.version_rolling_mask.is_some() {
             FRAME_SIZE_VER
         } else {
             FRAME_SIZE
         };
         if self.rx_free_pos >= expected_frame_size {
             let frame = &self.rx_buf[..expected_frame_size];
-            let used = match if self.asic.version_rolling_enabled() {
+            let used = match if self.version_rolling_mask.is_some() {
                 Response::parse_version(
                     frame.try_into().unwrap(),
                     self.asic.core_small_core_count(),
                 )
             } else {
-                Response::parse(frame.try_into().unwrap())
+                Response::parse(frame.try_into().unwrap(), self.asic.core_small_core_count())
             } {
                 Ok(r) => {
                     resp = Some(r);
@@ -223,6 +250,8 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
             reset,
             delay,
             job_id: 0,
+            version_rolling_mask: None,
+            chip_nonce_space: 0,
         };
 
         chain.reset.set_high().map_err(Error::Reset)?;
@@ -264,6 +293,11 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
         debug!("Enumerated {} asics", asic_cnt);
         chain.asic_addr_interval = 256 / asic_cnt;
         chain.asic_cnt = asic_cnt;
+        chain.chip_nonce_space = chain.asic_addr_interval
+            << (NONCE_BITS
+                - (chain.asic.core_count().ilog2() + 1)
+                - (chain.asic.core_small_core_count().ilog2() + 1)
+                - CHIP_ADDR_BITS);
         // TODO: try to determine domain_cnt according to known topologies
         chain.delay.delay_ms(50).await;
         if post_s19jpro {
@@ -310,8 +344,8 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
     /// ## Initialize all asics on the chain
     ///
     /// Will launch the sequence of initialization steps according to the ASIC detected during enumeration.
-    pub async fn init(&mut self, diffculty: u32) -> Result<(), U::Error, OB::Error, OR::Error> {
-        while let Some(step) = self.asic.init_next(diffculty) {
+    pub async fn init(&mut self, difficulty: u32) -> Result<(), U::Error, OB::Error, OR::Error> {
+        while let Some(step) = self.asic.init_next(difficulty) {
             self.send(step).await?;
         }
         self.delay.delay_ms(100).await;
@@ -375,6 +409,15 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
         {
             self.send(step).await?;
         }
+        self.chip_nonce_space = self.asic.cno_interval()
+            << (NONCE_BITS
+                - (self.asic.core_count().leading_zeros().ilog2() + 1)
+                - if self.version_rolling_mask.is_none() {
+                    0
+                } else {
+                    self.asic.core_small_core_count().ilog2() + 1
+                }
+                - self.asic.cno_bits());
         Ok(())
     }
 
@@ -385,11 +428,14 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
         &mut self,
         mask: u32,
     ) -> Result<(), U::Error, OB::Error, OR::Error> {
-        if !self.asic.version_rolling_enabled() {
+        if self.version_rolling_mask.is_none() {
             while let Some(step) = self.asic.set_version_rolling_next(mask) {
                 self.send(step).await?;
             }
             self.delay.delay_ms(100).await;
+            self.version_rolling_mask = Some(mask);
+            // when hw version rolling is enabled, the small cores split version_space and not nonce_space anymore
+            self.chip_nonce_space <<= self.asic.core_small_core_count().ilog2() + 1;
         }
         Ok(())
     }
@@ -405,8 +451,13 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
         n_bits: u32,
         n_time: u32,
     ) -> Result<u8, U::Error, OB::Error, OR::Error> {
-        self.job_id = self.job_id.wrapping_add(self.asic.core_small_core_count());
-        if self.asic.version_rolling_enabled() {
+        self.job_id = if self.job_id == 31 {
+            0
+        } else {
+            self.job_id + 1
+        };
+        // TODO: store the job in a `heapless::HistoryBuffer` to be able to compute corrsponding share difficulty
+        if self.version_rolling_mask.is_some() {
             let cmd = Command::job_header(
                 self.job_id,
                 n_bits,
@@ -423,8 +474,14 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
             for _i in 0..self.asic.core_small_core_count() {
                 midstates.push([0u8; 32]).unwrap(); // TODO finish midstate computation
             }
-            let cmd =
-                Command::job_midstate(self.job_id, n_bits, n_time, merkle_root_end, midstates);
+            let cmd = Command::job_midstate(
+                self.job_id,
+                n_bits,
+                n_time,
+                merkle_root_end,
+                midstates,
+                self.asic.core_small_core_count(),
+            );
             self.uart.write_all(&cmd).await.map_err(Error::Io)?;
         };
         Ok(self.job_id)

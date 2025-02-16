@@ -7,7 +7,6 @@ pub(crate) mod fmt;
 use bm13xx_asic::{core_register::*, register::*, Asic, CmdDelay, SequenceStep};
 use bm13xx_protocol::command::{Command, Destination};
 
-use core::time::Duration;
 use fugit::HertzU64;
 use heapless::FnvIndexMap;
 
@@ -21,14 +20,6 @@ pub const BM1366_PLL_ID_HASH: usize = 0; // PLL0 is used for Hashing
 pub const BM1366_PLL_OUT_HASH: usize = 0; // specifically PLL0_OUT0 is used for Hashing
 pub const BM1366_PLL_ID_UART: usize = 1; // PLL1 can be used for UART Baudrate
 pub const BM1366_PLL_OUT_UART: usize = 4; // specifically PLL1_OUT4 can be used for UART Baudrate
-pub const BM1366_NONCE_CORES_BITS: usize = 7; // Core ID is hardcoded on Nonce[31:25] -> 7 bits
-pub const BM1366_NONCE_CORES_MASK: u32 = 0b111_1111;
-pub const BM1366_NONCE_SMALL_CORES_BITS: usize = 3; // Small Core ID is hardcoded on Nonce[24:22] -> 3 bits
-pub const BM1366_NONCE_SMALL_CORES_MASK: u32 = 0b111;
-
-const NONCE_BITS: usize = 32;
-const CHIP_ADDR_BITS: usize = 8;
-const CHIP_ADDR_MASK: u32 = 0b1111_1111;
 
 /// # BM1366
 #[derive(Debug)]
@@ -46,9 +37,6 @@ pub struct BM1366 {
     pub chip_addr: u8,
     pub registers: FnvIndexMap<u8, u32, 64>,
     pub core_registers: FnvIndexMap<u8, u8, 16>,
-    pub chip_nonce_offset_used: bool,
-    pub version_rolling_enabled: bool,
-    pub version_mask: u32,
 }
 
 impl BM1366 {
@@ -73,24 +61,6 @@ impl BM1366 {
         self.chip_addr = chip_addr;
     }
 
-    fn version_mask_bits(&self) -> usize {
-        self.version_mask.count_ones() as usize
-    }
-
-    /// ## Get the SHA Hashing Frequency
-    ///
-    /// ### Example
-    /// ```
-    /// use bm1366::{BM1366, BM1366_PLL_ID_HASH};
-    /// use fugit::HertzU64;
-    ///
-    /// let mut bm1366 = BM1366::default();
-    /// assert_eq!(bm1366.hash_freq(), HertzU64::MHz(50));
-    /// assert_eq!(bm1366.set_hash_freq(HertzU64::MHz(200)).hash_freq(), HertzU64::MHz(200));
-    /// ```
-    pub fn hash_freq(&self) -> HertzU64 {
-        self.plls[BM1366_PLL_ID_HASH].frequency(self.input_clock_freq, BM1366_PLL_OUT_HASH)
-    }
     pub fn set_hash_freq(&mut self, freq: HertzU64) -> &mut Self {
         self.plls[BM1366_PLL_ID_HASH].set_frequency(
             self.input_clock_freq,
@@ -101,62 +71,11 @@ impl BM1366 {
         self
     }
 
-    /// ## Get the theoretical Hashrate in GH/s
-    ///
-    /// ### Example
-    /// ```
-    /// use bm1366::BM1366;
-    /// use fugit::HertzU64;
-    ///
-    /// let bm1366 = BM1366::default();
-    /// assert_eq!(bm1366.theoretical_hashrate_ghs(), 44.7);
-    /// ```
-    pub fn theoretical_hashrate_ghs(&self) -> f32 {
-        self.hash_freq().raw() as f32 * self.sha.small_core_count() as f32 / 1_000_000_000.0
-    }
-
-    /// ## Get the rolling duration
-    ///
-    /// BM1366 can do Version Rolling in Hardware.
-    ///
-    /// If Hardware Version Rolling is not enabled, BM1366 only roll the Nonce Space (32 bits), but:
-    /// - Nonce\[31:25\] is used to hardcode the Core ID.
-    /// - Nonce\[24:22\] is used to hardcode the Small Core ID.
-    /// - Nonce\[21:14\] is used to hardcode the Chip Address.
-    ///
-    /// So only the Nonce\[13:0\] are rolled for each Chip Address.
-    ///
-    /// If Hardware Version Rolling is enabled, BM1366 roll the Nonce Space (32 bits) and
-    /// up to 16 bits in Version Space, but:
-    /// - Nonce\[31:25\] is used to hardcode the Core ID.
-    /// - Nonce\[24:17\] is used to hardcode the Chip Address.
-    /// - Version\[15:13\] is used to hardcode the Small Core ID (assuming the Version Mask is 0x1fffe000).
-    ///
-    /// So only the Nonce\[16:0\] and Version\[28:16\] are rolled for each Chip Address.
-    ///
-    /// ### Example
-    /// ```
-    /// use bm1366::BM1366;
-    /// use core::time::Duration;
-    ///
-    /// let mut bm1366 = BM1366::default();
-    /// assert_eq!(bm1366.rolling_duration(), Duration::from_secs_f32(0.00032768));
-    // bm1366.enable_version_rolling(0x1fffe000);
-    // assert_eq!(bm1366.rolling_duration(), Duration::from_secs_f32(21.474836349));
-    /// ```
-    pub fn rolling_duration(&self) -> Duration {
-        let space = if self.version_rolling_enabled {
-            (1 << (NONCE_BITS - BM1366_NONCE_CORES_BITS - CHIP_ADDR_BITS
-                + self.version_mask_bits()
-                - BM1366_NONCE_SMALL_CORES_BITS)) as f32
-        } else {
-            (1 << (NONCE_BITS
-                - BM1366_NONCE_CORES_BITS
-                - BM1366_NONCE_SMALL_CORES_BITS
-                - CHIP_ADDR_BITS)) as f32
-        };
-        Duration::from_secs_f32(space / (self.hash_freq().raw() as f32))
-    }
+    /*
+    const BM1366_NONCE_CORES_BITS: usize = 7; // Core ID is hardcoded on Nonce[31:25] -> 7 bits
+    const BM1366_NONCE_CORES_MASK: u32 = 0b111_1111;
+    const BM1366_NONCE_SMALL_CORES_BITS: usize = 3; // Small Core ID is hardcoded on Nonce[24:22] -> 3 bits
+    const BM1366_NONCE_SMALL_CORES_MASK: u32 = 0b111;
 
     /// ## Get the Core ID that produced a given Nonce
     ///
@@ -249,6 +168,7 @@ impl BM1366 {
                 & CHIP_ADDR_MASK) as usize
         }
     }
+     */
 }
 
 impl Default for BM1366 {
@@ -261,9 +181,6 @@ impl Default for BM1366 {
             chip_addr: 0,
             registers: FnvIndexMap::<_, _, 64>::new(),
             core_registers: FnvIndexMap::<_, _, 16>::new(),
-            chip_nonce_offset_used: false,
-            version_rolling_enabled: false,
-            version_mask: 0x1fffe000,
         };
         bm1366.reset();
         bm1366
@@ -280,9 +197,6 @@ impl Asic for BM1366 {
         self.chip_addr = 0;
         self.registers = FnvIndexMap::<_, _, 64>::new();
         self.core_registers = FnvIndexMap::<_, _, 16>::new();
-        self.chip_nonce_offset_used = false;
-        self.version_rolling_enabled = false;
-        self.version_mask = 0x1fffe000;
 
         // Default PLLs Parameter
         self.plls[0].set_parameter(0xC054_0165);
@@ -449,42 +363,66 @@ impl Asic for BM1366 {
     ///
     /// ### Example
     /// ```
+    /// use bm1366::{BM1366, BM1366_CORE_CNT};
+    /// use bm13xx_asic::Asic;
+    ///
+    /// let bm1366 = BM1366::default();
+    /// assert_eq!(bm1366.core_count(), BM1366_CORE_CNT);
+    /// ```
+    fn core_count(&self) -> usize {
+        self.sha.core_count()
+    }
+
+    /// ## Get the Chip Small Core count per Core
+    ///
+    /// ### Example
+    /// ```
     /// use bm1366::{BM1366, BM1366_CORE_SMALL_CORE_CNT};
     /// use bm13xx_asic::Asic;
     ///
     /// let bm1366 = BM1366::default();
-    /// assert_eq!(bm1366.core_small_core_count(), BM1366_CORE_SMALL_CORE_CNT as u8);
+    /// assert_eq!(bm1366.core_small_core_count(), BM1366_CORE_SMALL_CORE_CNT);
     /// ```
-    fn core_small_core_count(&self) -> u8 {
-        self.sha.core_small_core_count() as u8
+    fn core_small_core_count(&self) -> usize {
+        self.sha.core_small_core_count()
     }
 
-    /// ## Is Chip Nonce Offset used
+    /// ## Get the Chip Small Core count
     ///
     /// ### Example
     /// ```
-    /// use bm1366::BM1366;
+    /// use bm1366::{BM1366, BM1366_SMALL_CORE_CNT};
     /// use bm13xx_asic::Asic;
     ///
     /// let bm1366 = BM1366::default();
-    /// assert!(!bm1366.chip_nonce_offset_used());
+    /// assert_eq!(bm1366.small_core_count(), BM1366_SMALL_CORE_CNT);
     /// ```
-    fn chip_nonce_offset_used(&self) -> bool {
-        self.chip_nonce_offset_used
+    fn small_core_count(&self) -> usize {
+        self.sha.small_core_count()
     }
 
-    /// ## Is Hardware Version Rolling enabled
+    fn cno_interval(&self) -> usize {
+        0
+    }
+
+    fn cno_bits(&self) -> u32 {
+        ChipNonceOffsetV2::CNO_MASK.count_ones()
+    }
+
+    /// ## Get the SHA Hashing Frequency
     ///
     /// ### Example
     /// ```
-    /// use bm1366::BM1366;
+    /// use bm1366::{BM1366, BM1366_PLL_ID_HASH};
     /// use bm13xx_asic::Asic;
+    /// use fugit::HertzU64;
     ///
-    /// let bm1366 = BM1366::default();
-    /// assert!(!bm1366.version_rolling_enabled());
+    /// let mut bm1366 = BM1366::default();
+    /// assert_eq!(bm1366.hash_freq(), HertzU64::MHz(50));
+    /// assert_eq!(bm1366.set_hash_freq(HertzU64::MHz(200)).hash_freq(), HertzU64::MHz(200));
     /// ```
-    fn version_rolling_enabled(&self) -> bool {
-        self.version_rolling_enabled
+    fn hash_freq(&self) -> HertzU64 {
+        self.plls[BM1366_PLL_ID_HASH].frequency(self.input_clock_freq, BM1366_PLL_OUT_HASH)
     }
 
     /// ## Init the Chip command list
@@ -506,7 +444,7 @@ impl Asic for BM1366 {
     /// assert_eq!(bm1366.registers.get(&AnalogMuxControlV2::ADDR).unwrap(), &0x0000_0003);
     /// ```
     ///
-    fn init_next(&mut self, diffculty: u32) -> Option<CmdDelay> {
+    fn init_next(&mut self, difficulty: u32) -> Option<CmdDelay> {
         match self.seq_step {
             SequenceStep::Init(step) => match step {
                 0 => {
@@ -531,7 +469,7 @@ impl Asic for BM1366 {
                 }
                 1 => {
                     self.seq_step = SequenceStep::Init(2);
-                    let tck_mask = TicketMask::from_difficulty(diffculty).val();
+                    let tck_mask = TicketMask::from_difficulty(difficulty).val();
                     self.registers.insert(TicketMask::ADDR, tck_mask).unwrap();
                     Some(CmdDelay {
                         cmd: Command::write_reg(TicketMask::ADDR, tck_mask, Destination::All),
@@ -1198,7 +1136,6 @@ impl Asic for BM1366 {
         _chain_asic_num: usize,
         _asic_addr_interval: usize,
     ) -> Option<CmdDelay> {
-        self.chip_nonce_offset_used = true;
         None // TODO if needed
     }
 
@@ -1234,8 +1171,6 @@ impl Asic for BM1366 {
                 }
                 1 => {
                     self.seq_step = SequenceStep::None;
-                    self.version_rolling_enabled = true;
-                    self.version_mask = mask;
                     None
                 }
                 _ => unreachable!(),
