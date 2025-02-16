@@ -15,8 +15,9 @@ pub struct RegisterResponse {
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 pub struct JobResponse {
     pub nonce: u32,
-    pub job_id: u8,
-    pub midstate_id: u8,
+    pub job_id: usize,
+    pub midstate_id: usize,
+    pub small_core_id: usize,
 }
 
 #[derive(Debug, PartialEq)]
@@ -24,8 +25,8 @@ pub struct JobResponse {
 pub struct JobVersionResponse {
     pub nonce: u32,
     pub unknown: u8,
-    pub job_id: u8,
-    pub small_core_id: u8,
+    pub job_id: usize,
+    pub small_core_id: usize,
     pub version_bit: u32,
 }
 
@@ -53,6 +54,7 @@ impl Response {
     ///
     /// ## Return
     /// - `Err(Error::InvalidPreamble)` if it first 2 bytes are not `[0xAA, 0x55]`.
+    /// - `Err(Error::UnsupportedCoreSmallCoreCnt)` if core_small_core_cnt is not 4, 8 or 16.
     /// - `Err(Error::InvalidCrc)` if the CRC5 is not valid.
     /// - `Ok(ResponseType::Reg(r))` with the `RegisterResponse`.
     /// - `Ok(ResponseType::Job(j))` with the `JobResponse`.
@@ -64,25 +66,30 @@ impl Response {
     /// use bm13xx_protocol::response::{Response, ResponseType};
     ///
     /// // Error::InvalidPreamble
-    /// let resp = Response::parse(&[0x00,0x55,0x13,0x97,0x18,0x00,0x00,0x00,0x06]);
+    /// let resp = Response::parse(&[0x00,0x55,0x13,0x97,0x18,0x00,0x00,0x00,0x06], 4);
     /// assert!(resp.is_err());
     /// assert_eq!(resp.unwrap_err(), Error::InvalidPreamble);
     ///
-    /// let resp = Response::parse(&[0xAA,0x00,0x13,0x97,0x18,0x00,0x00,0x00,0x06]);
+    /// let resp = Response::parse(&[0xAA,0x00,0x13,0x97,0x18,0x00,0x00,0x00,0x06], 4);
     /// assert!(resp.is_err());
     /// assert_eq!(resp.unwrap_err(), Error::InvalidPreamble);
     ///
-    /// let resp = Response::parse(&[0x00,0x00,0x13,0x97,0x18,0x00,0x00,0x00,0x06]);
+    /// let resp = Response::parse(&[0x00,0x00,0x13,0x97,0x18,0x00,0x00,0x00,0x06], 4);
     /// assert!(resp.is_err());
     /// assert_eq!(resp.unwrap_err(), Error::InvalidPreamble);
+    ///
+    /// // Error::UnsupportedCoreSmallCoreCnt
+    /// let resp = Response::parse(&[0xAA,0x55,0x13,0x97,0x18,0x00,0x00,0x00,0x06], 5);
+    /// assert!(resp.is_err());
+    /// assert_eq!(resp.unwrap_err(), Error::UnsupportedCoreSmallCoreCnt);
     ///
     /// // Error::InvalidCrc
-    /// let resp = Response::parse(&[0xAA,0x55,0x13,0x97,0x18,0x00,0x00,0x00,0x00]); // should be 0x06
+    /// let resp = Response::parse(&[0xAA,0x55,0x13,0x97,0x18,0x00,0x00,0x00,0x00], 4); // should be 0x06
     /// assert!(resp.is_err());
     /// assert_eq!(resp.unwrap_err(), Error::InvalidCrc { expected: 0x06, actual: 0x00 });
     ///
     /// // ChipIdentification == 0x13971800
-    /// let resp = Response::parse(&[0xAA,0x55,0x13,0x97,0x18,0x00,0x00,0x00,0x06]);
+    /// let resp = Response::parse(&[0xAA,0x55,0x13,0x97,0x18,0x00,0x00,0x00,0x06], 4);
     /// assert!(resp.is_ok());
     /// match resp.unwrap() {
     ///     ResponseType::Reg(r) => {
@@ -93,20 +100,24 @@ impl Response {
     ///     _ => panic!(),
     /// };
     ///
-    /// let resp = Response::parse(&[0xAA,0x55,0x97,0xC3,0x28,0xB6,0x01,0x63,0x9C]);
+    /// let resp = Response::parse(&[0xAA,0x55,0x97,0xC3,0x28,0xB6,0x01,0x63,0x9C], 4);
     /// assert!(resp.is_ok());
     /// match resp.unwrap() {
     ///     ResponseType::Job(j) => {
     ///         assert_eq!(j.nonce, 0xB628_C397);
     ///         assert_eq!(j.midstate_id, 1);
-    ///         assert_eq!(j.job_id, 0x63);
+    ///         assert_eq!(j.job_id, 24);
+    ///         assert_eq!(j.small_core_id, 3);
     ///     },
     ///     _ => panic!(),
     /// };
     /// ```
-    pub fn parse(data: &[u8; FRAME_SIZE]) -> Result<ResponseType> {
+    pub fn parse(data: &[u8; FRAME_SIZE], core_small_core_cnt: usize) -> Result<ResponseType> {
         if data[0] != 0xAA || data[1] != 0x55 {
             return Err(Error::InvalidPreamble);
+        }
+        if core_small_core_cnt != 4 && core_small_core_cnt != 8 && core_small_core_cnt != 16 {
+            return Err(Error::UnsupportedCoreSmallCoreCnt);
         }
         if crc5(&data[2..9]) != 0x00 {
             return Err(Error::InvalidCrc {
@@ -115,10 +126,13 @@ impl Response {
             });
         }
         if data[8] & 0x80 == 0x80 {
+            let small_core_mask = core_small_core_cnt - 1;
+            let small_core_bits = core_small_core_cnt.trailing_zeros() as u8;
             return Ok(ResponseType::Job(JobResponse {
                 nonce: u32::from_le_bytes(data[2..6].try_into().unwrap()),
-                midstate_id: data[6],
-                job_id: data[7],
+                midstate_id: data[6] as usize,
+                job_id: ((data[7] as usize) >> small_core_bits) & 0b1_1111,
+                small_core_id: (data[7] as usize) & small_core_mask,
             }));
         }
         Ok(ResponseType::Reg(RegisterResponse {
@@ -136,6 +150,7 @@ impl Response {
     ///
     /// ## Return
     /// - `Err(Error::InvalidPreamble)` if it first 2 bytes are not `[0xAA, 0x55]`.
+    /// - `Err(Error::UnsupportedCoreSmallCoreCnt)` if core_small_core_cnt is not 8 or 16.
     /// - `Err(Error::InvalidCrc)` if the CRC5 is not valid.
     /// - `Ok(ResponseType::Reg(r))` with the `RegisterResponse`.
     /// - `Ok(ResponseType::JobVer(j))` with the `JobVersionResponse`.
@@ -209,7 +224,7 @@ impl Response {
     /// ```
     pub fn parse_version(
         data: &[u8; FRAME_SIZE_VER],
-        core_small_core_cnt: u8,
+        core_small_core_cnt: usize,
     ) -> Result<ResponseType> {
         if data[0] != 0xAA || data[1] != 0x55 {
             return Err(Error::InvalidPreamble);
@@ -226,15 +241,12 @@ impl Response {
         if data[10] & 0x80 == 0x80 {
             let small_core_mask = core_small_core_cnt - 1;
             let small_core_bits = core_small_core_cnt.trailing_zeros() as u8;
+            let chunk = ((data[6] as u16) << 8) | data[7] as u16;
             return Ok(ResponseType::JobVer(JobVersionResponse {
                 nonce: u32::from_le_bytes(data[2..6].try_into().unwrap()),
-                unknown: (data[6] >> if core_small_core_cnt > 8 { 1 } else { 0 }) & 0x7f,
-                job_id: if core_small_core_cnt > 8 {
-                    (data[6] & 0x01) << 7
-                } else {
-                    0
-                } + (data[7] >> small_core_bits),
-                small_core_id: data[7] & small_core_mask,
+                unknown: (chunk >> (small_core_bits + 5)) as u8,
+                job_id: ((chunk >> small_core_bits) as usize) & 0b1_1111,
+                small_core_id: (data[7] as usize) & small_core_mask,
                 version_bit: (u16::from_be_bytes(data[8..10].try_into().unwrap()) as u32) << 13,
             }));
         }

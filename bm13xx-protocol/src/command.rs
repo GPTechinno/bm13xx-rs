@@ -167,7 +167,7 @@ impl Command {
     ///         0x55, 0x74, 0xD4, 0xBA,
     /// ]);
     /// assert_eq!(
-    ///     Command::job_midstate(0, 0x1707_9E15, 0x638E_3275, 0x706A_B3A2, midstates.clone()),
+    ///     Command::job_midstate(0, 0x1707_9E15, 0x638E_3275, 0x706A_B3A2, midstates.clone(), 4),
     ///     [
     ///         0x55, 0xAA, 0x21, 0x36, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x15, 0x9E, 0x07, 0x17,
     ///         0x75, 0x32, 0x8E, 0x63, 0xA2, 0xB3, 0x6A, 0x70, 0xDE, 0x60, 0x4A, 0x09, 0xE9, 0x30,
@@ -192,7 +192,7 @@ impl Command {
     ///         0x04, 0x3A, 0x7C, 0x2D,
     /// ]);
     /// assert_eq!(
-    ///     Command::job_midstate(0, 0x1707_9E15, 0x638E_3275, 0x706A_B3A2, midstates),
+    ///     Command::job_midstate(0, 0x1707_9E15, 0x638E_3275, 0x706A_B3A2, midstates, 4),
     ///     [
     ///         0x55, 0xAA, 0x21, 0x96, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x15, 0x9E, 0x07, 0x17,
     ///         0x75, 0x32, 0x8E, 0x63, 0xA2, 0xB3, 0x6A, 0x70, 0xDE, 0x60, 0x4A, 0x09, 0xE9, 0x30,
@@ -214,13 +214,15 @@ impl Command {
         n_time: u32,
         merkle_root_end: u32,
         midstates: Vec<[u8; 32], 4>,
+        core_small_core_cnt: usize,
     ) -> Vec<u8, 152> {
         let mut data = Vec::new();
         data.push(0x55).unwrap();
         data.push(0xAA).unwrap();
         data.push(Self::CMD_SEND_JOB).unwrap();
         data.push(22 + (midstates.len() * 32) as u8).unwrap();
-        data.push(job_id).unwrap();
+        data.push(job_id << if core_small_core_cnt > 5 { 3 } else { 2 })
+            .unwrap();
         data.push(midstates.len() as u8).unwrap();
         data.extend_from_slice(&0u32.to_le_bytes()).unwrap(); // starting_nonce ?
         data.extend_from_slice(&n_bits.to_le_bytes()).unwrap();
@@ -249,7 +251,7 @@ impl Command {
     ///         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x86, 0xff,
     ///         0x0e, 0xa5, 0xa4, 0x5b, 0xfc, 0x00, 0xd3, 0x55, 0x56, 0xd5, 0x0e, 0xae,
     ///         0x1a, 0xd8, 0x76, 0xd7, 0x1f, 0x99, 0xe1, 0x38];
-    /// let header = Command::job_header(168, 0x1704_2450, 0x6570_de83, merkle_root, prev_hash, 0x2000_0000);
+    /// let header = Command::job_header(21, 0x1704_2450, 0x6570_de83, merkle_root, prev_hash, 0x2000_0000);
     /// assert_eq!(
     ///     header,
     ///     [
@@ -276,7 +278,7 @@ impl Command {
         data[2] = Self::CMD_SEND_JOB;
         // data[3] = 54;
         data[3] = data.len() as u8 - 32 - 2;
-        data[4] = job_id;
+        data[4] = job_id << 3;
         data[5] = 1;
         // data[6..].clone_from_slice(&0u32.to_le_bytes()); // starting_nonce ?
         data[10..14].clone_from_slice(&n_bits.to_le_bytes());
