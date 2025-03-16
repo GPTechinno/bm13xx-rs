@@ -158,6 +158,18 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
         } else {
             FRAME_SIZE
         };
+
+        if self.uart.read_ready().map_err(Error::Io)? {
+            let n = self
+                .uart
+                .read(self.rx_buf[self.rx_free_pos..].as_mut())
+                .await
+                .map_err(Error::Io)?;
+            debug!("read {} bytes @{}", n, self.rx_free_pos);
+            trace!("{:?}", &self.rx_buf[self.rx_free_pos..self.rx_free_pos + n]);
+            self.rx_free_pos += n;
+        }
+
         if self.rx_free_pos >= expected_frame_size {
             let frame = &self.rx_buf[..expected_frame_size];
             let used = match if self.version_rolling_mask.is_some() {
@@ -205,16 +217,6 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
                 self.rx_buf.copy_within(used..self.rx_free_pos, 0);
             }
             self.rx_free_pos -= used;
-        }
-        if self.uart.read_ready().map_err(Error::Io)? {
-            let n = self
-                .uart
-                .read(self.rx_buf[self.rx_free_pos..].as_mut())
-                .await
-                .map_err(Error::Io)?;
-            debug!("read {} bytes @{}", n, self.rx_free_pos);
-            trace!("{:?}", &self.rx_buf[self.rx_free_pos..self.rx_free_pos + n]);
-            self.rx_free_pos += n;
         }
         Ok(resp)
     }
