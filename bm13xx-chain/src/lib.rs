@@ -164,6 +164,7 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
                 Response::parse_version(
                     frame.try_into().unwrap(),
                     self.asic.core_small_core_count(),
+                    self.asic_cnt,
                 )
             } else {
                 Response::parse(frame.try_into().unwrap(), self.asic.core_small_core_count())
