@@ -175,7 +175,7 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
                 }
                 Err(bm13xx_protocol::Error::InvalidCrc { expected, actual }) => {
                     error!(
-                        "Ignoring Frame {:x} with bad CRC: {:02x}!={:02x}",
+                        "Ignoring Frame {:x?} with bad CRC: {:02x}!={:02x}",
                         frame, expected, actual
                     );
                     expected_frame_size
@@ -186,14 +186,14 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
                         .position(|w| w == [0xAA, 0x55])
                         .unwrap_or(expected_frame_size);
                     error!(
-                        "Resync Frame {:x} because bad preamble, dropping first {} bytes",
+                        "Resync Frame {:x?} because bad preamble, dropping first {} bytes",
                         frame, offset
                     );
                     offset
                 }
                 Err(bm13xx_protocol::Error::UnsupportedCoreSmallCoreCnt) => {
                     error!(
-                        "Ignoring Frame {:x} because bad CoreSmallCoreCnt {}",
+                        "Ignoring Frame {:x?} because bad CoreSmallCoreCnt {}",
                         frame,
                         self.asic.core_small_core_count()
                     );
