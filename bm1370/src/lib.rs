@@ -1027,7 +1027,7 @@ impl Asic for BM1370 {
                         self.plls[BM1370_PLL_ID_HASH].parameter(),
                     )
                     .unwrap();
-                if freq > target_freq {
+                if freq == target_freq + HertzU64::kHz(6250) {
                     self.seq_step = SequenceStep::None;
                     None
                 } else {
