@@ -272,30 +272,6 @@ impl Command {
         mut prev_block_header_hash: [u8; 32],
         version: u32,
     ) -> [u8; 88] {
-        fn swap_endian_words(hex_words: [u8; 32], output: &mut [u8]) {
-            let hex_length = hex_words.len();
-
-            if hex_length % 4 != 0 {
-                error!("Must be 4-byte word aligned");
-            }
-
-            if output.len() < hex_length {
-                panic!(
-            "Output buffer is not large enough to hold the result. Required: {}, Provided: {}",
-            hex_length,
-            output.len()
-        );
-            }
-
-            for i in (0..hex_length).step_by(4) {
-                // Copy the 4 bytes in reverse order to achieve endian swapping
-                output[i] = hex_words[hex_length - i - 4];
-                output[i + 1] = hex_words[hex_length - i - 3];
-                output[i + 2] = hex_words[hex_length - i - 2];
-                output[i + 3] = hex_words[hex_length - i - 1];
-            }
-        }
-
         let mut data = [0; 88];
         data[0] = 0x55;
         data[1] = 0xAA;
@@ -307,7 +283,10 @@ impl Command {
         // data[6..].clone_from_slice(&0u32.to_le_bytes()); // starting_nonce ?
         data[10..14].clone_from_slice(&n_bits.to_le_bytes());
         data[14..18].clone_from_slice(&n_time.to_le_bytes());
-        swap_endian_words(full_merkle_root, &mut full_merkle_root);
+        full_merkle_root.reverse();
+        full_merkle_root.chunks_exact_mut(4).for_each(|chunk| {
+            chunk.reverse();
+        });
         data[18..50].clone_from_slice(&full_merkle_root);
         prev_block_header_hash
             .chunks_exact_mut(4)
