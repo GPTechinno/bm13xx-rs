@@ -482,7 +482,8 @@ impl Asic for BM1370 {
                         let ana_mux_ctrl = AnalogMuxControlV2(
                             *self.registers.get(&AnalogMuxControlV2::ADDR).unwrap(),
                         )
-                        .set_diode_vdd_mux_sel(3)
+                        .set_diode_vdd_mux_sel(2) // Set 2 as it works on most of the versions of
+                            // BM1370 (AA, PA, BC)
                         .val();
                         self.registers
                             .insert(AnalogMuxControlV2::ADDR, ana_mux_ctrl)
