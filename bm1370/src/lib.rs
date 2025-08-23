@@ -1156,8 +1156,8 @@ impl Asic for BM1370 {
             _ => {
                 // authorize a VersionRolling sequence start whatever the current step was
                 self.seq_step = SequenceStep::VersionRolling(0);
-                let hcn = 0x0000_1eb5; // S21Pro
-                                       // let hcn = 0x0000_1a44; // S21XP
+                // let hcn = 0x0000_1eb5; // S21Pro
+                let hcn = 0x0000_1a44; // S21XP
                 self.registers
                     .insert(HashCountingNumber::ADDR, hcn)
                     .unwrap();
