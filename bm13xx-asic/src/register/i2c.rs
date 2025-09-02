@@ -29,7 +29,7 @@ impl core::fmt::Display for I2CControl {
     }
 }
 
-#[cfg(feature = "defmt-03")]
+#[cfg(feature = "defmt")]
 impl defmt::Format for I2CControl {
     fn format(&self, fmt: defmt::Formatter) {
         defmt::write!(fmt, "I2CControl {{  }}",);

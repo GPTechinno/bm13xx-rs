@@ -10,13 +10,13 @@ members = [
 ]
 
 [workspace.dependencies]
-crc = "3.2"
-defmt = { version = "0.3" }
-derive_more = { version = "1.0", default-features = false }
+crc = "3.3"
+defmt = { version = "1.0" }
+derive_more = { version = "2.0", default-features = false }
 embedded-hal = "1.0"
 embedded-hal-async = "1.0"
 embedded-io-async = "0.6"
 fugit = "0.3"
-heapless = "0.8"
+heapless = "0.9"
 log = "0.4"
 rustversion = "1.0"

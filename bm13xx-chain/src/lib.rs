@@ -95,7 +95,7 @@ const NONCE_BITS: u32 = u32::BITS;
 const CHIP_ADDR_BITS: u32 = u8::BITS;
 
 #[derive(Debug, PartialEq)]
-#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Chain<A, U, OB, OR, D> {
     pub asic_cnt: usize,
     asic: A,

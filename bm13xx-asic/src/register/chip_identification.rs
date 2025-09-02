@@ -74,7 +74,7 @@ impl core::fmt::Display for ChipIdentification {
     }
 }
 
-#[cfg(feature = "defmt-03")]
+#[cfg(feature = "defmt")]
 impl defmt::Format for ChipIdentification {
     fn format(&self, fmt: defmt::Formatter) {
         defmt::write!(

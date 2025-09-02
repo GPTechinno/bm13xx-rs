@@ -21,7 +21,7 @@ impl ::core::fmt::Display for CoreReg11 {
     }
 }
 
-#[cfg(feature = "defmt-03")]
+#[cfg(feature = "defmt")]
 impl defmt::Format for CoreReg11 {
     fn format(&self, fmt: defmt::Formatter) {
         defmt::write!(fmt, "CoreReg11 {{ }}",);

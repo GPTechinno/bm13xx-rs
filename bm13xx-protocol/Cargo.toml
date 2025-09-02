@@ -2,8 +2,8 @@
 categories = ["embedded", "no-std"]
 edition = "2021"
 name = "bm13xx-protocol"
-rust-version = "1.75.0"
-version = "0.1.0"
+rust-version = "1.86.0"
+version = "0.2.0"
 
 [dependencies]
 crc = { workspace = true }
@@ -14,7 +14,7 @@ log = { workspace = true, optional = true }
 rustversion = { workspace = true }
 
 [features]
-defmt-03 = ["dep:defmt", "heapless/defmt-03"]
+defmt = ["dep:defmt", "heapless/defmt"]
 
 [dev-dependencies]
 env_logger = "0.11"

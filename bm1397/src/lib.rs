@@ -8,7 +8,7 @@ use bm13xx_asic::{core_register::*, register::*, Asic, CmdDelay, SequenceStep};
 use bm13xx_protocol::command::{Command, Destination};
 
 use fugit::HertzU64;
-use heapless::FnvIndexMap;
+use heapless::index_map::FnvIndexMap;
 
 pub const BM1397_CHIP_ID: u16 = 0x1397;
 pub const BM1397_CORE_CNT: usize = 168;
@@ -23,7 +23,7 @@ pub const BM1397_PLL_OUT_UART: usize = 4; // specifically PLL3_OUT4 can be used 
 
 /// # BM1397
 #[derive(Debug)]
-// #[cfg_attr(feature = "defmt-03", derive(defmt::Format))] // FnvIndexMap doesn't implement defmt
+// #[cfg_attr(feature = "defmt", derive(defmt::Format))] // FnvIndexMap doesn't implement defmt
 pub struct BM1397 {
     seq_step: SequenceStep,
     pub sha: bm13xx_asic::sha::Sha<

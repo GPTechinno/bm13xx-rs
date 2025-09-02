@@ -19,7 +19,7 @@ impl ::core::fmt::Display for CoreEnable {
     }
 }
 
-#[cfg(feature = "defmt-03")]
+#[cfg(feature = "defmt")]
 impl defmt::Format for CoreEnable {
     fn format(&self, fmt: defmt::Formatter) {
         defmt::write!(fmt, "CoreEnable {{ }}",);

@@ -1,11 +1,11 @@
 /// # Small Core
 #[derive(Debug, Default, Copy, Clone, Eq, PartialEq, Hash)]
-#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct SmallCore {}
 
 /// # Core
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
-#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Core<const SC: usize> {
     small_cores: [SmallCore; SC],
 }
@@ -39,7 +39,7 @@ impl<const SC: usize> Default for Core<SC> {
 
 /// # ASIC
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
-#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Sha<const C: usize, const SC: usize, const CSC: usize, const D: usize> {
     cores: [Core<CSC>; C],
 }

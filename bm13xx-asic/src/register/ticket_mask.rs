@@ -40,7 +40,7 @@ impl core::fmt::Display for TicketMask {
     }
 }
 
-#[cfg(feature = "defmt-03")]
+#[cfg(feature = "defmt")]
 impl defmt::Format for TicketMask {
     fn format(&self, fmt: defmt::Formatter) {
         defmt::write!(fmt, "TicketMask {{  }}",);
@@ -66,7 +66,7 @@ impl core::fmt::Display for TicketMask2 {
     }
 }
 
-#[cfg(feature = "defmt-03")]
+#[cfg(feature = "defmt")]
 impl defmt::Format for TicketMask2 {
     fn format(&self, fmt: defmt::Formatter) {
         defmt::write!(fmt, "TicketMask2 {{  }}",);

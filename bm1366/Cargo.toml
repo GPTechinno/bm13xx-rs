@@ -2,8 +2,8 @@
 categories = ["embedded", "no-std"]
 edition = "2021"
 name = "bm1366"
-rust-version = "1.75.0"
-version = "0.1.0"
+rust-version = "1.86.0"
+version = "0.2.0"
 
 [dependencies]
 "bm13xx-asic" = { path = "../bm13xx-asic" }
@@ -15,10 +15,10 @@ heapless = { workspace = true }
 log = { workspace = true, optional = true }
 
 [features]
-defmt-03 = [
+defmt = [
     "dep:defmt",
-    "bm13xx-asic/defmt-03",
-    "bm13xx-protocol/defmt-03",
+    "bm13xx-asic/defmt",
+    "bm13xx-protocol/defmt",
     "fugit/defmt",
-    "heapless/defmt-03",
+    "heapless/defmt",
 ]

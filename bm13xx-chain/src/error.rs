@@ -5,7 +5,7 @@ use derive_more::From;
 pub type Result<T, IO, B, R> = core::result::Result<T, Error<IO, B, R>>;
 
 #[derive(PartialEq, From)]
-#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Error<IO, B, R> {
     /// We received a response from ASIC which does not correspond to the command sent
     UnexpectedResponse { resp: ResponseType },

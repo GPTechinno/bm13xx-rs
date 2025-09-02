@@ -17,14 +17,14 @@ use bm13xx_protocol::command::Destination;
 use fugit::HertzU64;
 
 #[derive(Debug, Clone, PartialEq)]
-#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct CmdDelay {
     pub cmd: [u8; 11],
     pub delay_ms: u32,
 }
 
 #[derive(Debug, Default, Clone, PartialEq)]
-#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum SequenceStep {
     #[default]
     None,

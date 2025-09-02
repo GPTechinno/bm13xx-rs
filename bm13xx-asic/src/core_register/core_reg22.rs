@@ -44,7 +44,7 @@ impl ::core::fmt::Display for CoreReg22 {
     }
 }
 
-#[cfg(feature = "defmt-03")]
+#[cfg(feature = "defmt")]
 impl defmt::Format for CoreReg22 {
     fn format(&self, fmt: defmt::Formatter) {
         defmt::write!(fmt, "CoreReg22 {{ enabled: {} }}", self.enabled(),);

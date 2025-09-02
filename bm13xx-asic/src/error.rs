@@ -3,7 +3,7 @@ use derive_more::From;
 pub type Result<T> = core::result::Result<T, Error>;
 
 #[derive(Debug, PartialEq, From)]
-#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Error {
     // -- register
     UnknownRegister { reg_addr: u8 },

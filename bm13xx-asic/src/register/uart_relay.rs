@@ -92,7 +92,7 @@ impl core::fmt::Display for UARTRelay {
     }
 }
 
-#[cfg(feature = "defmt-03")]
+#[cfg(feature = "defmt")]
 impl defmt::Format for UARTRelay {
     fn format(&self, fmt: defmt::Formatter) {
         defmt::write!(fmt, "UARTRelay {{  }}",);

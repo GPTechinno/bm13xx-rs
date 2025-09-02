@@ -19,7 +19,7 @@ impl core::fmt::Display for NonceErrorCounter {
     }
 }
 
-#[cfg(feature = "defmt-03")]
+#[cfg(feature = "defmt")]
 impl defmt::Format for NonceErrorCounter {
     fn format(&self, fmt: defmt::Formatter) {
         defmt::write!(fmt, "NonceErrorCounter {{  }}",);
@@ -45,7 +45,7 @@ impl core::fmt::Display for NonceOverflowCounter {
     }
 }
 
-#[cfg(feature = "defmt-03")]
+#[cfg(feature = "defmt")]
 impl defmt::Format for NonceOverflowCounter {
     fn format(&self, fmt: defmt::Formatter) {
         defmt::write!(fmt, "NonceOverflowCounter {{  }}",);

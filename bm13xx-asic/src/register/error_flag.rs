@@ -23,7 +23,7 @@ impl core::fmt::Display for ErrorFlag {
     }
 }
 
-#[cfg(feature = "defmt-03")]
+#[cfg(feature = "defmt")]
 impl defmt::Format for ErrorFlag {
     fn format(&self, fmt: defmt::Formatter) {
         defmt::write!(fmt, "ErrorFlag {{  }}",);

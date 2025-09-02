@@ -17,7 +17,7 @@ macro_rules! unknown {
             }
         }
 
-        #[cfg(feature = "defmt-03")]
+        #[cfg(feature = "defmt")]
         impl defmt::Format for $REG {
             fn format(&self, fmt: defmt::Formatter) {
                 defmt::write!(fmt, "$REG {{  }}",);

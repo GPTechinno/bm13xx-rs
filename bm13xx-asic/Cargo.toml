@@ -2,8 +2,8 @@
 categories = ["embedded", "no-std"]
 edition = "2021"
 name = "bm13xx-asic"
-rust-version = "1.75.0"
-version = "0.1.0"
+rust-version = "1.86.0"
+version = "0.2.0"
 
 [dependencies]
 bm13xx-protocol = { path = "../bm13xx-protocol" }
@@ -15,4 +15,4 @@ log = { workspace = true, optional = true }
 rustversion = { workspace = true }
 
 [features]
-defmt-03 = ["dep:defmt", "bm13xx-protocol/defmt-03", "fugit/defmt"]
+defmt = ["dep:defmt", "bm13xx-protocol/defmt", "fugit/defmt"]

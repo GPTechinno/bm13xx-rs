@@ -6,7 +6,7 @@ use crate::register::Register;
 ///
 /// [`MiscControl::bclk_sel`]: crate::register::MiscControl::bclk_sel
 #[derive(Copy, Clone, Eq, PartialEq, Debug, PartialOrd, Ord, Hash, Default)]
-#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[repr(u8)]
 pub enum BaudrateClockSelect {
     /// Baudrate base clock is CLKI (external clock).
@@ -151,7 +151,7 @@ impl core::fmt::Display for MiscControl {
     }
 }
 
-#[cfg(feature = "defmt-03")]
+#[cfg(feature = "defmt")]
 impl defmt::Format for MiscControl {
     fn format(&self, fmt: defmt::Formatter) {
         defmt::write!(
@@ -284,7 +284,7 @@ impl core::fmt::Display for MiscControlV2 {
     }
 }
 
-#[cfg(feature = "defmt-03")]
+#[cfg(feature = "defmt")]
 impl defmt::Format for MiscControlV2 {
     fn format(&self, fmt: defmt::Formatter) {
         defmt::write!(fmt, "MiscControlV2 {{ }}",);

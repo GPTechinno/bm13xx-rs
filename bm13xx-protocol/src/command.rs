@@ -6,14 +6,14 @@ use crate::crc::{crc16, crc5};
 
 /// Some command can be send to All chip in the chain or to a specific one
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Destination {
     All,
     Chip(u8),
 }
 
 #[derive(Debug, PartialEq)]
-#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Command;
 
 impl Command {
