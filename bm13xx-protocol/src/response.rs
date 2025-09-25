@@ -26,6 +26,7 @@ pub struct JobVersionResponse {
     pub nonce: u32,
     pub unknown: u8,
     pub job_id: usize,
+    pub chip_addr: usize,
     pub small_core_id: usize,
     pub version_bit: u32,
 }
@@ -225,6 +226,7 @@ impl Response {
     pub fn parse_version(
         data: &[u8; FRAME_SIZE_VER],
         core_small_core_cnt: usize,
+        chain_asic_num: usize,
     ) -> Result<ResponseType> {
         if data[0] != 0xAA || data[1] != 0x55 {
             return Err(Error::InvalidPreamble);
@@ -242,10 +244,16 @@ impl Response {
             let small_core_mask = core_small_core_cnt - 1;
             let small_core_bits = small_core_mask.count_ones();
             let chunk = ((data[6] as u16) << 8) | data[7] as u16;
+            let nonce = u32::from_le_bytes(data[2..6].try_into().unwrap());
+            // TODO: https://github.com/GPTechinno/bm13xx-rs/blob/4973f1bea844823c9f00f9083ea25487e5151506/bm1370/src/lib.rs#L145-L151
+            let chip_addr = (((nonce >> (32 - 7 - 16)) & 0b1111_1111_1111_1111) as usize
+                * chain_asic_num)
+            >> 16;
             return Ok(ResponseType::JobVer(JobVersionResponse {
-                nonce: u32::from_le_bytes(data[2..6].try_into().unwrap()),
+                nonce,
                 unknown: (chunk >> (small_core_bits + 5)) as u8,
                 job_id: ((chunk >> small_core_bits) as usize) & 0b1_1111,
+                chip_addr,
                 small_core_id: (data[7] as usize) & small_core_mask,
                 version_bit: (u16::from_be_bytes(data[8..10].try_into().unwrap()) as u32) << 13,
             }));
