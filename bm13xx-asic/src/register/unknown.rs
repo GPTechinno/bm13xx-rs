@@ -26,9 +26,11 @@ macro_rules! unknown {
     };
 }
 
-unknown!(Reg24, 0x24);
-unknown!(Reg30, 0x30);
+unknown!(Time1sCounter, 0x04);
+unknown!(TopProcessMonitor, 0x24);
+unknown!(CoreNumber, 0x30);
 unknown!(Reg34, 0x34);
+unknown!(TicketNonceCounter, 0x90);
 unknown!(RegAC, 0xAC);
 unknown!(RegB0, 0xB0);
 unknown!(RegB4, 0xB4);
@@ -38,10 +40,10 @@ unknown!(RegC0, 0xC0);
 unknown!(RegC4, 0xC4);
 unknown!(RegC8, 0xC8);
 unknown!(RegCC, 0xCC);
-unknown!(RegD0, 0xD0);
+unknown!(FrequencySweepControl, 0xD0);
 unknown!(RegD4, 0xD4);
 unknown!(RegD8, 0xD8);
-unknown!(RegDC, 0xDC);
+unknown!(SweepNonceRetTimeout, 0xDC);
 unknown!(RegE0, 0xE0);
 unknown!(RegE4, 0xE4);
 unknown!(RegE8, 0xE8);

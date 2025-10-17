@@ -230,12 +230,16 @@ impl Asic for BM1366 {
         self.registers
             .insert(OrderedClockEnable::ADDR, 0x0000_0003)
             .unwrap();
-        self.registers.insert(Reg24::ADDR, 0x0010_0000).unwrap();
+        self.registers
+            .insert(TopProcessMonitor::ADDR, 0x0010_0000)
+            .unwrap();
         self.registers
             .insert(FastUARTConfigurationV2::ADDR, 0x0130_1a00)
             .unwrap();
         self.registers.insert(UARTRelay::ADDR, 0x000f_0000).unwrap();
-        self.registers.insert(Reg30::ADDR, 0x0000_0070).unwrap();
+        self.registers
+            .insert(CoreNumber::ADDR, 0x0000_0070)
+            .unwrap();
         self.registers.insert(Reg34::ADDR, 0x0000_0000).unwrap();
         self.registers
             .insert(TicketMask2::ADDR, 0x0000_0000)
@@ -300,9 +304,11 @@ impl Asic for BM1366 {
             .insert(ReturnedSinglePatternStatus::ADDR, 0x0000_0000)
             .unwrap();
         self.registers
-            .insert(VersionRolling::ADDR, 0x0000_ffff)
+            .insert(MidstateCalc::ADDR, 0x0000_ffff)
             .unwrap();
-        self.registers.insert(RegA8::ADDR, 0x0007_0000).unwrap();
+        self.registers
+            .insert(SoftResetControl::ADDR, 0x0007_0000)
+            .unwrap();
         self.registers.insert(RegAC::ADDR, 0x0000_0000).unwrap();
         self.registers.insert(RegB0::ADDR, 0x0000_0000).unwrap();
         self.registers.insert(RegB4::ADDR, 0x0000_0000).unwrap();
@@ -312,10 +318,14 @@ impl Asic for BM1366 {
         self.registers.insert(RegC4::ADDR, 0x0000_0000).unwrap();
         self.registers.insert(RegC8::ADDR, 0x0000_0000).unwrap();
         self.registers.insert(RegCC::ADDR, 0x0000_0000).unwrap();
-        self.registers.insert(RegD0::ADDR, 0x0000_0070).unwrap();
+        self.registers
+            .insert(FrequencySweepControl::ADDR, 0x0000_0070)
+            .unwrap();
         self.registers.insert(RegD4::ADDR, 0x0037_6400).unwrap();
         self.registers.insert(RegD8::ADDR, 0x3030_3030).unwrap();
-        self.registers.insert(RegDC::ADDR, 0x0000_ffff).unwrap();
+        self.registers
+            .insert(SweepNonceRetTimeout::ADDR, 0x0000_ffff)
+            .unwrap();
         self.registers.insert(RegE0::ADDR, 0x0000_0000).unwrap();
         self.registers.insert(RegE4::ADDR, 0x0000_0000).unwrap();
         self.registers.insert(RegE8::ADDR, 0x0000_0000).unwrap();
@@ -859,13 +869,21 @@ impl Asic for BM1366 {
                         }
                         1 => {
                             self.seq_step = SequenceStep::ResetCore(2);
-                            let reg_a8 = RegA8(*self.registers.get(&RegA8::ADDR).unwrap())
-                                .set_b8()
-                                .set_b3_0(0)
-                                .val();
-                            self.registers.insert(RegA8::ADDR, reg_a8).unwrap();
+                            let soft_rst_ctrl = SoftResetControl(
+                                *self.registers.get(&SoftResetControl::ADDR).unwrap(),
+                            )
+                            .set_b8()
+                            .set_b3_0(0)
+                            .val();
+                            self.registers
+                                .insert(SoftResetControl::ADDR, soft_rst_ctrl)
+                                .unwrap();
                             Some(CmdDelay {
-                                cmd: Command::write_reg(RegA8::ADDR, reg_a8, dest),
+                                cmd: Command::write_reg(
+                                    SoftResetControl::ADDR,
+                                    soft_rst_ctrl,
+                                    dest,
+                                ),
                                 delay_ms: 10,
                             })
                         }
@@ -941,12 +959,15 @@ impl Asic for BM1366 {
                 _ => {
                     // authorize a ResetCore sequence start whatever the current step was
                     self.seq_step = SequenceStep::ResetCore(0);
-                    let reg_a8 = RegA8(*self.registers.get(&RegA8::ADDR).unwrap())
-                        .set_b3_0(0xf)
-                        .val();
-                    self.registers.insert(RegA8::ADDR, reg_a8).unwrap();
+                    let soft_rst_ctrl =
+                        SoftResetControl(*self.registers.get(&SoftResetControl::ADDR).unwrap())
+                            .set_b3_0(0xf)
+                            .val();
+                    self.registers
+                        .insert(SoftResetControl::ADDR, soft_rst_ctrl)
+                        .unwrap();
                     Some(CmdDelay {
-                        cmd: Command::write_reg(RegA8::ADDR, reg_a8, dest),
+                        cmd: Command::write_reg(SoftResetControl::ADDR, soft_rst_ctrl, dest),
                         delay_ms: 10,
                     })
                 }
@@ -1040,13 +1061,16 @@ impl Asic for BM1366 {
                 _ => {
                     // authorize a ResetCore sequence start whatever the current step was
                     self.seq_step = SequenceStep::ResetCore(0);
-                    let reg_a8 = RegA8(*self.registers.get(&RegA8::ADDR).unwrap())
-                        .set_b8()
-                        .set_b7_4(0xf)
-                        .val();
-                    self.registers.insert(RegA8::ADDR, reg_a8).unwrap();
+                    let soft_rst_ctrl =
+                        SoftResetControl(*self.registers.get(&SoftResetControl::ADDR).unwrap())
+                            .set_b8()
+                            .set_b7_4(0xf)
+                            .val();
+                    self.registers
+                        .insert(SoftResetControl::ADDR, soft_rst_ctrl)
+                        .unwrap();
                     Some(CmdDelay {
-                        cmd: Command::write_reg(RegA8::ADDR, reg_a8, dest),
+                        cmd: Command::write_reg(SoftResetControl::ADDR, soft_rst_ctrl, dest),
                         delay_ms: 10,
                     })
                 }
@@ -1156,16 +1180,15 @@ impl Asic for BM1366 {
             SequenceStep::VersionRolling(step) => match step {
                 0 => {
                     self.seq_step = SequenceStep::VersionRolling(1);
-                    let vers_roll =
-                        VersionRolling(*self.registers.get(&VersionRolling::ADDR).unwrap())
-                            .enable()
-                            .set_mask(mask)
-                            .val();
+                    let vers_roll = MidstateCalc(*self.registers.get(&MidstateCalc::ADDR).unwrap())
+                        .enable()
+                        .set_mask(mask)
+                        .val();
                     self.registers
-                        .insert(VersionRolling::ADDR, vers_roll)
+                        .insert(MidstateCalc::ADDR, vers_roll)
                         .unwrap();
                     Some(CmdDelay {
-                        cmd: Command::write_reg(VersionRolling::ADDR, vers_roll, Destination::All),
+                        cmd: Command::write_reg(MidstateCalc::ADDR, vers_roll, Destination::All),
                         delay_ms: 1,
                     })
                 }

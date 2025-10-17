@@ -1,11 +1,11 @@
 use crate::register::Register;
 
-/// # RegA8 register
+/// # SoftResetControl register
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
-pub struct RegA8(pub u32);
-impl_boilerplate_for!(RegA8);
+pub struct SoftResetControl(pub u32);
+impl_boilerplate_for!(SoftResetControl);
 
-impl RegA8 {
+impl SoftResetControl {
     pub const ADDR: u8 = 0xA8;
 
     const B10_OFFSET: u8 = 10;
@@ -25,12 +25,12 @@ impl RegA8 {
     /// ### Example
     ///
     /// ```
-    /// use bm13xx_asic::register::RegA8;
+    /// use bm13xx_asic::register::SoftResetControl;
     ///
-    /// let mut reg_a8 = RegA8(0x0007_0000); // BM1366 default value
-    /// assert!(!reg_a8.is_b10());
-    /// assert!(reg_a8.set_b10().is_b10());
-    /// assert!(!reg_a8.clr_b10().is_b10());
+    /// let mut sft_rst_ctrl = SoftResetControl(0x0007_0000); // BM1366 default value
+    /// assert!(!sft_rst_ctrl.is_b10());
+    /// assert!(sft_rst_ctrl.set_b10().is_b10());
+    /// assert!(!sft_rst_ctrl.clr_b10().is_b10());
     /// ```
     pub const fn is_b10(&self) -> bool {
         (self.0 >> Self::B10_OFFSET) & Self::B10_MASK == Self::B10_MASK
@@ -51,12 +51,12 @@ impl RegA8 {
     /// ### Example
     ///
     /// ```
-    /// use bm13xx_asic::register::RegA8;
+    /// use bm13xx_asic::register::SoftResetControl;
     ///
-    /// let mut reg_a8 = RegA8(0x0007_0000); // BM1366 default value
-    /// assert!(!reg_a8.is_b8());
-    /// assert!(reg_a8.set_b8().is_b8());
-    /// assert!(!reg_a8.clr_b8().is_b8());
+    /// let mut sft_rst_ctrl = SoftResetControl(0x0007_0000); // BM1366 default value
+    /// assert!(!sft_rst_ctrl.is_b8());
+    /// assert!(sft_rst_ctrl.set_b8().is_b8());
+    /// assert!(!sft_rst_ctrl.clr_b8().is_b8());
     /// ```
     pub const fn is_b8(&self) -> bool {
         (self.0 >> Self::B8_OFFSET) & Self::B8_MASK == Self::B8_MASK
@@ -77,12 +77,12 @@ impl RegA8 {
     /// ### Example
     ///
     /// ```
-    /// use bm13xx_asic::register::RegA8;
+    /// use bm13xx_asic::register::SoftResetControl;
     ///
-    /// let mut reg_a8 = RegA8(0x0007_0000); // BM1366 default value
-    /// assert_eq!(reg_a8.b7_4(), 0);
-    /// assert_eq!(reg_a8.set_b7_4(0xf).b7_4(), 0xf); // max value
-    /// assert_eq!(reg_a8.set_b7_4(0x10).b7_4(), 0); // out of bound value
+    /// let mut sft_rst_ctrl = SoftResetControl(0x0007_0000); // BM1366 default value
+    /// assert_eq!(sft_rst_ctrl.b7_4(), 0);
+    /// assert_eq!(sft_rst_ctrl.set_b7_4(0xf).b7_4(), 0xf); // max value
+    /// assert_eq!(sft_rst_ctrl.set_b7_4(0x10).b7_4(), 0); // out of bound value
     /// ```
     pub const fn b7_4(&self) -> u8 {
         ((self.0 >> Self::B7_4_OFFSET) & Self::B7_4_MASK) as u8
@@ -100,12 +100,12 @@ impl RegA8 {
     /// ### Example
     ///
     /// ```
-    /// use bm13xx_asic::register::RegA8;
+    /// use bm13xx_asic::register::SoftResetControl;
     ///
-    /// let mut reg_a8 = RegA8(0x0007_0000); // BM1366 default value
-    /// assert_eq!(reg_a8.b3_0(), 0);
-    /// assert_eq!(reg_a8.set_b3_0(0xf).b3_0(), 0xf); // max value
-    /// assert_eq!(reg_a8.set_b3_0(0x10).b3_0(), 0); // out of bound value
+    /// let mut sft_rst_ctrl = SoftResetControl(0x0007_0000); // BM1366 default value
+    /// assert_eq!(sft_rst_ctrl.b3_0(), 0);
+    /// assert_eq!(sft_rst_ctrl.set_b3_0(0xf).b3_0(), 0xf); // max value
+    /// assert_eq!(sft_rst_ctrl.set_b3_0(0x10).b3_0(), 0); // out of bound value
     /// ```
     pub const fn b3_0(&self) -> u8 {
         ((self.0 >> Self::B3_0_OFFSET) & Self::B3_0_MASK) as u8
@@ -117,14 +117,14 @@ impl RegA8 {
     }
 }
 
-impl core::fmt::Display for RegA8 {
+impl core::fmt::Display for SoftResetControl {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("RegA8").finish()
     }
 }
 
 #[cfg(feature = "defmt")]
-impl defmt::Format for RegA8 {
+impl defmt::Format for SoftResetControl {
     fn format(&self, fmt: defmt::Formatter) {
         defmt::write!(fmt, "RegA8 {{  }}",);
     }

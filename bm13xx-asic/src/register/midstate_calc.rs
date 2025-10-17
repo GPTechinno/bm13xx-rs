@@ -1,11 +1,11 @@
 use crate::register::Register;
 
-/// # Version Rolling register
+/// # MidstateCalc register
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
-pub struct VersionRolling(pub u32);
-impl_boilerplate_for!(VersionRolling);
+pub struct MidstateCalc(pub u32);
+impl_boilerplate_for!(MidstateCalc);
 
-impl VersionRolling {
+impl MidstateCalc {
     pub const ADDR: u8 = 0xA4;
 
     const EN_OFFSET: u8 = 31;
@@ -22,9 +22,9 @@ impl VersionRolling {
     /// ### Example
     ///
     /// ```
-    /// use bm13xx_asic::register::VersionRolling;
+    /// use bm13xx_asic::register::MidstateCalc;
     ///
-    /// let mut vers_roll = VersionRolling(0x0000_FFFF);
+    /// let mut vers_roll = MidstateCalc(0x0000_FFFF);
     /// assert!(!vers_roll.enabled());
     /// assert!(vers_roll.enable().enabled());
     /// assert!(!vers_roll.disable().enabled());
@@ -51,9 +51,9 @@ impl VersionRolling {
     /// ### Example
     ///
     /// ```
-    /// use bm13xx_asic::register::VersionRolling;
+    /// use bm13xx_asic::register::MidstateCalc;
     ///
-    /// let mut vers_roll = VersionRolling(0x0000_FFFF);
+    /// let mut vers_roll = MidstateCalc(0x0000_FFFF);
     /// assert_eq!(vers_roll.mask(), 0x1fff_e000);
     /// assert_eq!(vers_roll.set_mask(0x1fff_e000).mask(), 0x1fff_e000);
     /// ```
@@ -67,14 +67,14 @@ impl VersionRolling {
     }
 }
 
-impl core::fmt::Display for VersionRolling {
+impl core::fmt::Display for MidstateCalc {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("VersionRolling").finish()
     }
 }
 
 #[cfg(feature = "defmt")]
-impl defmt::Format for VersionRolling {
+impl defmt::Format for MidstateCalc {
     fn format(&self, fmt: defmt::Formatter) {
         defmt::write!(fmt, "VersionRolling {{  }}",);
     }
