@@ -498,7 +498,8 @@ impl Asic for BM1370 {
                         let ana_mux_ctrl = AnalogMuxControlV2(
                             *self.registers.get(&AnalogMuxControlV2::ADDR).unwrap(),
                         )
-                        .set_diode_vdd_mux_sel(3)
+                        .set_diode_vdd_mux_sel(2) // Set 2 as it works on most of the versions of
+                            // BM1370 (AA, PA, BC)
                         .val();
                         self.registers
                             .insert(AnalogMuxControlV2::ADDR, ana_mux_ctrl)
@@ -1049,7 +1050,7 @@ impl Asic for BM1370 {
                         self.plls[BM1370_PLL_ID_HASH].parameter(),
                     )
                     .unwrap();
-                if freq > target_freq {
+                if freq == target_freq + HertzU64::kHz(6250) {
                     self.seq_step = SequenceStep::None;
                     None
                 } else {
@@ -1176,8 +1177,8 @@ impl Asic for BM1370 {
             _ => {
                 // authorize a VersionRolling sequence start whatever the current step was
                 self.seq_step = SequenceStep::VersionRolling(0);
-                let hcn = 0x0000_1eb5; // S21Pro
-                                       // let hcn = 0x0000_1a44; // S21XP
+                // let hcn = 0x0000_1eb5; // S21Pro
+                let hcn = 0x0000_1a44; // S21XP
                 self.registers
                     .insert(HashCountingNumber::ADDR, hcn)
                     .unwrap();

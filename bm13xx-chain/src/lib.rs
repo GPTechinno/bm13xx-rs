@@ -132,7 +132,7 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
             } else {
                 1.0
             };
-        Duration::from_secs_f32(space / (self.asic.hash_freq().raw() as f32))
+        Duration::from_secs_f32(space / (self.asic.hash_freq().raw() as f32) / 1_000.0)
     }
 
     /// ## Get the theoretical Hashrate in GH/s
@@ -158,12 +158,25 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
         } else {
             FRAME_SIZE
         };
+
+        if self.uart.read_ready().map_err(Error::Io)? {
+            let n = self
+                .uart
+                .read(self.rx_buf[self.rx_free_pos..].as_mut())
+                .await
+                .map_err(Error::Io)?;
+            debug!("read {} bytes @{}", n, self.rx_free_pos);
+            trace!("{:?}", &self.rx_buf[self.rx_free_pos..self.rx_free_pos + n]);
+            self.rx_free_pos += n;
+        }
+
         if self.rx_free_pos >= expected_frame_size {
             let frame = &self.rx_buf[..expected_frame_size];
             let used = match if self.version_rolling_mask.is_some() {
                 Response::parse_version(
                     frame.try_into().unwrap(),
                     self.asic.core_small_core_count(),
+                    self.asic_cnt,
                 )
             } else {
                 Response::parse(frame.try_into().unwrap(), self.asic.core_small_core_count())
@@ -174,7 +187,7 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
                 }
                 Err(bm13xx_protocol::Error::InvalidCrc { expected, actual }) => {
                     error!(
-                        "Ignoring Frame {:x} with bad CRC: {:02x}!={:02x}",
+                        "Ignoring Frame {:x?} with bad CRC: {:02x}!={:02x}",
                         frame, expected, actual
                     );
                     expected_frame_size
@@ -185,14 +198,14 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
                         .position(|w| w == [0xAA, 0x55])
                         .unwrap_or(expected_frame_size);
                     error!(
-                        "Resync Frame {:x} because bad preamble, dropping first {} bytes",
+                        "Resync Frame {:x?} because bad preamble, dropping first {} bytes",
                         frame, offset
                     );
                     offset
                 }
                 Err(bm13xx_protocol::Error::UnsupportedCoreSmallCoreCnt) => {
                     error!(
-                        "Ignoring Frame {:x} because bad CoreSmallCoreCnt {}",
+                        "Ignoring Frame {:x?} because bad CoreSmallCoreCnt {}",
                         frame,
                         self.asic.core_small_core_count()
                     );
@@ -204,16 +217,6 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
                 self.rx_buf.copy_within(used..self.rx_free_pos, 0);
             }
             self.rx_free_pos -= used;
-        }
-        if self.uart.read_ready().map_err(Error::Io)? {
-            let n = self
-                .uart
-                .read(self.rx_buf[self.rx_free_pos..].as_mut())
-                .await
-                .map_err(Error::Io)?;
-            debug!("read {} bytes @{}", n, self.rx_free_pos);
-            trace!("{:?}", &self.rx_buf[self.rx_free_pos..self.rx_free_pos + n]);
-            self.rx_free_pos += n;
         }
         Ok(resp)
     }

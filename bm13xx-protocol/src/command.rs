@@ -283,6 +283,7 @@ impl Command {
         // data[6..].clone_from_slice(&0u32.to_le_bytes()); // starting_nonce ?
         data[10..14].clone_from_slice(&n_bits.to_le_bytes());
         data[14..18].clone_from_slice(&n_time.to_le_bytes());
+        full_merkle_root.reverse();
         full_merkle_root.chunks_exact_mut(4).for_each(|chunk| {
             chunk.reverse();
         });
