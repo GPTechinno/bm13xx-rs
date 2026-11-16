@@ -439,7 +439,7 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
         }
         self.chip_nonce_space = self.asic.cno_interval()
             << (NONCE_BITS
-                - (self.asic.core_count().leading_zeros().ilog2() + 1)
+                - (self.asic.core_count().ilog2() + 1)
                 - if self.version_rolling_mask.is_none() {
                     0
                 } else {
