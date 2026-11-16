@@ -451,11 +451,15 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
         n_bits: u32,
         n_time: u32,
     ) -> Result<u8, U::Error, OB::Error, OR::Error> {
-        self.job_id = if self.job_id == 31 {
-            0
-        } else {
-            self.job_id + 1
-        };
+        // The job id is sent shifted left by 3 bits (by 2 on chips with 4 small cores per core).
+        // Keep the sent byte below 0x80: whether chips echo its bit 7 back is not verified.
+        let job_id_cnt =
+            if self.version_rolling_mask.is_some() || self.asic.core_small_core_count() > 5 {
+                16
+            } else {
+                32
+            };
+        self.job_id = (self.job_id + 1) % job_id_cnt;
         // TODO: store the job in a `heapless::HistoryBuffer` to be able to compute corrsponding share difficulty
         if self.version_rolling_mask.is_some() {
             let cmd = Command::job_header(
