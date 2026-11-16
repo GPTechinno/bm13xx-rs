@@ -153,6 +153,9 @@ impl Asic for BM1397 {
         self.registers = FnvIndexMap::<_, _, 64>::new();
         self.core_registers = FnvIndexMap::<_, _, 16>::new();
 
+        // PLL0 post dividers hold the divider itself (measured hashrate at a known PLL0 word).
+        // PLL3 baudrate settings only match the captures with the default encoding.
+        self.plls[BM1397_PLL_ID_HASH].set_plain_post_div(true);
         // Default PLLs Parameter
         self.plls[0].set_parameter(0xC060_0161);
         self.plls[1].set_parameter(0x0064_0111);
@@ -367,7 +370,7 @@ impl Asic for BM1397 {
     /// use fugit::HertzU64;
     ///
     /// let mut bm1397 = BM1397::default();
-    /// assert_eq!(bm1397.hash_freq(), HertzU64::Hz(21428571));
+    /// assert_eq!(bm1397.hash_freq(), HertzU64::MHz(50));
     /// assert_eq!(bm1397.set_hash_freq(HertzU64::MHz(425)).hash_freq(), HertzU64::MHz(425));
     /// ```
     fn hash_freq(&self) -> HertzU64 {
