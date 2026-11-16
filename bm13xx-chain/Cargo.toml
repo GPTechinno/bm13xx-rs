@@ -37,8 +37,8 @@ embedded-io = { version = "0.6", features = ["std"] }
 env_logger = "0.11"
 inquire = "0.7"
 linux-embedded-hal = "0.4"
-tokio = { version = "1.38", features = ["macros", "time", "rt-multi-thread"] }
-tokio-serial = "5.4"
+tokio = { version = "1.54", features = ["macros", "time", "rt-multi-thread"] }
+tokio-serial = "5.5"
 
 [[example]]
 name = "bm13xx-cli"

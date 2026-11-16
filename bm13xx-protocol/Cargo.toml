@@ -17,7 +17,7 @@ defmt = ["dep:defmt", "heapless/defmt"]
 
 [dev-dependencies]
 env_logger = "0.11"
-serialport = { version = "4.4", default-features = false }
+serialport = { version = "4.10", default-features = false }
 
 [[example]]
 name = "reg_probe"
