@@ -35,6 +35,7 @@ unknown!(RegAC, 0xAC);
 unknown!(RegB0, 0xB0);
 unknown!(RegB4, 0xB4);
 unknown!(RegB8, 0xB8);
+unknown!(AdcCtrl1, 0xB9);
 unknown!(RegBC, 0xBC);
 unknown!(RegC0, 0xC0);
 unknown!(RegC4, 0xC4);

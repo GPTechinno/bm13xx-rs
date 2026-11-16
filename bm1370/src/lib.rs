@@ -282,7 +282,7 @@ impl Asic for BM1370 {
         self.registers.insert(RegB0::ADDR, 0x0000_0000).unwrap();
         self.registers.insert(RegB4::ADDR, 0x0000_0000).unwrap();
         self.registers.insert(RegB8::ADDR, 0x2000_0000).unwrap();
-        // self.registers.insert(RegB9::ADDR, 0x0000_0000).unwrap();
+        self.registers.insert(AdcCtrl1::ADDR, 0x0000_0000).unwrap();
         // self.registers.insert(RegBA::ADDR, 0x0000_0000).unwrap();
         // self.registers.insert(RegBB::ADDR, 0x0000_0000).unwrap();
         self.registers.insert(RegBC::ADDR, 0x0000_3313).unwrap();
