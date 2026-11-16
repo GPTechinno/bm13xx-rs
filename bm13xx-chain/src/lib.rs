@@ -479,13 +479,15 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
         n_time: u32,
     ) -> Result<u8, U::Error, OB::Error, OR::Error> {
         // The job id is sent shifted left by 3 bits (by 2 on chips with 4 small cores per core).
-        // Keep the sent byte below 0x80: whether chips echo its bit 7 back is not verified.
-        let job_id_cnt =
-            if self.version_rolling_mask.is_some() || self.asic.core_small_core_count() > 5 {
-                16
-            } else {
-                32
-            };
+        // With up to 8 small cores per core, the chip echoes the whole sent byte (bit 7 included,
+        // seen on a stock S19 XP), so 32 job ids are usable.
+        // With 16 small cores per core, only 4 job id bits fit next to the small core id in the
+        // response: keep the sent byte below 0x80.
+        let job_id_cnt = if self.asic.core_small_core_count() > 8 {
+            16
+        } else {
+            32
+        };
         self.job_id = (self.job_id + 1) % job_id_cnt;
         // TODO: store the job in a `heapless::HistoryBuffer` to be able to compute corrsponding share difficulty
         if self.version_rolling_mask.is_some() {
@@ -682,5 +684,16 @@ mod tests {
         let chain = enumerate(3).await;
         assert_eq!(chain.asic_cnt, 3);
         assert_eq!(chain.asic_addr_interval, 85);
+    }
+
+    #[tokio::test]
+    async fn send_job_cycles_32_job_ids_with_8_small_cores() {
+        let mut chain = chain(&[]);
+        chain.version_rolling_mask = Some(0x1fff_e000);
+        let mut job_ids = Vec::new();
+        for _ in 0..33 {
+            job_ids.push(chain.send_job(0, [0; 32], [0; 32], 0, 0).await.unwrap());
+        }
+        assert_eq!(job_ids, (1..32).chain(0..2).collect::<Vec<u8>>());
     }
 }
