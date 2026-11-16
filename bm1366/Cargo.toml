@@ -3,7 +3,7 @@ categories = ["embedded", "no-std"]
 edition = "2021"
 name = "bm1366"
 rust-version = "1.87.0"
-version = "0.2.0"
+version = "0.3.0"
 
 [dependencies]
 "bm13xx-asic" = { path = "../bm13xx-asic" }
