@@ -18,7 +18,7 @@ jobs:
 
     steps:
       - name: Set up Rust
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - uses: awalsh128/cache-apt-pkgs-action@latest
         with:
           packages: libudev-dev
