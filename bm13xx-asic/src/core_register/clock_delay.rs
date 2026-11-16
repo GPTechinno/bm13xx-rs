@@ -27,19 +27,20 @@ impl ClockDelayCtrl {
     /// ### Example
     ///
     /// ```
-    /// use bm13xx_asic::core_register::ClockDelayCtrl;
+    /// use bm13xx_asic::core_register::{ClockDelayCtrl, CoreRegister};
     ///
     /// let mut cdc = ClockDelayCtrl(0x00); // BM1397 default value
     /// assert_eq!(cdc.ccdly(), 0);
     /// assert_eq!(cdc.set_ccdly(1).ccdly(), 1); // BM1397 init() value
     /// assert_eq!(cdc.set_ccdly(3).ccdly(), 3); // max value
     /// assert_eq!(cdc.set_ccdly(4).ccdly(), 0); // out of bound value
+    /// assert_eq!(ClockDelayCtrl(0xB4).set_ccdly(0).val(), 0x34); // T17 value, other fields are kept
     /// ```
     pub const fn ccdly(&self) -> u8 {
         (self.0 >> Self::CCDLY_SEL_OFFSET) & Self::CCDLY_SEL_MASK
     }
     pub fn set_ccdly(&mut self, ccdly: u8) -> &mut Self {
-        self.0 &= !Self::CCDLY_SEL_MASK << Self::CCDLY_SEL_OFFSET;
+        self.0 &= !(Self::CCDLY_SEL_MASK << Self::CCDLY_SEL_OFFSET);
         self.0 |= (ccdly & Self::CCDLY_SEL_MASK) << Self::CCDLY_SEL_OFFSET;
         self
     }
@@ -62,7 +63,7 @@ impl ClockDelayCtrl {
         (self.0 >> Self::PWTH_SEL_OFFSET) & Self::PWTH_SEL_MASK
     }
     pub fn set_pwth(&mut self, pwth: u8) -> &mut Self {
-        self.0 &= !Self::PWTH_SEL_MASK << Self::PWTH_SEL_OFFSET;
+        self.0 &= !(Self::PWTH_SEL_MASK << Self::PWTH_SEL_OFFSET);
         self.0 |= (pwth & Self::PWTH_SEL_MASK) << Self::PWTH_SEL_OFFSET;
         self
     }
@@ -199,19 +200,20 @@ impl ClockDelayCtrlV2 {
     /// ### Example
     ///
     /// ```
-    /// use bm13xx_asic::core_register::ClockDelayCtrlV2;
+    /// use bm13xx_asic::core_register::{ClockDelayCtrlV2, CoreRegister};
     ///
     /// let mut cdc = ClockDelayCtrlV2(0x98); // BM1366 default value
     /// assert_eq!(cdc.ccdly(), 2);
     /// assert_eq!(cdc.set_ccdly(0).ccdly(), 0); // BM1366 init() value
     /// assert_eq!(cdc.set_ccdly(3).ccdly(), 3); // max value
     /// assert_eq!(cdc.set_ccdly(4).ccdly(), 0); // out of bound value
+    /// assert_eq!(ClockDelayCtrlV2(0xFF).set_ccdly(0).set_pwth(0).val(), 0x07); // other fields are kept
     /// ```
     pub const fn ccdly(&self) -> u8 {
         (self.0 >> Self::CCDLY_SEL_OFFSET) & Self::CCDLY_SEL_MASK
     }
     pub fn set_ccdly(&mut self, ccdly: u8) -> &mut Self {
-        self.0 &= !Self::CCDLY_SEL_MASK << Self::CCDLY_SEL_OFFSET;
+        self.0 &= !(Self::CCDLY_SEL_MASK << Self::CCDLY_SEL_OFFSET);
         self.0 |= (ccdly & Self::CCDLY_SEL_MASK) << Self::CCDLY_SEL_OFFSET;
         self
     }
@@ -235,7 +237,7 @@ impl ClockDelayCtrlV2 {
         (self.0 >> Self::PWTH_SEL_OFFSET) & Self::PWTH_SEL_MASK
     }
     pub fn set_pwth(&mut self, pwth: u8) -> &mut Self {
-        self.0 &= !Self::PWTH_SEL_MASK << Self::PWTH_SEL_OFFSET;
+        self.0 &= !(Self::PWTH_SEL_MASK << Self::PWTH_SEL_OFFSET);
         self.0 |= (pwth & Self::PWTH_SEL_MASK) << Self::PWTH_SEL_OFFSET;
         self
     }
