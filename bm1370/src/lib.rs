@@ -308,7 +308,7 @@ impl Asic for BM1370 {
         self.registers.insert(RegFC::ADDR, 0x0000_0000).unwrap();
         // Default Core Registers Value
         self.core_registers
-            .insert(ClockDelayCtrlV2::ID, 0x52)
+            .insert(ClockDelayCtrlV3::ID, 0x52)
             .unwrap();
         // self.core_registers.insert(1, 0x00).unwrap(); // not used anywhere in official FW
         self.core_registers.insert(CoreReg2::ID, 0x55).unwrap();
@@ -435,7 +435,7 @@ impl Asic for BM1370 {
     /// assert_eq!(bm1370.init_next(256), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x54, 0x00, 0x00, 0x00, 0x03, 0x1d], delay_ms: 0}));
     /// assert_eq!(bm1370.init_next(256), None);
     /// assert_eq!(bm1370.core_registers.get(&CoreReg11::ID).unwrap(), &0x00);
-    /// assert_eq!(bm1370.core_registers.get(&ClockDelayCtrlV2::ID).unwrap(), &0x10);
+    /// assert_eq!(bm1370.core_registers.get(&ClockDelayCtrlV3::ID).unwrap(), &0x10);
     /// assert_eq!(bm1370.registers.get(&TicketMask::ADDR).unwrap(), &0x0000_00ff);
     /// assert_eq!(bm1370.registers.get(&AnalogMuxControlV2::ADDR).unwrap(), &0x0000_0003);
     /// ```
@@ -445,38 +445,23 @@ impl Asic for BM1370 {
                 match step {
                     0 => {
                         self.seq_step = SequenceStep::Init(1);
-                        // 2 - [55, AA, 51, 09, 00, 3C, 80, 00, 80, 0C, 11] // S21 Pro //TODO: understand why S21Pro has a different value (0x0c)
-                        // 2 - [55, AA, 51, 09, 00, 3C, 80, 00, 80, 10, 12] // S21 XP
-                        // Seems to be a ClockDelayCtrlV3 ? because 0x0c has a 1 in bit2 which is not in ClockDelayCtrlV2
-                        // S21Pro
-                        // let clk_dly_ctrl = 0x0c;
-                        // let clk_dly_ctrl = ClockDelayCtrlV2(
-                        //     *self.core_registers.get(&ClockDelayCtrlV2::ID).unwrap(),
-                        // )
-                        // .set_ccdly(0)
-                        // .set_pwth(0)
-                        // .enable_bit2()
-                        // .disable_sweep_frequency_mode()
-                        // .val();
-                        // S21XP
-                        // let clk_dly_ctrl = 0x10;
-                        let clk_dly_ctrl = ClockDelayCtrlV2(
-                            *self.core_registers.get(&ClockDelayCtrlV2::ID).unwrap(),
-                        )
-                        .set_ccdly(0)
-                        .set_pwth(2)
-                        // .disable_bit2()
-                        .disable_sweep_frequency_mode()
-                        .val();
+                        // 2 - [55, AA, 51, 09, 00, 3C, 80, 00, 80, 0C, 11] // S21 Pro: pwth 3
+                        // 2 - [55, AA, 51, 09, 00, 3C, 80, 00, 80, 10, 12] // S21 XP: pwth 4
+                        // the stock firmware writes the whole register, other fields cleared
+                        let clk_dly_ctrl = ClockDelayCtrlV3(0)
+                            .set_ccdly(0)
+                            .set_pwth(4)
+                            .disable_sweep_frequency_mode()
+                            .val();
                         self.core_registers
-                            .insert(ClockDelayCtrlV2::ID, clk_dly_ctrl)
+                            .insert(ClockDelayCtrlV3::ID, clk_dly_ctrl)
                             .unwrap();
                         Some(CmdDelay {
                             cmd: Command::write_reg(
                                 CoreRegisterControl::ADDR,
                                 CoreRegisterControl::write_core_reg(
                                     0,
-                                    ClockDelayCtrlV2(clk_dly_ctrl),
+                                    ClockDelayCtrlV3(clk_dly_ctrl),
                                 ),
                                 Destination::All,
                             ),
@@ -946,27 +931,21 @@ impl Asic for BM1370 {
                     }
                     2 => {
                         self.seq_step = SequenceStep::ResetCore(3);
-                        // Seemes to be a ClockDelayCtrlV3 ? because 0x0c has a 1 in bit2 which is not in ClockDelayCtrlV2
-                        // let clk_dly_ctrl = 0x0c; // S21Pro
-                        let clk_dly_ctrl = 0x10; // S21XP
-
-                        // let clk_dly_ctrl = ClockDelayCtrlV2( // TODO: replace the fixed value above with this detailed
-                        //         *self.core_registers.get(&ClockDelayCtrlV2::ID).unwrap(),
-                        // )
-                        // .set_ccdly(0)
-                        // .set_pwth(0)
-                        // .enable_bit2()
-                        // .disable_sweep_frequency_mode()
-                        // .val();
+                        // S21 Pro uses pwth 3 (0x0c), S21 XP pwth 4 (0x10)
+                        let clk_dly_ctrl = ClockDelayCtrlV3(0)
+                            .set_ccdly(0)
+                            .set_pwth(4)
+                            .disable_sweep_frequency_mode()
+                            .val();
                         self.core_registers
-                            .insert(ClockDelayCtrlV2::ID, clk_dly_ctrl)
+                            .insert(ClockDelayCtrlV3::ID, clk_dly_ctrl)
                             .unwrap();
                         Some(CmdDelay {
                             cmd: Command::write_reg(
                                 CoreRegisterControl::ADDR,
                                 CoreRegisterControl::write_core_reg(
                                     0,
-                                    ClockDelayCtrlV2(clk_dly_ctrl),
+                                    ClockDelayCtrlV3(clk_dly_ctrl),
                                 ),
                                 dest,
                             ),

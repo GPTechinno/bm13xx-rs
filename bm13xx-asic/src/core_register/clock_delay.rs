@@ -292,3 +292,131 @@ impl defmt::Format for ClockDelayCtrlV2 {
         );
     }
 }
+
+/// # Clock Delay Control register, BM1370 layout
+///
+/// Same register as [`ClockDelayCtrlV2`], with CCdly and PWth one bit lower:
+/// - PWth is in bits \[4:2\]: the stock S21 Pro and S21 XP firmwares log `pwth_sel = 3` and
+///   `pwth_sel = 4`, and write 0x0C and 0x10.
+/// - CCdly is assumed to be in bits \[6:5\]: a reference driver names the value 0x5A `PWTH6_CCDLY2`.
+/// - Sweep Frequency Mode is assumed to stay in bit 0.
+/// - The meaning of bits 7 and 1 is unknown.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+pub struct ClockDelayCtrlV3(pub u8);
+impl_boilerplate_for_core_reg!(ClockDelayCtrlV3);
+
+impl ClockDelayCtrlV3 {
+    pub const ID: u8 = 0;
+
+    const CCDLY_SEL_OFFSET: u8 = 5;
+    const PWTH_SEL_OFFSET: u8 = 2;
+    const SWPF_MODE_OFFSET: u8 = 0;
+
+    const CCDLY_SEL_MASK: u8 = 0b11;
+    const PWTH_SEL_MASK: u8 = 0b111;
+    const SWPF_MODE_MASK: u8 = 0b1;
+
+    /// ## Handle the CCdly field.
+    ///
+    /// Get and set the CCdly value.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use bm13xx_asic::core_register::{ClockDelayCtrlV3, CoreRegister};
+    ///
+    /// let mut cdc = ClockDelayCtrlV3(0x52); // BM1370 default value
+    /// assert_eq!(cdc.ccdly(), 2);
+    /// assert_eq!(ClockDelayCtrlV3(0x5A).ccdly(), 2);
+    /// assert_eq!(cdc.set_ccdly(0).ccdly(), 0);
+    /// assert_eq!(cdc.val(), 0x12); // other bits are kept
+    /// assert_eq!(cdc.set_ccdly(3).ccdly(), 3); // max value
+    /// assert_eq!(cdc.set_ccdly(4).ccdly(), 0); // out of bound value
+    /// ```
+    pub const fn ccdly(&self) -> u8 {
+        (self.0 >> Self::CCDLY_SEL_OFFSET) & Self::CCDLY_SEL_MASK
+    }
+    pub fn set_ccdly(&mut self, ccdly: u8) -> &mut Self {
+        self.0 &= !(Self::CCDLY_SEL_MASK << Self::CCDLY_SEL_OFFSET);
+        self.0 |= (ccdly & Self::CCDLY_SEL_MASK) << Self::CCDLY_SEL_OFFSET;
+        self
+    }
+
+    /// ## Handle the PWth field.
+    ///
+    /// Get and set the PWth value.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use bm13xx_asic::core_register::{ClockDelayCtrlV3, CoreRegister};
+    ///
+    /// assert_eq!(ClockDelayCtrlV3(0x52).pwth(), 4); // BM1370 default value
+    /// assert_eq!(ClockDelayCtrlV3(0x5A).pwth(), 6);
+    /// let mut cdc = ClockDelayCtrlV3(0);
+    /// assert_eq!(cdc.set_pwth(3).val(), 0x0C); // S21 Pro init() value
+    /// assert_eq!(cdc.set_pwth(4).val(), 0x10); // S21 XP init() value
+    /// assert_eq!(cdc.set_pwth(7).pwth(), 7); // max value
+    /// assert_eq!(cdc.set_pwth(8).pwth(), 0); // out of bound value
+    /// ```
+    pub const fn pwth(&self) -> u8 {
+        (self.0 >> Self::PWTH_SEL_OFFSET) & Self::PWTH_SEL_MASK
+    }
+    pub fn set_pwth(&mut self, pwth: u8) -> &mut Self {
+        self.0 &= !(Self::PWTH_SEL_MASK << Self::PWTH_SEL_OFFSET);
+        self.0 |= (pwth & Self::PWTH_SEL_MASK) << Self::PWTH_SEL_OFFSET;
+        self
+    }
+
+    /// ## Handle the Sweep Frequency Mode field.
+    ///
+    /// Get and set the Sweep Frequency Mode state.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use bm13xx_asic::core_register::ClockDelayCtrlV3;
+    ///
+    /// let mut cdc = ClockDelayCtrlV3(0x52); // BM1370 default value
+    /// assert!(!cdc.sweep_frequency_mode_enabled());
+    /// assert!(cdc.enable_sweep_frequency_mode().sweep_frequency_mode_enabled());
+    /// assert!(!cdc.disable_sweep_frequency_mode().sweep_frequency_mode_enabled());
+    /// ```
+    pub const fn sweep_frequency_mode_enabled(&self) -> bool {
+        (self.0 >> Self::SWPF_MODE_OFFSET) & Self::SWPF_MODE_MASK == Self::SWPF_MODE_MASK
+    }
+    pub fn enable_sweep_frequency_mode(&mut self) -> &mut Self {
+        self.0 |= 1 << Self::SWPF_MODE_OFFSET;
+        self
+    }
+    pub fn disable_sweep_frequency_mode(&mut self) -> &mut Self {
+        self.0 &= !(1 << Self::SWPF_MODE_OFFSET);
+        self
+    }
+}
+
+impl ::core::fmt::Display for ClockDelayCtrlV3 {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+        f.debug_struct("ClockDelayCtrlV3")
+            .field("ccdly", &self.ccdly())
+            .field("pwth", &self.pwth())
+            .field(
+                "sweep_frequency_mode_enabled",
+                &self.sweep_frequency_mode_enabled(),
+            )
+            .finish()
+    }
+}
+
+#[cfg(feature = "defmt")]
+impl defmt::Format for ClockDelayCtrlV3 {
+    fn format(&self, fmt: defmt::Formatter) {
+        defmt::write!(
+            fmt,
+            "ClockDelayCtrlV3 {{ ccdly: {}, pwth: {}, sweep_frequency_mode_enabled: {} }}",
+            self.ccdly(),
+            self.pwth(),
+            self.sweep_frequency_mode_enabled(),
+        );
+    }
+}

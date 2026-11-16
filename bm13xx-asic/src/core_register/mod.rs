@@ -41,7 +41,7 @@ mod hash_clock;
 mod process_monitor;
 mod sweep_clock;
 
-pub use clock_delay::{ClockDelayCtrl, ClockDelayCtrlV2};
+pub use clock_delay::{ClockDelayCtrl, ClockDelayCtrlV2, ClockDelayCtrlV3};
 pub use core_enable::CoreEnable;
 pub use core_error::CoreError;
 pub use core_reg11::CoreReg11;
