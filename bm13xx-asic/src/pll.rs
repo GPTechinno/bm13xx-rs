@@ -18,6 +18,7 @@ pub struct Pll {
     post1_div: u8,
     post2_div: u8,
     out_div: [u8; PLL_OUT_MAX],
+    plain_post_div: bool,
 }
 
 impl Pll {
@@ -118,6 +119,48 @@ impl Pll {
         self
     }
 
+    /// ## Handle the post dividers encoding.
+    ///
+    /// By default the POSTDIV1 and POSTDIV2 fields hold the divider minus 1 (BM1366 and later).
+    /// When set, they hold the divider itself, as on the BM1397 hashing PLL.
+    /// This setting is not part of the PLL parameter register.
+    ///
+    /// ### Example
+    /// ```
+    /// use fugit::HertzU64;
+    /// use bm13xx_asic::pll::Pll;
+    ///
+    /// let clki = HertzU64::MHz(25);
+    /// let mut pll = Pll::default();
+    /// assert!(!pll.plain_post_div());
+    /// pll.set_plain_post_div(true);
+    /// assert!(pll.plain_post_div());
+    /// pll.set_parameter(0xC060_0161); // BM1397 PLL0 default value
+    /// pll.set_divider(0x0304_0607); // BM1397 PLL0 default divider
+    /// assert_eq!(pll.frequency(clki, 0), HertzU64::MHz(50));
+    /// pll.set_parameter(0xC078_0215); // fb 120, ref 2, post 1 and 5
+    /// pll.set_divider(0x0F0F_0F00);
+    /// assert_eq!(pll.frequency(clki, 0), HertzU64::MHz(300));
+    /// assert_eq!(pll.set_frequency(clki, 0, HertzU64::MHz(425), false).frequency(clki, 0), HertzU64::MHz(425));
+    /// assert_eq!(pll.parameter(), 0xC0AA_0251);
+    /// ```
+    pub const fn plain_post_div(&self) -> bool {
+        self.plain_post_div
+    }
+    pub fn set_plain_post_div(&mut self, plain: bool) -> &mut Self {
+        self.plain_post_div = plain;
+        self
+    }
+
+    /// Divider value of a POSTDIV field.
+    const fn post_div(&self, field: u8) -> u32 {
+        if self.plain_post_div {
+            field as u32
+        } else {
+            field as u32 + 1
+        }
+    }
+
     /// ## Get the PLL VCO Frequency.
     ///
     /// ### Example
@@ -158,11 +201,9 @@ impl Pll {
     /// assert_eq!(pll.frequency(clki, 0), HertzU64::MHz(0));
     /// ```
     pub fn frequency(&self, in_clk_freq: HertzU64, out: usize) -> HertzU64 {
-        if out < PLL_OUT_MAX {
-            self.vco_freq(in_clk_freq)
-                / ((self.post1_div as u32 + 1)
-                    * (self.post2_div as u32 + 1)
-                    * (self.out_div[out] as u32 + 1))
+        let div = self.post_div(self.post1_div) * self.post_div(self.post2_div);
+        if out < PLL_OUT_MAX && div != 0 {
+            self.vco_freq(in_clk_freq) / (div * (self.out_div[out] as u32 + 1))
         } else {
             HertzU64::MHz(0)
         }
@@ -177,14 +218,15 @@ impl Pll {
         if out < PLL_OUT_MAX {
             let mut pll = *self;
             pll.out_div[out] = 0;
+            let min_post_div = if self.plain_post_div { 1 } else { 0 };
             for ref_div in (1..=2).rev() {
                 pll.ref_div = ref_div;
-                for post2_div in 0..=7 {
+                for post2_div in min_post_div..=7 {
                     pll.post2_div = post2_div;
                     for post1_div in post2_div..=7 {
                         pll.post1_div = post1_div;
-                        let fb_div = (((post1_div + 1) as f64
-                            * (post2_div + 1) as f64
+                        let fb_div = ((pll.post_div(post1_div) as f64
+                            * pll.post_div(post2_div) as f64
                             * target_freq.raw() as f64
                             * ref_div as f64
                             / in_clk_freq.raw() as f64)
