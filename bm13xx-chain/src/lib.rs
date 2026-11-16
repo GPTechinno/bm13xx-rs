@@ -104,6 +104,7 @@ pub struct Chain<A, U, OB, OR, D> {
     uart: U,
     rx_buf: [u8; RX_BUF_SIZE],
     rx_free_pos: usize,
+    rx_dropped: usize,
     busy: OB,
     reset: OR,
     delay: D,
@@ -147,8 +148,8 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
     /// If only a partial frame or nothing has been received, this function will return None.
     /// If at least a complete frame has been received, this function will return the parsed response.
     /// If more than the first frame has been received, this function will keep the extra data in the internal rx buffer.
-    /// In case of receiving a Frame but with bad CRC, this function will ignore the frame and return None.
-    /// In case of receiving a Frame but with bad Preamble, this function will try to resync and return None.
+    /// In case of receiving a Frame with bad CRC or bad Preamble, this function will drop bytes up to the next
+    /// possible Preamble, count them (see [`Chain::rx_dropped_bytes`]) and return None.
     pub async fn poll_response(
         &mut self,
     ) -> Result<Option<ResponseType>, U::Error, OB::Error, OR::Error> {
@@ -160,7 +161,7 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
         };
         if self.rx_free_pos >= expected_frame_size {
             let frame = &self.rx_buf[..expected_frame_size];
-            let used = match if self.version_rolling_mask.is_some() {
+            let (used, dropped) = match if self.version_rolling_mask.is_some() {
                 Response::parse_version(
                     frame.try_into().unwrap(),
                     self.asic.core_small_core_count(),
@@ -170,25 +171,23 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
             } {
                 Ok(r) => {
                     resp = Some(r);
-                    expected_frame_size
+                    (expected_frame_size, 0)
                 }
                 Err(bm13xx_protocol::Error::InvalidCrc { expected, actual }) => {
+                    let offset = self.next_preamble_offset();
                     error!(
-                        "Ignoring Frame {:x} with bad CRC: {:02x}!={:02x}",
-                        frame, expected, actual
+                        "Resync Frame {:x} because bad CRC {:02x}!={:02x}, dropping first {} bytes",
+                        frame, expected, actual, offset
                     );
-                    expected_frame_size
+                    (offset, offset)
                 }
                 Err(bm13xx_protocol::Error::InvalidPreamble) => {
-                    let offset = frame
-                        .windows(2)
-                        .position(|w| w == [0xAA, 0x55])
-                        .unwrap_or(expected_frame_size);
+                    let offset = self.next_preamble_offset();
                     error!(
                         "Resync Frame {:x} because bad preamble, dropping first {} bytes",
                         frame, offset
                     );
-                    offset
+                    (offset, offset)
                 }
                 Err(bm13xx_protocol::Error::UnsupportedCoreSmallCoreCnt) => {
                     error!(
@@ -196,9 +195,10 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
                         frame,
                         self.asic.core_small_core_count()
                     );
-                    expected_frame_size
+                    (expected_frame_size, 0)
                 }
             };
+            self.rx_dropped = self.rx_dropped.wrapping_add(dropped);
             if self.rx_free_pos > used {
                 debug!("copy reminder {} bytes @0", self.rx_free_pos - used);
                 self.rx_buf.copy_within(used..self.rx_free_pos, 0);
@@ -216,6 +216,25 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
             self.rx_free_pos += n;
         }
         Ok(resp)
+    }
+
+    /// Number of bytes to drop from the rx buffer to reach the next possible Preamble after the first byte.
+    fn next_preamble_offset(&self) -> usize {
+        let data = &self.rx_buf[..self.rx_free_pos];
+        match data[1..].windows(2).position(|w| w == [0xAA, 0x55]) {
+            Some(pos) => pos + 1,
+            // keep a trailing 0xAA, it can be the start of the next Preamble
+            None if data.last() == Some(&0xAA) => data.len() - 1,
+            None => data.len(),
+        }
+    }
+
+    /// ## Get the number of bytes dropped while resyncing on the response stream
+    ///
+    /// Bytes are dropped when a Frame has a bad Preamble or a bad CRC.
+    /// A growing count is a sign of a noisy serial line or a wrong baudrate.
+    pub fn rx_dropped_bytes(&self) -> usize {
+        self.rx_dropped
     }
 
     /// ## Enumerate all asics on the chain
@@ -246,6 +265,7 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
             uart,
             rx_buf: [0; RX_BUF_SIZE],
             rx_free_pos: 0,
+            rx_dropped: 0,
             busy,
             reset,
             delay,
@@ -491,5 +511,137 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
             self.uart.write_all(&cmd).await.map_err(Error::Io)?;
         };
         Ok(self.job_id)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    extern crate std;
+
+    use super::*;
+    use bm1366::BM1366;
+    use bm13xx_protocol::response::RegisterResponse;
+    use core::convert::Infallible;
+    use std::{collections::VecDeque, vec::Vec};
+
+    /// ChipIdentification register response of a BM1397.
+    const CHIP_ID: [u8; FRAME_SIZE] = [0xAA, 0x55, 0x13, 0x97, 0x18, 0x00, 0x00, 0x00, 0x06];
+
+    /// A serial interface that returns the queued bytes and discards what is written.
+    struct MockUart(VecDeque<u8>);
+
+    impl embedded_io_async::ErrorType for MockUart {
+        type Error = Infallible;
+    }
+
+    impl Read for MockUart {
+        async fn read(&mut self, buf: &mut [u8]) -> core::result::Result<usize, Infallible> {
+            let n = buf.len().min(self.0.len());
+            for (b, d) in buf.iter_mut().zip(self.0.drain(..n)) {
+                *b = d;
+            }
+            Ok(n)
+        }
+    }
+
+    impl ReadReady for MockUart {
+        fn read_ready(&mut self) -> core::result::Result<bool, Infallible> {
+            Ok(!self.0.is_empty())
+        }
+    }
+
+    impl Write for MockUart {
+        async fn write(&mut self, buf: &[u8]) -> core::result::Result<usize, Infallible> {
+            Ok(buf.len())
+        }
+    }
+
+    impl Baud for MockUart {
+        fn set_baudrate(&mut self, _baudrate: u32) {}
+    }
+
+    struct MockPin;
+
+    impl embedded_hal::digital::ErrorType for MockPin {
+        type Error = Infallible;
+    }
+
+    impl OutputPin for MockPin {
+        fn set_low(&mut self) -> core::result::Result<(), Infallible> {
+            Ok(())
+        }
+        fn set_high(&mut self) -> core::result::Result<(), Infallible> {
+            Ok(())
+        }
+    }
+
+    struct MockDelay;
+
+    impl DelayNs for MockDelay {
+        async fn delay_ns(&mut self, _ns: u32) {}
+    }
+
+    type MockChain = Chain<BM1366, MockUart, MockPin, MockPin, MockDelay>;
+
+    fn chain(rx: &[u8]) -> MockChain {
+        Chain {
+            asic_cnt: 1,
+            asic: BM1366::default(),
+            asic_addr_interval: 256,
+            domain_cnt: 1,
+            uart: MockUart(rx.iter().copied().collect()),
+            rx_buf: [0; RX_BUF_SIZE],
+            rx_free_pos: 0,
+            rx_dropped: 0,
+            busy: MockPin,
+            reset: MockPin,
+            delay: MockDelay,
+            job_id: 0,
+            version_rolling_mask: None,
+            chip_nonce_space: 0,
+        }
+    }
+
+    async fn poll_all(chain: &mut MockChain) -> Vec<ResponseType> {
+        let mut resps = Vec::new();
+        for _ in 0..8 {
+            if let Some(resp) = chain.poll_response().await.unwrap() {
+                resps.push(resp);
+            }
+        }
+        resps
+    }
+
+    fn chip_id_resp() -> ResponseType {
+        ResponseType::Reg(RegisterResponse {
+            chip_addr: 0,
+            reg_addr: 0,
+            reg_value: 0x1397_1800,
+        })
+    }
+
+    #[tokio::test]
+    async fn poll_response_skips_garbage() {
+        let mut chain = chain(&[[0x00, 0x12, 0xAA].as_slice(), &CHIP_ID].concat());
+        assert_eq!(poll_all(&mut chain).await, [chip_id_resp()]);
+        assert_eq!(chain.rx_dropped_bytes(), 3);
+    }
+
+    #[tokio::test]
+    async fn poll_response_keeps_frame_after_false_preamble() {
+        // a false Preamble whose Frame has a bad CRC must not swallow the real Frame after it
+        let mut chain = chain(&[[0xAA, 0x55, 0x01, 0x02].as_slice(), &CHIP_ID].concat());
+        assert_eq!(poll_all(&mut chain).await, [chip_id_resp()]);
+        assert_eq!(chain.rx_dropped_bytes(), 4);
+    }
+
+    #[tokio::test]
+    async fn poll_response_keeps_trailing_preamble_byte() {
+        let mut chain = chain(&[[0x00; 10].as_slice(), &CHIP_ID[..1]].concat());
+        assert_eq!(poll_all(&mut chain).await, []);
+        assert_eq!(chain.rx_dropped_bytes(), 10);
+        chain.uart.0.extend(&CHIP_ID[1..]);
+        assert_eq!(poll_all(&mut chain).await, [chip_id_resp()]);
+        assert_eq!(chain.rx_dropped_bytes(), 10);
     }
 }
