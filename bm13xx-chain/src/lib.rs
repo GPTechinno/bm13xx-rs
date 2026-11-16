@@ -335,9 +335,11 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
     ///
     /// Act on the physical NRST signal propagating through the chain.
     /// A new chain enumeration is required to release the NRST signal.
+    /// The serial interface is set back to 115200 baud, the chips' default after a reset.
     pub async fn reset(&mut self) -> Result<(), U::Error, OB::Error, OR::Error> {
         self.reset.set_low().map_err(Error::Reset)?;
         self.asic.reset();
+        self.uart.set_baudrate(115_200);
         Ok(())
     }
 
