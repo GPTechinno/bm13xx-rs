@@ -1,7 +1,6 @@
 //! BM13xx protocol.
 
 #![no_std]
-#![macro_use]
 pub(crate) mod fmt;
 
 mod crc;

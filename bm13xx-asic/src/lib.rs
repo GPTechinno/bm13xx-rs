@@ -1,7 +1,6 @@
 //! BM13xx ASIC representation.
 
 #![no_std]
-#![macro_use]
 pub(crate) mod fmt;
 
 pub mod core_register;
