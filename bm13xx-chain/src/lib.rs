@@ -91,6 +91,9 @@ pub trait Baud {
 
 const RX_BUF_SIZE: usize = 256;
 
+/// Enumeration stops once no ChipIdentification reply has come for this long.
+const ENUM_QUIET_MS: u32 = 100;
+
 const NONCE_BITS: u32 = u32::BITS;
 const CHIP_ADDR_BITS: u32 = u8::BITS;
 
@@ -282,9 +285,14 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
 
         let mut asic_cnt = 0;
         let mut post_s19jpro = false;
-        loop {
+        // `poll_response` can return None while replies are still coming, so only stop once
+        // no reply has come for `ENUM_QUIET_MS`.
+        let mut quiet_ms = 0;
+        while quiet_ms < ENUM_QUIET_MS {
             chain.delay.delay_ms(10).await;
+            quiet_ms += 10;
             if let Some(resp) = chain.poll_response().await? {
+                quiet_ms = 0;
                 if let ResponseType::Reg(reg_resp) = resp {
                     if reg_resp.chip_addr != 0 || reg_resp.reg_addr != ChipIdentification::ADDR {
                         warn!("reg_resp: {:#?}, {}", reg_resp, ChipIdentification::ADDR);
@@ -303,8 +311,6 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
                 } else {
                     return Err(Error::UnexpectedResponse { resp });
                 };
-            } else {
-                break;
             }
         }
         if asic_cnt == 0 {
@@ -643,5 +649,39 @@ mod tests {
         chain.uart.0.extend(&CHIP_ID[1..]);
         assert_eq!(poll_all(&mut chain).await, [chip_id_resp()]);
         assert_eq!(chain.rx_dropped_bytes(), 10);
+    }
+
+    /// ChipIdentification register response of a BM1366, with its CRC.
+    fn bm1366_chip_id() -> [u8; FRAME_SIZE] {
+        let mut frame = [0xAA, 0x55, 0x13, 0x66, 0x00, 0x00, 0x00, 0x00, 0x00];
+        frame[8] = (0..0x20)
+            .find(|&crc| {
+                frame[8] = crc;
+                Response::parse(&frame, 8).is_ok()
+            })
+            .unwrap();
+        frame
+    }
+
+    async fn enumerate(asic_cnt: usize) -> MockChain {
+        let rx = bm1366_chip_id().repeat(asic_cnt);
+        let uart = MockUart(rx.into_iter().collect());
+        Chain::enumerate(BM1366::default(), uart, MockPin, MockPin, MockDelay)
+            .await
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn enumerate_one_chip() {
+        let chain = enumerate(1).await;
+        assert_eq!(chain.asic_cnt, 1);
+        assert_eq!(chain.asic_addr_interval, 256);
+    }
+
+    #[tokio::test]
+    async fn enumerate_three_chips() {
+        let chain = enumerate(3).await;
+        assert_eq!(chain.asic_cnt, 3);
+        assert_eq!(chain.asic_addr_interval, 85);
     }
 }
