@@ -1095,35 +1095,48 @@ impl Asic for BM1366 {
     /// assert_eq!(bm1366.set_hash_freq_next(HertzU64::MHz(75)), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x08, 0xc0, 0xa8, 0x02, 0x63, 0x14], delay_ms: 400}));
     /// assert_eq!(bm1366.set_hash_freq_next(HertzU64::MHz(75)), None);
     /// assert_eq!(bm1366.plls[BM1366_PLL_ID_HASH].parameter(), 0xc0a8_0263);
+    /// // the last word sent is the target, even off the 6.25 MHz grid
+    /// let mut last = [0; 11];
+    /// while let Some(step) = bm1366.set_hash_freq_next(HertzU64::MHz(80)) {
+    ///     last = step.cmd;
+    /// }
+    /// assert_eq!(last[6..10], bm1366.plls[BM1366_PLL_ID_HASH].parameter().to_be_bytes());
+    /// // and going down
+    /// while let Some(step) = bm1366.set_hash_freq_next(HertzU64::MHz(75)) {
+    ///     last = step.cmd;
+    /// }
+    /// assert_eq!(last[6..10], bm1366.plls[BM1366_PLL_ID_HASH].parameter().to_be_bytes());
     /// ```
     fn set_hash_freq_next(&mut self, target_freq: HertzU64) -> Option<CmdDelay> {
         match self.seq_step {
+            SequenceStep::HashFreq(1) => {
+                self.seq_step = SequenceStep::None;
+                None
+            }
             SequenceStep::HashFreq(_) => {
-                let freq = self.hash_freq() + HertzU64::kHz(6250);
-                self.set_hash_freq(if freq > target_freq {
+                let step = HertzU64::kHz(6250);
+                let current = self.hash_freq();
+                let freq = if current + step < target_freq {
+                    current + step
+                } else if current > target_freq + step {
+                    current - step
+                } else {
                     target_freq
-                } else {
-                    freq
-                });
-                self.registers
-                    .insert(
-                        PLL0Parameter::ADDR,
-                        self.plls[BM1366_PLL_ID_HASH].parameter(),
-                    )
-                    .unwrap();
-                if freq > target_freq {
-                    self.seq_step = SequenceStep::None;
-                    None
-                } else {
-                    Some(CmdDelay {
-                        cmd: Command::write_reg(
-                            PLL0Parameter::ADDR,
-                            self.plls[BM1366_PLL_ID_HASH].parameter(),
-                            Destination::All,
-                        ),
-                        delay_ms: if freq > HertzU64::MHz(380) { 2300 } else { 400 },
-                    })
+                };
+                let prev_pll0_param = self.plls[BM1366_PLL_ID_HASH].parameter();
+                self.set_hash_freq(freq);
+                let pll0_param = self.plls[BM1366_PLL_ID_HASH].parameter();
+                // stop at the target, or if the PLL can't get closer to it
+                if freq == target_freq || pll0_param == prev_pll0_param {
+                    self.seq_step = SequenceStep::HashFreq(1);
                 }
+                self.registers
+                    .insert(PLL0Parameter::ADDR, pll0_param)
+                    .unwrap();
+                Some(CmdDelay {
+                    cmd: Command::write_reg(PLL0Parameter::ADDR, pll0_param, Destination::All),
+                    delay_ms: if freq > HertzU64::MHz(380) { 2300 } else { 400 },
+                })
             }
             _ => {
                 // authorize a SetHashFreq sequence start whatever the current step was
