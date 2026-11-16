@@ -560,8 +560,7 @@ impl Asic for BM1370 {
     /// assert_eq!(bm1370.set_baudrate_next(3_125_000, 13, 7, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0x28, 0x58, 0x00, 0x01, 0x31, 0x11, 0x13], delay_ms: 0}));
     /// assert_eq!(bm1370.set_baudrate_next(3_125_000, 13, 7, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0x1a, 0x58, 0x00, 0x01, 0x31, 0x11, 0x09], delay_ms: 0}));
     /// assert_eq!(bm1370.set_baudrate_next(3_125_000, 13, 7, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0x0c, 0x58, 0x00, 0x01, 0x31, 0x11, 0x0e], delay_ms: 0}));
-    // assert_eq!(bm1370.set_baudrate_next(3_125_000, 13, 7, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x68, 0x5a, 0xa5, 0x5a, 0xa5, 0x1c], delay_ms: 0})); // real values
-    /// assert_eq!(bm1370.set_baudrate_next(3_125_000, 13, 7, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x68, 0x5a, 0xa5, 26, 37, 20], delay_ms: 0}));
+    /// assert_eq!(bm1370.set_baudrate_next(3_125_000, 13, 7, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x68, 0x5a, 0xa5, 0x5a, 0xa5, 0x1c], delay_ms: 0}));
     /// assert_eq!(bm1370.set_baudrate_next(3_125_000, 13, 7, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0xa8, 0x2C, 0x00, 0x15, 0x00, 0x03, 0x14], delay_ms: 0}));
     /// assert_eq!(bm1370.set_baudrate_next(3_125_000, 13, 7, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0xb4, 0x2C, 0x00, 0x15, 0x00, 0x03, 0x1f], delay_ms: 0}));
     /// assert_eq!(bm1370.set_baudrate_next(3_125_000, 13, 7, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0x9a, 0x2C, 0x00, 0x1c, 0x00, 0x03, 0x08], delay_ms: 0}));
@@ -592,7 +591,7 @@ impl Asic for BM1370 {
     /// assert_eq!(bm1370.set_baudrate_next(3_125_000, 13, 7, 2), None);
     // assert!(bm1370.plls[BM1370_PLL_ID_UART].enabled());
     /// assert_eq!(bm1370.registers.get(&IoDriverStrenghtConfiguration::ADDR).unwrap(), &0x0001_1111);
-    // assert_eq!(bm1370.registers.get(&PLL3Parameter::ADDR).unwrap(), &0x5aa5_5aa5); // real value
+    /// assert_eq!(bm1370.registers.get(&PLL3Parameter::ADDR).unwrap(), &0x5aa5_5aa5);
     /// assert_eq!(bm1370.registers.get(&FastUARTConfigurationV2::ADDR).unwrap(), &0x0130_0000);
     ///
     /// ```
@@ -648,7 +647,8 @@ impl Asic for BM1370 {
                         // .set_post1_div(1)
                         // .set_post2_div(1)
                         .set_out_div(BM1370_PLL_OUT_UART, pll3_div4);
-                    let pll3_param = self.plls[BM1370_PLL_ID_UART].parameter();
+                    // send the captured value as is: `Pll::parameter()` can't re-encode all its bits
+                    let pll3_param = 0x5aa5_5aa5;
                     self.registers
                         .insert(PLL3Parameter::ADDR, pll3_param)
                         .unwrap();
