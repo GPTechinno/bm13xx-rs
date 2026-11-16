@@ -12,7 +12,6 @@ defmt = { workspace = true, optional = true }
 derive_more = { workspace = true, features = ["from"] }
 fugit = { workspace = true }
 log = { workspace = true, optional = true }
-rustversion = { workspace = true }
 
 [features]
 defmt = ["dep:defmt", "bm13xx-protocol/defmt", "fugit/defmt"]

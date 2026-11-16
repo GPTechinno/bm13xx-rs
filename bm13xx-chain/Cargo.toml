@@ -17,7 +17,6 @@ embedded-io-async = { workspace = true }
 fugit = { workspace = true }
 heapless = { workspace = true }
 log = { workspace = true, optional = true }
-rustversion = { workspace = true }
 
 [features]
 defmt = [

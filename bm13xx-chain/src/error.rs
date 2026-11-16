@@ -28,13 +28,11 @@ pub enum Error<IO, B, R> {
     SetBaudrate,
 }
 
-#[rustversion::since(1.81)]
 impl<IO: core::fmt::Debug, B: core::fmt::Debug, R: core::fmt::Debug> core::error::Error
     for Error<IO, B, R>
 {
 }
 
-#[rustversion::since(1.81)]
 impl<IO: core::fmt::Debug, B: core::fmt::Debug, R: core::fmt::Debug> core::fmt::Display
     for Error<IO, B, R>
 {

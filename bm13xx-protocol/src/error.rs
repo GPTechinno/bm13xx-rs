@@ -11,10 +11,8 @@ pub enum Error {
     InvalidCrc { expected: u8, actual: u8 },
 }
 
-#[rustversion::since(1.81)]
 impl core::error::Error for Error {}
 
-#[rustversion::since(1.81)]
 impl core::fmt::Display for Error {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{self:?}")

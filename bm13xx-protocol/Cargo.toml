@@ -11,7 +11,6 @@ defmt = { workspace = true, optional = true }
 derive_more = { workspace = true, features = ["from"] }
 heapless = { workspace = true }
 log = { workspace = true, optional = true }
-rustversion = { workspace = true }
 
 [features]
 defmt = ["dep:defmt", "heapless/defmt"]
