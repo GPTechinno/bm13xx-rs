@@ -227,9 +227,9 @@ impl Pll {
                         pll.post1_div = post1_div;
                         let fb_div = ((pll.post_div(post1_div) as f64
                             * pll.post_div(post2_div) as f64
-                            * target_freq.raw() as f64
+                            * target_freq.to_raw() as f64
                             * ref_div as f64
-                            / in_clk_freq.raw() as f64)
+                            / in_clk_freq.to_raw() as f64)
                             + 0.5) as u16;
                         if fb_div < 251 {
                             pll.fb_div = fb_div;

@@ -135,12 +135,13 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
             } else {
                 1.0
             };
-        Duration::from_secs_f32(space / (self.asic.hash_freq().raw() as f32))
+        Duration::from_secs_f32(space / (self.asic.hash_freq().to_raw() as f32))
     }
 
     /// ## Get the theoretical Hashrate in GH/s
     pub fn theoretical_hashrate_ghs(&self) -> f32 {
-        (self.asic.hash_freq().raw() as f32 * self.asic.small_core_count() as f32 / 1_000_000_000.0)
+        (self.asic.hash_freq().to_raw() as f32 * self.asic.small_core_count() as f32
+            / 1_000_000_000.0)
             * self.asic_cnt as f32
     }
 

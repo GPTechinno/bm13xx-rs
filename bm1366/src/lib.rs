@@ -686,9 +686,9 @@ impl Asic for BM1366 {
                         delay_ms: if step == sub_seq4_start - 1 { 130 } else { 0 },
                     })
                 } else if step == sub_seq4_start {
-                    if baudrate <= self.input_clock_freq.raw() as u32 / 8 {
+                    if baudrate <= self.input_clock_freq.to_raw() as u32 / 8 {
                         self.seq_step = SequenceStep::Baudrate(end);
-                        let fbase = self.input_clock_freq.raw() as u32;
+                        let fbase = self.input_clock_freq.to_raw() as u32;
                         let bt8d = (fbase / (8 * baudrate)) - 1;
                         let fast_uart_cfg = FastUARTConfigurationV2(
                             *self.registers.get(&FastUARTConfigurationV2::ADDR).unwrap(),
@@ -735,7 +735,7 @@ impl Asic for BM1366 {
                     }
                 } else if step == sub_seq5_start {
                     self.seq_step = SequenceStep::Baudrate(end);
-                    if baudrate <= self.input_clock_freq.raw() as u32 / 8 {
+                    if baudrate <= self.input_clock_freq.to_raw() as u32 / 8 {
                         // should not be reached for 2 reasons:
                         // - in step above we jump directly to end
                         // - after setting the chip's FastUartConfiguration with bclk_sel(BaudrateClockSelectV2::Clki) in previous step
@@ -757,7 +757,7 @@ impl Asic for BM1366 {
                     } else {
                         let fbase = self.plls[BM1366_PLL_ID_UART]
                             .frequency(self.input_clock_freq, BM1366_PLL_OUT_UART)
-                            .raw();
+                            .to_raw();
                         let bt8d = (fbase as u32 / (2 * baudrate)) - 1;
                         let fast_uart_cfg = FastUARTConfigurationV2(
                             *self.registers.get(&FastUARTConfigurationV2::ADDR).unwrap(),
@@ -1229,7 +1229,7 @@ impl Asic for BM1366 {
                 // Same rule as the stock firmware: 80 % of the core nonce space share
                 // (asic_addr_interval << 17) * 25 MHz / (2 * hash frequency), minus 1.
                 let hcn = (asic_addr_interval as u64 * 1_310_720_000_000
-                    / self.hash_freq().raw().max(1))
+                    / self.hash_freq().to_raw().max(1))
                 .saturating_sub(1)
                 .min(u32::MAX as u64) as u32;
                 self.registers

@@ -580,8 +580,8 @@ impl Asic for BM1397 {
         _domain_asic_cnt: usize,
         _asic_addr_interval: usize,
     ) -> Option<CmdDelay> {
-        if baudrate <= self.input_clock_freq.raw() as u32 / 8 {
-            let fbase = self.input_clock_freq.raw() as u32;
+        if baudrate <= self.input_clock_freq.to_raw() as u32 / 8 {
+            let fbase = self.input_clock_freq.to_raw() as u32;
             let bt8d = (fbase / (8 * baudrate)) - 1;
             match self.seq_step {
                 SequenceStep::Baudrate(step) => match step {
@@ -641,7 +641,7 @@ impl Asic for BM1397 {
                 .set_out_div(BM1397_PLL_OUT_UART, pll3_div4);
             let fbase = self.plls[BM1397_PLL_ID_UART]
                 .frequency(self.input_clock_freq, BM1397_PLL_OUT_UART)
-                .raw();
+                .to_raw();
             match self.seq_step {
                 SequenceStep::Baudrate(step) => match step {
                     0 => {
