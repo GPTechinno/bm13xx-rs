@@ -25,7 +25,7 @@ defmt = [
     "bm13xx-protocol/defmt",
     "embedded-hal/defmt-03",
     "embedded-hal-async/defmt-03",
-    "embedded-io-async/defmt-03",
+    "embedded-io-async/defmt",
     "fugit/defmt",
     "heapless/defmt",
 ]
@@ -33,7 +33,7 @@ defmt = [
 [dev-dependencies]
 bm1366 = { path = "../bm1366" }
 
-embedded-io = { version = "0.6", features = ["std"] }
+embedded-io = { version = "0.7", features = ["std"] }
 env_logger = "0.11"
 inquire = "0.7"
 linux-embedded-hal = "0.4"

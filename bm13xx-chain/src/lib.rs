@@ -566,6 +566,9 @@ mod tests {
         async fn write(&mut self, buf: &[u8]) -> core::result::Result<usize, Infallible> {
             Ok(buf.len())
         }
+        async fn flush(&mut self) -> core::result::Result<(), Infallible> {
+            Ok(())
+        }
     }
 
     impl Baud for MockUart {

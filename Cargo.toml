@@ -15,7 +15,7 @@ defmt = { version = "1.2" }
 derive_more = { version = "2.1", default-features = false }
 embedded-hal = "1.0"
 embedded-hal-async = "1.0"
-embedded-io-async = "0.6"
+embedded-io-async = "0.7"
 fugit = "0.6"
 heapless = "0.9"
 log = "0.4"
