@@ -457,7 +457,10 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
         mask: u32,
     ) -> Result<(), U::Error, OB::Error, OR::Error> {
         if self.version_rolling_mask.is_none() {
-            while let Some(step) = self.asic.set_version_rolling_next(mask) {
+            while let Some(step) = self
+                .asic
+                .set_version_rolling_next(mask, self.asic_addr_interval)
+            {
                 self.send(step).await?;
             }
             self.delay.delay_ms(100).await;

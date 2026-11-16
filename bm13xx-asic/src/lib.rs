@@ -59,5 +59,9 @@ pub trait Asic {
         chain_asic_num: usize,
         asic_addr_interval: usize,
     ) -> Option<CmdDelay>;
-    fn set_version_rolling_next(&mut self, mask: u32) -> Option<CmdDelay>;
+    fn set_version_rolling_next(
+        &mut self,
+        mask: u32,
+        asic_addr_interval: usize,
+    ) -> Option<CmdDelay>;
 }

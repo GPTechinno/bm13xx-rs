@@ -1164,17 +1164,30 @@ impl Asic for BM1366 {
 
     /// ## Send Enable Version Rolling command list
     ///
+    /// The Hash Counting Number is computed from the current hash frequency, so set it first.
+    ///
     /// ### Example
     /// ```
     /// use bm1366::BM1366;
-    /// use bm13xx_asic::{Asic, CmdDelay};
+    /// use bm13xx_asic::{register::HashCountingNumber, Asic, CmdDelay};
+    /// use fugit::HertzU64;
     ///
     /// let mut bm1366 = BM1366::default();
-    /// assert_eq!(bm1366.set_version_rolling_next(0x1fff_e000), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x10, 0x00, 0x00, 0x15, 0x1c, 0x02], delay_ms: 1}));
-    /// assert_eq!(bm1366.set_version_rolling_next(0x1fff_e000), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0xa4, 0x90, 0x00, 0xff, 0xff, 0x1c], delay_ms: 1}));
-    /// assert_eq!(bm1366.set_version_rolling_next(0x1fff_e000), None);
+    /// bm1366.set_hash_freq(HertzU64::MHz(485)); // S19 XP
+    /// assert_eq!(bm1366.set_version_rolling_next(0x1fff_e000, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x10, 0x00, 0x00, 0x15, 0x1c, 0x02], delay_ms: 1}));
+    /// assert_eq!(bm1366.set_version_rolling_next(0x1fff_e000, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0xa4, 0x90, 0x00, 0xff, 0xff, 0x1c], delay_ms: 1}));
+    /// assert_eq!(bm1366.set_version_rolling_next(0x1fff_e000, 2), None);
+    ///
+    /// let mut bm1366 = BM1366::default();
+    /// bm1366.set_hash_freq(HertzU64::MHz(485));
+    /// bm1366.set_version_rolling_next(0x1fff_e000, 256); // single chip
+    /// assert_eq!(bm1366.registers.get(&HashCountingNumber::ADDR).unwrap(), &0x000a_8e82);
     /// ```
-    fn set_version_rolling_next(&mut self, mask: u32) -> Option<CmdDelay> {
+    fn set_version_rolling_next(
+        &mut self,
+        mask: u32,
+        asic_addr_interval: usize,
+    ) -> Option<CmdDelay> {
         match self.seq_step {
             SequenceStep::VersionRolling(step) => match step {
                 0 => {
@@ -1200,7 +1213,12 @@ impl Asic for BM1366 {
             _ => {
                 // authorize a VersionRolling sequence start whatever the current step was
                 self.seq_step = SequenceStep::VersionRolling(0);
-                let hcn = 0x0000_151c;
+                // Same rule as the stock firmware: 80 % of the core nonce space share
+                // (asic_addr_interval << 17) * 25 MHz / (2 * hash frequency), minus 1.
+                let hcn = (asic_addr_interval as u64 * 1_310_720_000_000
+                    / self.hash_freq().raw().max(1))
+                .saturating_sub(1)
+                .min(u32::MAX as u64) as u32;
                 self.registers
                     .insert(HashCountingNumber::ADDR, hcn)
                     .unwrap();
