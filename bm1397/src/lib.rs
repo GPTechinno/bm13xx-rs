@@ -733,106 +733,78 @@ impl Asic for BM1397 {
 
     /// ## Send Hash Frequency command list
     ///
+    /// Move the hash frequency by steps of 6.25 MHz until the target.
+    /// As on a stock T17, each PLL0 Parameter write comes after writing 0x0F0F_0F00 to PLL0 Divider:
+    /// `[55, AA, 51, 09, 00, 70, 0F, 0F, 0F, 00, 19]`, `[55, AA, 51, 09, 00, 08, C0, AD, 02, 77, 0D]`,
+    /// `[55, AA, 51, 09, 00, 70, 0F, 0F, 0F, 00, 19]`, `[55, AA, 51, 09, 00, 08, C0, AD, 02, 76, 08]`...
+    ///
     /// ### Example
     /// ```
-    /// use bm1397::{BM1397, BM1397_PLL_ID_HASH};
+    /// use bm1397::BM1397;
     /// use bm13xx_asic::{register::*, Asic, CmdDelay};
     /// use fugit::HertzU64;
     ///
     /// let mut bm1397 = BM1397::default();
-    // assert_eq!(bm1397.set_hash_freq_next(HertzU64::MHz(700)), CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x70, 0x0f, 0x0f, 0x0f, 0x00, 25], delay_ms: 0});
-    // assert_eq!(bm1397.set_hash_freq_next(HertzU64::MHz(700)), CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x08, 0xc0, 0xad, 0x02, 0x77, 13], delay_ms: 1});
-    // assert_eq!(bm1397.set_hash_freq_next(HertzU64::MHz(700)), CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x70, 0x0f, 0x0f, 0x0f, 0x00, 25], delay_ms: 0});
-    // assert_eq!(bm1397.set_hash_freq_next(HertzU64::MHz(700)), CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x08, 0xc0, 0xad, 0x02, 0x76, 8], delay_ms: 1});
-    /// assert_eq!(bm1397.set_hash_freq_next(HertzU64::MHz(700)), None);
-    // assert_eq!(bm1397.plls[BM1397_PLL_ID_HASH].parameter(), 0xc070_0111);
+    /// assert_eq!(bm1397.hash_freq(), HertzU64::MHz(50));
+    /// assert_eq!(bm1397.set_hash_freq_next(HertzU64::MHz(60)), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x70, 0x0f, 0x0f, 0x0f, 0x00, 0x19], delay_ms: 10}));
+    /// assert_eq!(bm1397.set_hash_freq_next(HertzU64::MHz(60)), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x08, 0xc0, 0xa2, 0x02, 0x66, 0x0e], delay_ms: 100})); // 56.25 MHz
+    /// assert_eq!(bm1397.set_hash_freq_next(HertzU64::MHz(60)), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x70, 0x0f, 0x0f, 0x0f, 0x00, 0x19], delay_ms: 10}));
+    /// assert_eq!(bm1397.set_hash_freq_next(HertzU64::MHz(60)), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x08, 0xc0, 0xa8, 0x02, 0x75, 0x10], delay_ms: 100})); // 60 MHz
+    /// assert_eq!(bm1397.set_hash_freq_next(HertzU64::MHz(60)), None);
+    /// assert_eq!(bm1397.hash_freq(), HertzU64::MHz(60));
+    /// assert_eq!(bm1397.registers.get(&PLL0Divider::ADDR).unwrap(), &0x0f0f_0f00);
+    /// assert_eq!(bm1397.registers.get(&PLL0Parameter::ADDR).unwrap(), &0xc0a8_0275);
+    /// // ramping down works too
+    /// while bm1397.set_hash_freq_next(HertzU64::MHz(50)).is_some() {}
+    /// assert_eq!(bm1397.hash_freq(), HertzU64::MHz(50));
     /// ```
-    fn set_hash_freq_next(&mut self, _target_freq: HertzU64) -> Option<CmdDelay> {
-        /*
-        self.plls[BM1397_PLL_ID_HASH].set_divider(0x0f0f_0f00);
-        self.registers
-            .insert(PLL0Divider::ADDR, self.plls[BM1397_PLL_ID_HASH].divider())
-            .unwrap();
-        self.plls[BM1397_PLL_ID_HASH]
-            .set_fb_div(173)
-            .set_ref_div(2)
-            .set_post1_div(7);
-        let mut prev_post_div: u8;
-        let mut found = false;
-        for post2_div in (1..=7).rev() {
-            prev_post_div = self.plls[BM1397_PLL_ID_HASH].post2_div();
-            self.plls[BM1397_PLL_ID_HASH].set_post2_div(post2_div);
-            if self.hash_freq() < target_freq {
-                Some(CmdDelay {
-                        cmd: Command::write_reg(
-                            PLL0Divider::ADDR,
-                            self.plls[BM1397_PLL_ID_HASH].divider(),
-                            Destination::All,
-                        ),
-                        delay_ms: 1,
-                    })
-                Some(CmdDelay {
-                        cmd: Command::write_reg(
-                            PLL0Parameter::ADDR,
-                            self.plls[BM1397_PLL_ID_HASH].parameter(),
-                            Destination::All,
-                        ),
-                        delay_ms: if post2_div == 1 {
-                            12000
-                        } else if post2_div == 2 {
-                            6000
-                        } else {
-                            1000
-                        },
-                    })
-                self.registers
-                    .insert(
-                        PLL0Parameter::ADDR,
-                        self.plls[BM1397_PLL_ID_HASH].parameter(),
-                    )
-                    .unwrap();
-            } else {
-                self.plls[BM1397_PLL_ID_HASH].set_post2_div(prev_post_div);
-                found = true;
-                break;
-            }
-        }
-        if !found {
-            for post1_div in (1..=6).rev() {
-                prev_post_div = self.plls[BM1397_PLL_ID_HASH].post1_div();
-                self.plls[BM1397_PLL_ID_HASH].set_post2_div(post1_div);
-                if self.hash_freq() < target_freq {
-                    Some(CmdDelay {
-                            cmd: Command::write_reg(
-                                PLL0Divider::ADDR,
-                                self.plls[BM1397_PLL_ID_HASH].divider(),
-                                Destination::All,
-                            ),
-                            delay_ms: 1,
-                        })
-                    Some(CmdDelay {
-                            cmd: Command::write_reg(
-                                PLL0Parameter::ADDR,
-                                self.plls[BM1397_PLL_ID_HASH].parameter(),
-                                Destination::All,
-                            ),
-                            delay_ms: if post1_div > 4 { 6000 } else { 9000 },
-                        })
-                    self.registers
-                        .insert(
-                            PLL0Parameter::ADDR,
-                            self.plls[BM1397_PLL_ID_HASH].parameter(),
-                        )
-                        .unwrap();
+    fn set_hash_freq_next(&mut self, target_freq: HertzU64) -> Option<CmdDelay> {
+        match self.seq_step {
+            SequenceStep::HashFreq(1) => {
+                let step = HertzU64::kHz(6250);
+                let current = self.hash_freq();
+                let freq = if current + step < target_freq {
+                    current + step
+                } else if current > target_freq + step {
+                    current - step
                 } else {
-                    self.plls[BM1397_PLL_ID_HASH].set_post1_div(prev_post_div);
-                    break;
+                    target_freq
+                };
+                let prev_pll0_param = self.plls[BM1397_PLL_ID_HASH].parameter();
+                self.set_hash_freq(freq);
+                let pll0_param = self.plls[BM1397_PLL_ID_HASH].parameter();
+                // stop at the target, or if the PLL can't get closer to it
+                let done = freq == target_freq || pll0_param == prev_pll0_param;
+                self.seq_step = SequenceStep::HashFreq(if done { 2 } else { 0 });
+                self.registers
+                    .insert(PLL0Parameter::ADDR, pll0_param)
+                    .unwrap();
+                Some(CmdDelay {
+                    cmd: Command::write_reg(PLL0Parameter::ADDR, pll0_param, Destination::All),
+                    delay_ms: 100,
+                })
+            }
+            SequenceStep::HashFreq(2) => {
+                self.seq_step = SequenceStep::None;
+                None
+            }
+            _ => {
+                // authorize a SetHashFreq sequence start whatever the current step was
+                self.seq_step = SequenceStep::HashFreq(1);
+                if self.plls[BM1397_PLL_ID_HASH].divider() != 0x0f0f_0f00 {
+                    // start the ramp from the current frequency
+                    let freq = self.hash_freq();
+                    self.plls[BM1397_PLL_ID_HASH].set_divider(0x0f0f_0f00);
+                    self.set_hash_freq(freq);
                 }
+                let pll0_div = self.plls[BM1397_PLL_ID_HASH].divider();
+                self.registers.insert(PLL0Divider::ADDR, pll0_div).unwrap();
+                Some(CmdDelay {
+                    cmd: Command::write_reg(PLL0Divider::ADDR, pll0_div, Destination::All),
+                    delay_ms: 10,
+                })
             }
         }
-        // self.set_hash_freq(target_freq); // TODO: finish with the closest value
-         */
-        None // TODO: impl
     }
 
     /// ## Send Split Nonce Between Chips command list
