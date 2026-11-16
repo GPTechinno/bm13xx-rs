@@ -2,7 +2,7 @@
 categories = ["embedded", "no-std"]
 edition = "2021"
 name = "bm13xx-asic"
-rust-version = "1.86.0"
+rust-version = "1.87.0"
 version = "0.2.0"
 
 [dependencies]
