@@ -241,7 +241,8 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
 
     /// ## Enumerate all asics on the chain
     ///
-    /// Sets the `asic_addr_interval` according to the number of asics enumerated
+    /// Sets the `asic_addr_interval` to the largest power of two that fits all the asics enumerated
+    /// in the 8-bit chip address space, as the stock firmware does (2 for 65 to 128 asics).
     ///
     /// ### Errors
     ///
@@ -316,7 +317,7 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
             return Err(Error::EmptyChain);
         }
         debug!("Enumerated {} asics", asic_cnt);
-        chain.asic_addr_interval = 256 / asic_cnt;
+        chain.asic_addr_interval = 1 << (256usize / asic_cnt).max(1).ilog2();
         chain.asic_cnt = asic_cnt;
         chain.chip_nonce_space = chain.asic_addr_interval
             << (NONCE_BITS
@@ -683,7 +684,7 @@ mod tests {
     async fn enumerate_three_chips() {
         let chain = enumerate(3).await;
         assert_eq!(chain.asic_cnt, 3);
-        assert_eq!(chain.asic_addr_interval, 85);
+        assert_eq!(chain.asic_addr_interval, 64);
     }
 
     #[tokio::test]
