@@ -297,12 +297,11 @@ impl defmt::Format for ClockDelayCtrlV2 {
 
 /// # Clock Delay Control register, BM1370 layout
 ///
-/// Same register as [`ClockDelayCtrlV2`], with CCdly and PWth one bit lower:
-/// - PWth is in bits \[4:2\]: the stock S21 Pro and S21 XP firmwares log `pwth_sel = 3` and
-///   `pwth_sel = 4`, and write 0x0C and 0x10.
-/// - CCdly is assumed to be in bits \[6:5\]: a reference driver names the value 0x5A `PWTH6_CCDLY2`.
-/// - Sweep Frequency Mode is assumed to stay in bit 0.
-/// - The meaning of bits 7 and 1 is unknown.
+/// Same register as [`ClockDelayCtrlV2`], with another layout:
+/// - CCdly in bits \[7:5\],
+/// - PWth in bits \[4:2\],
+/// - Hash Clock Enable in bit 1,
+/// - Sweep Frequency Mode in bit 0.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub struct ClockDelayCtrlV3(pub u8);
 impl_boilerplate_for_core_reg!(ClockDelayCtrlV3);
@@ -312,10 +311,12 @@ impl ClockDelayCtrlV3 {
 
     const CCDLY_SEL_OFFSET: u8 = 5;
     const PWTH_SEL_OFFSET: u8 = 2;
+    const HASH_CLKEN_OFFSET: u8 = 1;
     const SWPF_MODE_OFFSET: u8 = 0;
 
-    const CCDLY_SEL_MASK: u8 = 0b11;
+    const CCDLY_SEL_MASK: u8 = 0b111;
     const PWTH_SEL_MASK: u8 = 0b111;
+    const HASH_CLKEN_MASK: u8 = 0b1;
     const SWPF_MODE_MASK: u8 = 0b1;
 
     /// ## Handle the CCdly field.
@@ -332,8 +333,8 @@ impl ClockDelayCtrlV3 {
     /// assert_eq!(ClockDelayCtrlV3(0x5A).ccdly(), 2);
     /// assert_eq!(cdc.set_ccdly(0).ccdly(), 0);
     /// assert_eq!(cdc.val(), 0x12); // other bits are kept
-    /// assert_eq!(cdc.set_ccdly(3).ccdly(), 3); // max value
-    /// assert_eq!(cdc.set_ccdly(4).ccdly(), 0); // out of bound value
+    /// assert_eq!(cdc.set_ccdly(7).ccdly(), 7); // max value
+    /// assert_eq!(cdc.set_ccdly(8).ccdly(), 0); // out of bound value
     /// ```
     pub const fn ccdly(&self) -> u8 {
         (self.0 >> Self::CCDLY_SEL_OFFSET) & Self::CCDLY_SEL_MASK
@@ -370,6 +371,32 @@ impl ClockDelayCtrlV3 {
         self
     }
 
+    /// ## Handle the Hash Clock Enable field.
+    ///
+    /// Get and set the Hash Clock Enable state.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use bm13xx_asic::core_register::ClockDelayCtrlV3;
+    ///
+    /// let mut cdc = ClockDelayCtrlV3(0x52); // BM1370 default value
+    /// assert!(cdc.hash_clock_enabled());
+    /// assert!(!cdc.disable_hash_clock().hash_clock_enabled());
+    /// assert!(cdc.enable_hash_clock().hash_clock_enabled());
+    /// ```
+    pub const fn hash_clock_enabled(&self) -> bool {
+        (self.0 >> Self::HASH_CLKEN_OFFSET) & Self::HASH_CLKEN_MASK == Self::HASH_CLKEN_MASK
+    }
+    pub fn enable_hash_clock(&mut self) -> &mut Self {
+        self.0 |= Self::HASH_CLKEN_MASK << Self::HASH_CLKEN_OFFSET;
+        self
+    }
+    pub fn disable_hash_clock(&mut self) -> &mut Self {
+        self.0 &= !(Self::HASH_CLKEN_MASK << Self::HASH_CLKEN_OFFSET);
+        self
+    }
+
     /// ## Handle the Sweep Frequency Mode field.
     ///
     /// Get and set the Sweep Frequency Mode state.
@@ -402,6 +429,7 @@ impl ::core::fmt::Display for ClockDelayCtrlV3 {
         f.debug_struct("ClockDelayCtrlV3")
             .field("ccdly", &self.ccdly())
             .field("pwth", &self.pwth())
+            .field("hash_clock_enabled", &self.hash_clock_enabled())
             .field(
                 "sweep_frequency_mode_enabled",
                 &self.sweep_frequency_mode_enabled(),
@@ -415,9 +443,10 @@ impl defmt::Format for ClockDelayCtrlV3 {
     fn format(&self, fmt: defmt::Formatter) {
         defmt::write!(
             fmt,
-            "ClockDelayCtrlV3 {{ ccdly: {}, pwth: {}, sweep_frequency_mode_enabled: {} }}",
+            "ClockDelayCtrlV3 {{ ccdly: {}, pwth: {}, hash_clock_enabled: {}, sweep_frequency_mode_enabled: {} }}",
             self.ccdly(),
             self.pwth(),
+            self.hash_clock_enabled(),
             self.sweep_frequency_mode_enabled(),
         );
     }
