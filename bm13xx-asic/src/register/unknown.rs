@@ -26,19 +26,28 @@ macro_rules! unknown {
     };
 }
 
+// Registers declared without fields: `RegXX` ones have no known meaning, the others are named but
+// their fields are not implemented yet. The counters `0x88`-`0x8C`, `0x90` and `0x94` are those of the
+// BM1368 and later (`0x8C` is `ClockOrderStatus` on the BM1397).
 unknown!(Time1sCounter, 0x04);
 unknown!(TopProcessMonitor, 0x24);
 unknown!(CoreNumber, 0x30);
 unknown!(Reg34, 0x34);
-unknown!(TicketNonceCounter, 0x90);
+unknown!(Domain0GotNonceCounter, 0x88);
+unknown!(Domain1GotNonceCounter, 0x89);
+unknown!(Domain2GotNonceCounter, 0x8A);
+unknown!(Domain3GotNonceCounter, 0x8B);
+unknown!(GotNonceCounter, 0x8C);
+unknown!(NtickNonceCounter, 0x90);
+unknown!(TickNonceCounter, 0x94);
 unknown!(RegAC, 0xAC);
 unknown!(RegB0, 0xB0);
 unknown!(RegB4, 0xB4);
-unknown!(RegB8, 0xB8);
+unknown!(AdcCtrl0, 0xB8);
 unknown!(AdcCtrl1, 0xB9);
-unknown!(RegBC, 0xBC);
-unknown!(RegC0, 0xC0);
-unknown!(RegC4, 0xC4);
+unknown!(Pll0ChargePumpProgramming, 0xBC);
+unknown!(Pll0OffsetCalibration, 0xC0);
+unknown!(AutoWorkCfg, 0xC4);
 unknown!(RegC8, 0xC8);
 unknown!(RegCC, 0xCC);
 unknown!(FrequencySweepControl, 0xD0);

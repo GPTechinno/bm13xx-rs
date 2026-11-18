@@ -382,10 +382,10 @@ impl Asic for BM1370 {
             .insert(ClockOrderControl1::ADDR, 0x0000_0000)
             .unwrap();
         self.registers
-            .insert(ClockOrderStatus::ADDR, 0x0000_0000)
+            .insert(GotNonceCounter::ADDR, 0x0000_0000)
             .unwrap();
         self.registers
-            .insert(TicketNonceCounter::ADDR, 0x0000_0000)
+            .insert(NtickNonceCounter::ADDR, 0x0000_0000)
             .unwrap();
         self.registers
             .insert(GoldenNonceForSweepReturn::ADDR, 0x0000_0000)
@@ -409,14 +409,20 @@ impl Asic for BM1370 {
         self.registers.insert(RegAC::ADDR, 0x0000_0000).unwrap();
         self.registers.insert(RegB0::ADDR, 0x0000_0000).unwrap();
         self.registers.insert(RegB4::ADDR, 0x0000_0000).unwrap();
-        self.registers.insert(RegB8::ADDR, 0x2000_0000).unwrap();
+        self.registers.insert(AdcCtrl0::ADDR, 0x2000_0000).unwrap();
         self.registers.insert(AdcCtrl1::ADDR, 0x0000_4480).unwrap();
         // self.registers.insert(RegBA::ADDR, 0x0000_0000).unwrap();
         // self.registers.insert(RegBB::ADDR, 0x0000_0000).unwrap();
-        self.registers.insert(RegBC::ADDR, 0x0000_3313).unwrap();
+        self.registers
+            .insert(Pll0ChargePumpProgramming::ADDR, 0x0000_3313)
+            .unwrap();
         // self.registers.insert(RegBD::ADDR, 0x0000_0000).unwrap();
-        self.registers.insert(RegC0::ADDR, 0x0000_2000).unwrap();
-        self.registers.insert(RegC4::ADDR, 0x0000_b850).unwrap();
+        self.registers
+            .insert(Pll0OffsetCalibration::ADDR, 0x0000_2000)
+            .unwrap();
+        self.registers
+            .insert(AutoWorkCfg::ADDR, 0x0000_b850)
+            .unwrap();
         self.registers.insert(RegC8::ADDR, 0x0000_0000).unwrap();
         self.registers.insert(RegCC::ADDR, 0x0000_0000).unwrap();
         self.registers

@@ -365,10 +365,16 @@ impl Asic for BM1366 {
         self.registers.insert(RegAC::ADDR, 0x0000_0000).unwrap();
         self.registers.insert(RegB0::ADDR, 0x0000_0000).unwrap();
         self.registers.insert(RegB4::ADDR, 0x0000_0000).unwrap();
-        self.registers.insert(RegB8::ADDR, 0x0000_0000).unwrap();
-        self.registers.insert(RegBC::ADDR, 0x0000_3313).unwrap();
-        self.registers.insert(RegC0::ADDR, 0x0000_2000).unwrap();
-        self.registers.insert(RegC4::ADDR, 0x0000_0000).unwrap();
+        self.registers.insert(AdcCtrl0::ADDR, 0x0000_0000).unwrap();
+        self.registers
+            .insert(Pll0ChargePumpProgramming::ADDR, 0x0000_3313)
+            .unwrap();
+        self.registers
+            .insert(Pll0OffsetCalibration::ADDR, 0x0000_2000)
+            .unwrap();
+        self.registers
+            .insert(AutoWorkCfg::ADDR, 0x0000_0000)
+            .unwrap();
         self.registers.insert(RegC8::ADDR, 0x0000_0000).unwrap();
         self.registers.insert(RegCC::ADDR, 0x0000_0000).unwrap();
         self.registers
