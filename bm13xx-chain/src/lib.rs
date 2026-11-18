@@ -322,8 +322,12 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
         chain.asic_cnt = asic_cnt;
         chain.chip_nonce_space = chain.asic_addr_interval
             << (NONCE_BITS
-                - (chain.asic.core_count().ilog2() + 1)
-                - (chain.asic.core_small_core_count().ilog2() + 1)
+                - (chain.asic.core_count().next_power_of_two().ilog2())
+                - (chain
+                    .asic
+                    .core_small_core_count()
+                    .next_power_of_two()
+                    .ilog2())
                 - CHIP_ADDR_BITS);
         // TODO: try to determine domain_cnt according to known topologies
         chain.delay.delay_ms(50).await;
@@ -440,11 +444,14 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
         }
         self.chip_nonce_space = self.asic.cno_interval()
             << (NONCE_BITS
-                - (self.asic.core_count().ilog2() + 1)
+                - (self.asic.core_count().next_power_of_two().ilog2())
                 - if self.version_rolling_mask.is_none() {
                     0
                 } else {
-                    self.asic.core_small_core_count().ilog2() + 1
+                    self.asic
+                        .core_small_core_count()
+                        .next_power_of_two()
+                        .ilog2()
                 }
                 - self.asic.cno_bits());
         Ok(())
@@ -467,7 +474,11 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
             self.delay.delay_ms(100).await;
             self.version_rolling_mask = Some(mask);
             // when hw version rolling is enabled, the small cores split version_space and not nonce_space anymore
-            self.chip_nonce_space <<= self.asic.core_small_core_count().ilog2() + 1;
+            self.chip_nonce_space <<= self
+                .asic
+                .core_small_core_count()
+                .next_power_of_two()
+                .ilog2();
         }
         Ok(())
     }
