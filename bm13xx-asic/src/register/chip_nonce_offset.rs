@@ -99,7 +99,8 @@ impl ChipNonceOffsetV2 {
     /// ```
     /// use bm13xx_asic::register::ChipNonceOffsetV2;
     ///
-    /// assert_eq!(ChipNonceOffsetV2(0x8000_03f1).offset(), 0x03f1);
+    /// assert!(ChipNonceOffsetV2(0x8000_03f1).valid());
+    /// assert!(!ChipNonceOffsetV2(0x0000_03f1).valid());
     /// ```
     pub const fn valid(&self) -> bool {
         (self.0 >> (Self::CNOV_OFFSET)) & Self::CNOV_MASK == Self::CNOV_MASK
