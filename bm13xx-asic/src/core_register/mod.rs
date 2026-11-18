@@ -34,6 +34,7 @@ mod clock_delay;
 mod core_enable;
 mod core_error;
 mod core_reg11;
+mod core_reg13;
 mod core_reg2;
 mod core_reg22;
 mod core_reg8;
@@ -45,6 +46,7 @@ pub use clock_delay::{ClockDelayCtrl, ClockDelayCtrlV2, ClockDelayCtrlV3};
 pub use core_enable::CoreEnable;
 pub use core_error::CoreError;
 pub use core_reg11::CoreReg11;
+pub use core_reg13::CoreReg13;
 pub use core_reg2::CoreReg2; // different than ProcessMonitorData but reuse of ID=2
 pub use core_reg22::CoreReg22;
 pub use core_reg8::CoreReg8;

@@ -19,6 +19,50 @@ pub const BM1370_PLL_ID_HASH: usize = 0; // PLL0 is used for Hashing
 pub const BM1370_PLL_OUT_HASH: usize = 0; // specifically PLL0_OUT0 is used for Hashing
 pub const BM1370_PLL_ID_UART: usize = 3; // PLL3 can be used for UART Baudrate
 pub const BM1370_PLL_OUT_UART: usize = 4; // specifically PLL3_OUT4 can be used for UART Baudrate
+/// First `SequenceStep::HashFreq` step of the writes done once before the first ramp.
+const PREPARE_STEP: usize = 10;
+
+/// # Hashboard settings
+///
+/// Values the stock firmware writes differently from one hashboard to another, read in captures of
+/// the original firmware.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct BoardConfig {
+    /// `pwth` of core register `ClockDelayCtrlV3`, written by `init_next()` and `reset_core_next()`.
+    pub clock_delay_pwth: u8,
+    /// `diode_vdd_mux_sel` of `AnalogMuxControlV2`, written by `init_next()` when the board does.
+    pub diode_vdd_mux_sel: Option<u8>,
+    /// `CLKO` driver strength in `IoDriverStrenghtConfiguration` of the last chip of each voltage
+    /// domain, written by `set_baudrate_next()`.
+    pub domain_end_clko_strength: u8,
+    /// `HashCountingNumber`, written by `set_version_rolling_next()`.
+    pub hash_counting_number: u32,
+}
+
+impl BoardConfig {
+    /// Antminer S21 Pro: 65 chips in 13 voltage domains.
+    pub const S21_PRO: Self = Self {
+        clock_delay_pwth: 3,
+        diode_vdd_mux_sel: None,
+        domain_end_clko_strength: 15,
+        hash_counting_number: 0x0000_1eb5,
+    };
+    /// Antminer S21 XP: 91 chips in 13 voltage domains. ESP-Miner's BM1370 init uses the same
+    /// clock delay, analog mux and IO driver strength.
+    pub const S21_XP: Self = Self {
+        clock_delay_pwth: 4,
+        diode_vdd_mux_sel: Some(3),
+        domain_end_clko_strength: 3,
+        hash_counting_number: 0x0000_1a44,
+    };
+}
+
+impl Default for BoardConfig {
+    fn default() -> Self {
+        Self::S21_XP
+    }
+}
 
 /// # BM1370
 #[derive(Debug)]
@@ -37,6 +81,10 @@ pub struct BM1370 {
     pub registers: FnvIndexMap<u8, u32, 64>,
     pub core_registers: FnvIndexMap<u8, u8, 16>,
     cno_interval: usize,
+    /// Settings of the hashboard the chip is on.
+    pub board: BoardConfig,
+    /// The writes done once before the first hash frequency ramp are done.
+    hash_freq_prepared: bool,
 }
 
 impl BM1370 {
@@ -44,6 +92,52 @@ impl BM1370 {
         BM1370 {
             input_clock_freq: clk,
             ..Default::default()
+        }
+    }
+
+    /// ## Create a BM1370 on a given hashboard
+    ///
+    /// ### Example
+    /// ```
+    /// use bm1370::{BoardConfig, BM1370};
+    ///
+    /// assert_eq!(BM1370::default().board, BoardConfig::S21_XP);
+    /// let bm1370 = BM1370::new_with_board(BoardConfig::S21_PRO);
+    /// assert_eq!(bm1370.board, BoardConfig::S21_PRO);
+    /// ```
+    pub fn new_with_board(board: BoardConfig) -> Self {
+        BM1370 {
+            board,
+            ..Default::default()
+        }
+    }
+
+    /// Write the shadow `AdcCtrl1` value (its reset value) to all chips.
+    fn write_adc_ctrl1(&self) -> CmdDelay {
+        CmdDelay {
+            cmd: Command::write_reg(
+                AdcCtrl1::ADDR,
+                *self.registers.get(&AdcCtrl1::ADDR).unwrap(),
+                Destination::All,
+            ),
+            delay_ms: 20,
+        }
+    }
+
+    /// First step of a hash frequency ramp: PLL0 output divider to 0.
+    fn hash_freq_start(&mut self) -> CmdDelay {
+        self.seq_step = SequenceStep::HashFreq(0);
+        self.plls[BM1370_PLL_ID_HASH].set_out_div(BM1370_PLL_OUT_HASH, 0);
+        self.registers
+            .insert(PLL0Divider::ADDR, self.plls[BM1370_PLL_ID_HASH].divider())
+            .unwrap();
+        CmdDelay {
+            cmd: Command::write_reg(
+                PLL0Divider::ADDR,
+                self.plls[BM1370_PLL_ID_HASH].divider(),
+                Destination::All,
+            ),
+            delay_ms: 2,
         }
     }
 
@@ -131,6 +225,8 @@ impl Default for BM1370 {
             registers: FnvIndexMap::<_, _, 64>::new(),
             core_registers: FnvIndexMap::<_, _, 16>::new(),
             cno_interval: 0,
+            board: BoardConfig::default(),
+            hash_freq_prepared: false,
         };
         bm1370.reset();
         bm1370
@@ -147,6 +243,7 @@ impl Asic for BM1370 {
         self.chip_addr = 0;
         self.registers = FnvIndexMap::<_, _, 64>::new();
         self.core_registers = FnvIndexMap::<_, _, 16>::new();
+        self.hash_freq_prepared = false;
         // Default PLLs Parameter
         self.plls[0].set_parameter(0xC054_0165);
         self.plls[1].set_parameter(0x2050_0174);
@@ -281,7 +378,7 @@ impl Asic for BM1370 {
         self.registers.insert(RegB0::ADDR, 0x0000_0000).unwrap();
         self.registers.insert(RegB4::ADDR, 0x0000_0000).unwrap();
         self.registers.insert(RegB8::ADDR, 0x2000_0000).unwrap();
-        self.registers.insert(AdcCtrl1::ADDR, 0x0000_0000).unwrap();
+        self.registers.insert(AdcCtrl1::ADDR, 0x0000_4480).unwrap();
         // self.registers.insert(RegBA::ADDR, 0x0000_0000).unwrap();
         // self.registers.insert(RegBB::ADDR, 0x0000_0000).unwrap();
         self.registers.insert(RegBC::ADDR, 0x0000_3313).unwrap();
@@ -424,7 +521,7 @@ impl Asic for BM1370 {
     ///
     /// ### Example
     /// ```
-    /// use bm1370::BM1370;
+    /// use bm1370::{BoardConfig, BM1370};
     /// use bm13xx_asic::{core_register::*, register::*, Asic, CmdDelay};
     ///
     /// let mut bm1370 = BM1370::default();
@@ -438,6 +535,14 @@ impl Asic for BM1370 {
     /// assert_eq!(bm1370.core_registers.get(&ClockDelayCtrlV3::ID).unwrap(), &0x10);
     /// assert_eq!(bm1370.registers.get(&TicketMask::ADDR).unwrap(), &0x0000_00ff);
     /// assert_eq!(bm1370.registers.get(&AnalogMuxControlV2::ADDR).unwrap(), &0x0000_0003);
+    ///
+    /// // Seen on S21Pro: pwth 3, no AnalogMuxControl
+    /// let mut bm1370 = BM1370::new_with_board(BoardConfig::S21_PRO);
+    /// assert_eq!(bm1370.init_next(256), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x3c, 0x80, 0x00, 0x8B, 0x00, 0x12], delay_ms: 10}));
+    /// assert_eq!(bm1370.init_next(256), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x3c, 0x80, 0x00, 0x80, 0x0c, 0x11], delay_ms: 10}));
+    /// assert_eq!(bm1370.init_next(256), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x14, 0x00, 0x00, 0x00, 0xFF, 0x08], delay_ms: 10}));
+    /// assert_eq!(bm1370.init_next(256), None);
+    /// assert_eq!(bm1370.registers.get(&AnalogMuxControlV2::ADDR).unwrap(), &0x0000_0000);
     /// ```
     fn init_next(&mut self, difficulty: u32) -> Option<CmdDelay> {
         match self.seq_step {
@@ -450,7 +555,7 @@ impl Asic for BM1370 {
                         // the stock firmware writes the whole register, other fields cleared
                         let clk_dly_ctrl = ClockDelayCtrlV3(0)
                             .set_ccdly(0)
-                            .set_pwth(4)
+                            .set_pwth(self.board.clock_delay_pwth)
                             .disable_sweep_frequency_mode()
                             .val();
                         self.core_registers
@@ -479,10 +584,15 @@ impl Asic for BM1370 {
                     }
                     2 => {
                         self.seq_step = SequenceStep::Init(3);
+                        // S21 XP only
+                        let Some(diode_vdd_mux_sel) = self.board.diode_vdd_mux_sel else {
+                            self.seq_step = SequenceStep::None;
+                            return None;
+                        };
                         let ana_mux_ctrl = AnalogMuxControlV2(
                             *self.registers.get(&AnalogMuxControlV2::ADDR).unwrap(),
                         )
-                        .set_diode_vdd_mux_sel(3)
+                        .set_diode_vdd_mux_sel(diode_vdd_mux_sel)
                         .val();
                         self.registers
                             .insert(AnalogMuxControlV2::ADDR, ana_mux_ctrl)
@@ -525,7 +635,7 @@ impl Asic for BM1370 {
     ///
     /// ### Example
     /// ```
-    /// use bm1370::{BM1370, BM1370_PLL_ID_UART};
+    /// use bm1370::{BoardConfig, BM1370, BM1370_PLL_ID_UART};
     /// use bm13xx_asic::{register::*, Asic, CmdDelay};
     ///
     /// let mut bm1370 = BM1370::default();
@@ -578,6 +688,11 @@ impl Asic for BM1370 {
     /// assert_eq!(bm1370.registers.get(&PLL3Parameter::ADDR).unwrap(), &0x5aa5_5aa5);
     /// assert_eq!(bm1370.registers.get(&FastUARTConfigurationV2::ADDR).unwrap(), &0x0130_0000);
     ///
+    /// // Seen on S21Pro: CLKO 15 on the last chip of each voltage domain
+    /// let mut bm1370 = BM1370::new_with_board(BoardConfig::S21_PRO);
+    /// assert_eq!(bm1370.set_baudrate_next(3_125_000, 13, 5, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x58, 0x00, 0x01, 0x11, 0x11, 0x0d], delay_ms: 0}));
+    /// assert_eq!(bm1370.set_baudrate_next(3_125_000, 13, 5, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0x80, 0x58, 0x00, 0x01, 0xf1, 0x11, 0x14], delay_ms: 0}));
+    /// assert_eq!(bm1370.set_baudrate_next(3_125_000, 13, 5, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0x76, 0x58, 0x00, 0x01, 0xf1, 0x11, 0x01], delay_ms: 0}));
     /// ```
     fn set_baudrate_next(
         &mut self,
@@ -598,7 +713,8 @@ impl Asic for BM1370 {
             SequenceStep::Baudrate(step) => {
                 if (sub_seq1_start..sub_seq2_start).contains(&step) {
                     self.seq_step = SequenceStep::Baudrate(step + 1);
-                    // last chip of each voltage domain should have IoDriverStrenghtConfiguration set to 0x0211_f111
+                    // the last chip of each voltage domain gets a stronger CLKO driver
+                    // (S21 XP: 0x0001_3111, S21 Pro: 0x0001_f111)
                     // (iterating voltage domain in decreasing chip address order)
                     let dom = sub_seq2_start - step - 1;
                     let io_drv_st_cfg = IoDriverStrenghtConfiguration(
@@ -607,7 +723,7 @@ impl Asic for BM1370 {
                             .get(&IoDriverStrenghtConfiguration::ADDR)
                             .unwrap(),
                     )
-                    .set_strenght(DriverSelect::CLKO, 3)
+                    .set_strenght(DriverSelect::CLKO, self.board.domain_end_clko_strength)
                     .val();
                     // do not save any chip-specific value
                     Some(CmdDelay {
@@ -934,7 +1050,7 @@ impl Asic for BM1370 {
                         // S21 Pro uses pwth 3 (0x0c), S21 XP pwth 4 (0x10)
                         let clk_dly_ctrl = ClockDelayCtrlV3(0)
                             .set_ccdly(0)
-                            .set_pwth(4)
+                            .set_pwth(self.board.clock_delay_pwth)
                             .disable_sweep_frequency_mode()
                             .val();
                         self.core_registers
@@ -1002,6 +1118,11 @@ impl Asic for BM1370 {
     /// use fugit::HertzU64;
     ///
     /// let mut bm1370 = BM1370::default();
+    /// // once before the first ramp
+    /// assert_eq!(bm1370.set_hash_freq_next(HertzU64::MHz(75)), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0xb9, 0x00, 0x00, 0x44, 0x80, 0x0d], delay_ms: 20}));
+    /// assert_eq!(bm1370.set_hash_freq_next(HertzU64::MHz(75)), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x54, 0x00, 0x00, 0x00, 0x02, 0x18], delay_ms: 100}));
+    /// assert_eq!(bm1370.set_hash_freq_next(HertzU64::MHz(75)), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0xb9, 0x00, 0x00, 0x44, 0x80, 0x0d], delay_ms: 20}));
+    /// assert_eq!(bm1370.set_hash_freq_next(HertzU64::MHz(75)), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x3c, 0x80, 0x00, 0x8d, 0xee, 0x1b], delay_ms: 10}));
     /// assert_eq!(bm1370.set_hash_freq_next(HertzU64::MHz(75)), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x70, 0x00, 0x00, 0x00, 0x00, 24], delay_ms: 2}));
     /// assert_eq!(bm1370.set_hash_freq_next(HertzU64::MHz(75)), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x08, 0xc0, 0xb4, 0x02, 0x74, 29], delay_ms: 400}));
     // assert_eq!(bm1370.set_hash_freq_next(HertzU64::MHz(75)), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x08, 0x40, 0xa2, 0x02, 0x55, 0x30], delay_ms: 400})); // seen on S21XP, but equivalent
@@ -1017,7 +1138,8 @@ impl Asic for BM1370 {
     ///     last = step.cmd;
     /// }
     /// assert_eq!(last[6..10], bm1370.plls[BM1370_PLL_ID_HASH].parameter().to_be_bytes());
-    /// // and going down
+    /// // and going down, without the writes done before the first ramp
+    /// assert_eq!(bm1370.set_hash_freq_next(HertzU64::MHz(75)).unwrap().cmd[5], PLL0Divider::ADDR);
     /// while let Some(step) = bm1370.set_hash_freq_next(HertzU64::MHz(75)) {
     ///     last = step.cmd;
     /// }
@@ -1028,6 +1150,50 @@ impl Asic for BM1370 {
             SequenceStep::HashFreq(1) => {
                 self.seq_step = SequenceStep::None;
                 None
+            }
+            SequenceStep::HashFreq(PREPARE_STEP) => {
+                self.seq_step = SequenceStep::HashFreq(PREPARE_STEP + 1);
+                // [55, AA, 51, 09, 00, 54, 00, 00, 00, 02, 18]
+                let ana_mux_ctrl =
+                    AnalogMuxControlV2(*self.registers.get(&AnalogMuxControlV2::ADDR).unwrap())
+                        .set_diode_vdd_mux_sel(2)
+                        .val();
+                self.registers
+                    .insert(AnalogMuxControlV2::ADDR, ana_mux_ctrl)
+                    .unwrap();
+                Some(CmdDelay {
+                    cmd: Command::write_reg(
+                        AnalogMuxControlV2::ADDR,
+                        ana_mux_ctrl,
+                        Destination::All,
+                    ),
+                    delay_ms: 100,
+                })
+            }
+            SequenceStep::HashFreq(step) if step == PREPARE_STEP + 1 => {
+                self.seq_step = SequenceStep::HashFreq(PREPARE_STEP + 2);
+                // [55, AA, 51, 09, 00, B9, 00, 00, 44, 80, 0D] again
+                Some(self.write_adc_ctrl1())
+            }
+            SequenceStep::HashFreq(step) if step == PREPARE_STEP + 2 => {
+                self.seq_step = SequenceStep::HashFreq(PREPARE_STEP + 3);
+                self.hash_freq_prepared = true;
+                // [55, AA, 51, 09, 00, 3C, 80, 00, 8D, EE, 1B]
+                let core_reg13 = 0xee;
+                self.core_registers
+                    .insert(CoreReg13::ID, core_reg13)
+                    .unwrap();
+                Some(CmdDelay {
+                    cmd: Command::write_reg(
+                        CoreRegisterControl::ADDR,
+                        CoreRegisterControl::write_core_reg(0, CoreReg13(core_reg13)),
+                        Destination::All,
+                    ),
+                    delay_ms: 10,
+                })
+            }
+            SequenceStep::HashFreq(step) if step == PREPARE_STEP + 3 => {
+                Some(self.hash_freq_start())
             }
             SequenceStep::HashFreq(_) => {
                 let step = HertzU64::kHz(6250);
@@ -1056,19 +1222,16 @@ impl Asic for BM1370 {
             }
             _ => {
                 // authorize a SetHashFreq sequence start whatever the current step was
-                self.seq_step = SequenceStep::HashFreq(0);
-                self.plls[BM1370_PLL_ID_HASH].set_out_div(BM1370_PLL_OUT_HASH, 0);
-                self.registers
-                    .insert(PLL0Divider::ADDR, self.plls[BM1370_PLL_ID_HASH].divider())
-                    .unwrap();
-                Some(CmdDelay {
-                    cmd: Command::write_reg(
-                        PLL0Divider::ADDR,
-                        self.plls[BM1370_PLL_ID_HASH].divider(),
-                        Destination::All,
-                    ),
-                    delay_ms: 2,
-                })
+                if self.hash_freq_prepared {
+                    Some(self.hash_freq_start())
+                } else {
+                    // Before its first ramp, the stock firmware writes AdcCtrl1, AnalogMuxControl,
+                    // AdcCtrl1 again and core register 13 to all chips (S21 Pro and S21 XP
+                    // captures; ESP-Miner does the same).
+                    // [55, AA, 51, 09, 00, B9, 00, 00, 44, 80, 0D]
+                    self.seq_step = SequenceStep::HashFreq(PREPARE_STEP);
+                    Some(self.write_adc_ctrl1())
+                }
             }
         }
     }
@@ -1132,14 +1295,16 @@ impl Asic for BM1370 {
     ///
     /// ### Example
     /// ```
-    /// use bm1370::BM1370;
+    /// use bm1370::{BoardConfig, BM1370};
     /// use bm13xx_asic::{Asic, CmdDelay};
     ///
     /// let mut bm1370 = BM1370::default();
-    // assert_eq!(bm1370.set_version_rolling_next(0x1fff_e000, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x10, 0x00, 0x00, 0x1a, 0x44, 0x17], delay_ms: 1})); // S21XP
-    /// assert_eq!(bm1370.set_version_rolling_next(0x1fff_e000, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x10, 0x00, 0x00, 0x1e, 0xb5, 0x0f], delay_ms: 1})); // S21Pro
+    /// assert_eq!(bm1370.set_version_rolling_next(0x1fff_e000, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x10, 0x00, 0x00, 0x1a, 0x44, 0x17], delay_ms: 1})); // S21XP
     /// assert_eq!(bm1370.set_version_rolling_next(0x1fff_e000, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0xa4, 0x90, 0x00, 0xff, 0xff, 0x1c], delay_ms: 1}));
     /// assert_eq!(bm1370.set_version_rolling_next(0x1fff_e000, 2), None);
+    ///
+    /// let mut bm1370 = BM1370::new_with_board(BoardConfig::S21_PRO);
+    /// assert_eq!(bm1370.set_version_rolling_next(0x1fff_e000, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x10, 0x00, 0x00, 0x1e, 0xb5, 0x0f], delay_ms: 1})); // S21Pro
     /// ```
     fn set_version_rolling_next(
         &mut self,
@@ -1171,8 +1336,7 @@ impl Asic for BM1370 {
             _ => {
                 // authorize a VersionRolling sequence start whatever the current step was
                 self.seq_step = SequenceStep::VersionRolling(0);
-                let hcn = 0x0000_1eb5; // S21Pro
-                                       // let hcn = 0x0000_1a44; // S21XP
+                let hcn = self.board.hash_counting_number;
                 self.registers
                     .insert(HashCountingNumber::ADDR, hcn)
                     .unwrap();

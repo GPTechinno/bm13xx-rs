@@ -20,6 +20,40 @@ pub const BM1366_PLL_OUT_HASH: usize = 0; // specifically PLL0_OUT0 is used for 
 pub const BM1366_PLL_ID_UART: usize = 1; // PLL1 can be used for UART Baudrate
 pub const BM1366_PLL_OUT_UART: usize = 4; // specifically PLL1_OUT4 can be used for UART Baudrate
 
+/// # Hashboard settings
+///
+/// Values the stock firmware writes differently from one hashboard to another, read in captures of
+/// the original firmware.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct BoardConfig {
+    /// `CLKO` driver strength in `IoDriverStrenghtConfiguration` of all chips, written by
+    /// `set_baudrate_next()`.
+    pub clko_strength: u8,
+    /// `CLKO` driver strength of the last chip of each voltage domain, written by
+    /// `set_baudrate_next()` when the board raises it.
+    pub domain_end_clko_strength: Option<u8>,
+}
+
+impl BoardConfig {
+    /// Antminer S19 XP: 110 chips in 11 voltage domains.
+    pub const S19_XP: Self = Self {
+        clko_strength: 1,
+        domain_end_clko_strength: Some(15),
+    };
+    /// Antminer S19k Pro: 77 chips in 11 voltage domains.
+    pub const S19K_PRO: Self = Self {
+        clko_strength: 4,
+        domain_end_clko_strength: None,
+    };
+}
+
+impl Default for BoardConfig {
+    fn default() -> Self {
+        Self::S19_XP
+    }
+}
+
 /// # BM1366
 #[derive(Debug)]
 // #[cfg_attr(feature = "defmt", derive(defmt::Format))] // FnvIndexMap doesn't implement defmt
@@ -36,12 +70,31 @@ pub struct BM1366 {
     pub chip_addr: u8,
     pub registers: FnvIndexMap<u8, u32, 64>,
     pub core_registers: FnvIndexMap<u8, u8, 16>,
+    /// Settings of the hashboard the chip is on.
+    pub board: BoardConfig,
 }
 
 impl BM1366 {
     pub fn new_with_clk(clk: HertzU64) -> Self {
         BM1366 {
             input_clock_freq: clk,
+            ..Default::default()
+        }
+    }
+
+    /// ## Create a BM1366 on a given hashboard
+    ///
+    /// ### Example
+    /// ```
+    /// use bm1366::{BoardConfig, BM1366};
+    ///
+    /// assert_eq!(BM1366::default().board, BoardConfig::S19_XP);
+    /// let bm1366 = BM1366::new_with_board(BoardConfig::S19K_PRO);
+    /// assert_eq!(bm1366.board, BoardConfig::S19K_PRO);
+    /// ```
+    pub fn new_with_board(board: BoardConfig) -> Self {
+        BM1366 {
+            board,
             ..Default::default()
         }
     }
@@ -180,6 +233,7 @@ impl Default for BM1366 {
             chip_addr: 0,
             registers: FnvIndexMap::<_, _, 64>::new(),
             core_registers: FnvIndexMap::<_, _, 16>::new(),
+            board: BoardConfig::default(),
         };
         bm1366.reset();
         bm1366
@@ -536,7 +590,7 @@ impl Asic for BM1366 {
     ///
     /// ### Example
     /// ```
-    /// use bm1366::{BM1366, BM1366_PLL_ID_UART};
+    /// use bm1366::{BoardConfig, BM1366, BM1366_PLL_ID_UART};
     /// use bm13xx_asic::{register::*, Asic, CmdDelay};
     ///
     /// let mut bm1366 = BM1366::default();
@@ -591,6 +645,12 @@ impl Asic for BM1366 {
     /// assert_eq!(bm1366.registers.get(&IoDriverStrenghtConfiguration::ADDR).unwrap(), &0x0211_1111);
     /// assert_eq!(bm1366.registers.get(&PLL1Parameter::ADDR).unwrap(), &0xC070_0111);
     /// assert_eq!(bm1366.registers.get(&FastUARTConfigurationV2::ADDR).unwrap(), &0x1560_0700);
+    ///
+    /// // real example from S19k Pro: CLKO 4 on all chips, nothing more at the domain ends
+    /// let mut bm1366 = BM1366::new_with_board(BoardConfig::S19K_PRO);
+    /// assert_eq!(bm1366.set_baudrate_next(1_000_000, 11, 7, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x58, 0x02, 0x11, 0x41, 0x11, 0x13], delay_ms: 0}));
+    /// assert_eq!(bm1366.set_baudrate_next(1_000_000, 11, 7, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0x8c, 0x2c, 0x00, 0x15, 0x00, 0x03, 0x09], delay_ms: 0}));
+    /// assert_eq!(bm1366.set_baudrate_next(1_000_000, 11, 7, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x41, 0x09, 0x98, 0x2c, 0x00, 0x15, 0x00, 0x03, 0x11], delay_ms: 0}));
     /// ```
     fn set_baudrate_next(
         &mut self,
@@ -599,8 +659,13 @@ impl Asic for BM1366 {
         domain_asic_cnt: usize,
         asic_addr_interval: usize,
     ) -> Option<CmdDelay> {
+        let domain_end_writes = if self.board.domain_end_clko_strength.is_some() {
+            chain_domain_cnt
+        } else {
+            0
+        };
         let sub_seq1_start = 0;
-        let sub_seq2_start = sub_seq1_start + chain_domain_cnt;
+        let sub_seq2_start = sub_seq1_start + domain_end_writes;
         let sub_seq3_start = sub_seq2_start + chain_domain_cnt;
         let sub_seq4_start = sub_seq3_start + chain_domain_cnt;
         let sub_seq5_start = sub_seq4_start + 1;
@@ -610,7 +675,8 @@ impl Asic for BM1366 {
             SequenceStep::Baudrate(step) => {
                 if (sub_seq1_start..sub_seq2_start).contains(&step) {
                     self.seq_step = SequenceStep::Baudrate(step + 1);
-                    // last chip of each voltage domain should have IoDriverStrenghtConfiguration set to 0x0211_f111
+                    // on boards that do it (S19 XP: 0x0211_f111), the last chip of each voltage
+                    // domain gets a stronger CLKO driver
                     // (iterating voltage domain in decreasing chip address order)
                     let dom = sub_seq2_start - step - 1;
                     let io_drv_st_cfg = IoDriverStrenghtConfiguration(
@@ -619,7 +685,10 @@ impl Asic for BM1366 {
                             .get(&IoDriverStrenghtConfiguration::ADDR)
                             .unwrap(),
                     )
-                    .set_strenght(DriverSelect::CLKO, 15)
+                    .set_strenght(
+                        DriverSelect::CLKO,
+                        self.board.domain_end_clko_strength.unwrap_or_default(),
+                    )
                     .val();
                     // do not save any chip-specific value
                     Some(CmdDelay {
@@ -802,7 +871,7 @@ impl Asic for BM1366 {
                 .disable(DriverRSelect::D1R)
                 .enable(DriverRSelect::D0R)
                 .set_strenght(DriverSelect::RO, 1)
-                .set_strenght(DriverSelect::CLKO, 1)
+                .set_strenght(DriverSelect::CLKO, self.board.clko_strength)
                 .set_strenght(DriverSelect::NRSTO, 1)
                 .set_strenght(DriverSelect::BO, 1)
                 .set_strenght(DriverSelect::CO, 1)
