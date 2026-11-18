@@ -36,8 +36,9 @@ pub struct BoardConfig {
     /// `CLKO` driver strength in `IoDriverStrenghtConfiguration` of the last chip of each voltage
     /// domain, written by `set_baudrate_next()`.
     pub domain_end_clko_strength: u8,
-    /// `HashCountingNumber`, written by `set_version_rolling_next()`.
-    pub hash_counting_number: u32,
+    /// `HashCountingNumber`, written by `set_version_rolling_next()`. `None`: computed from the
+    /// address interval and the hash frequency.
+    pub hash_counting_number: Option<u32>,
 }
 
 impl BoardConfig {
@@ -46,7 +47,7 @@ impl BoardConfig {
         clock_delay_pwth: 3,
         diode_vdd_mux_sel: None,
         domain_end_clko_strength: 15,
-        hash_counting_number: 0x0000_1eb5,
+        hash_counting_number: Some(0x0000_1eb5),
     };
     /// Antminer S21 XP: 91 chips in 13 voltage domains. ESP-Miner's BM1370 init uses the same
     /// clock delay, analog mux and IO driver strength.
@@ -54,13 +55,17 @@ impl BoardConfig {
         clock_delay_pwth: 4,
         diode_vdd_mux_sel: Some(3),
         domain_end_clko_strength: 3,
-        hash_counting_number: 0x0000_1a44,
+        hash_counting_number: Some(0x0000_1a44),
     };
 }
 
 impl Default for BoardConfig {
+    /// The S21 XP settings, with a computed `HashCountingNumber`.
     fn default() -> Self {
-        Self::S21_XP
+        Self {
+            hash_counting_number: None,
+            ..Self::S21_XP
+        }
     }
 }
 
@@ -88,6 +93,32 @@ pub struct BM1370 {
 }
 
 impl BM1370 {
+    /// ## Hash counting number for an address interval at the current hash frequency
+    ///
+    /// 85 % of the time a core takes to cover its share of the nonce range:
+    /// `(interval << 24) / next_pow2(cores) * 25 MHz / (2 * hash frequency)`.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use bm1370::BM1370;
+    /// use fugit::HertzU64;
+    ///
+    /// let mut bm1370 = BM1370::default();
+    /// bm1370.set_hash_freq(HertzU64::MHz(448));
+    /// assert_eq!(bm1370.hash_counting_number(2), 6230); // 91 chips
+    /// bm1370.set_hash_freq(HertzU64::MHz(525));
+    /// assert_eq!(bm1370.hash_counting_number(256), 679_077); // single chip
+    /// ```
+    pub fn hash_counting_number(&self, asic_addr_interval: usize) -> u32 {
+        let f_mhz = (self.hash_freq().to_raw() / 1_000_000).max(1);
+        let base = ((asic_addr_interval as u64) << 24) / BM1370_CORE_CNT.next_power_of_two() as u64
+            * 25
+            / f_mhz
+            / 2;
+        (base * 85 / 100).min(u32::MAX as u64) as u32
+    }
+
     pub fn new_with_clk(clk: HertzU64) -> Self {
         BM1370 {
             input_clock_freq: clk,
@@ -101,7 +132,8 @@ impl BM1370 {
     /// ```
     /// use bm1370::{BoardConfig, BM1370};
     ///
-    /// assert_eq!(BM1370::default().board, BoardConfig::S21_XP);
+    /// assert_eq!(BM1370::default().board, BoardConfig::default());
+    /// assert_eq!(BoardConfig::default().hash_counting_number, None);
     /// let bm1370 = BM1370::new_with_board(BoardConfig::S21_PRO);
     /// assert_eq!(bm1370.board, BoardConfig::S21_PRO);
     /// ```
@@ -1298,7 +1330,12 @@ impl Asic for BM1370 {
     /// use bm1370::{BoardConfig, BM1370};
     /// use bm13xx_asic::{Asic, CmdDelay};
     ///
-    /// let mut bm1370 = BM1370::default();
+    /// let mut bm1370 = BM1370::default(); // computed at the 50 MHz reset frequency
+    /// assert_eq!(bm1370.set_version_rolling_next(0x1fff_e000, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x10, 0x00, 0x00, 0xd9, 0x99, 0x13], delay_ms: 1}));
+    /// assert_eq!(bm1370.set_version_rolling_next(0x1fff_e000, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0xa4, 0x90, 0x00, 0xff, 0xff, 0x1c], delay_ms: 1}));
+    /// assert_eq!(bm1370.set_version_rolling_next(0x1fff_e000, 2), None);
+    ///
+    /// let mut bm1370 = BM1370::new_with_board(BoardConfig::S21_XP);
     /// assert_eq!(bm1370.set_version_rolling_next(0x1fff_e000, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x10, 0x00, 0x00, 0x1a, 0x44, 0x17], delay_ms: 1})); // S21XP
     /// assert_eq!(bm1370.set_version_rolling_next(0x1fff_e000, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0xa4, 0x90, 0x00, 0xff, 0xff, 0x1c], delay_ms: 1}));
     /// assert_eq!(bm1370.set_version_rolling_next(0x1fff_e000, 2), None);
@@ -1309,7 +1346,7 @@ impl Asic for BM1370 {
     fn set_version_rolling_next(
         &mut self,
         mask: u32,
-        _asic_addr_interval: usize,
+        asic_addr_interval: usize,
     ) -> Option<CmdDelay> {
         match self.seq_step {
             SequenceStep::VersionRolling(step) => match step {
@@ -1336,7 +1373,10 @@ impl Asic for BM1370 {
             _ => {
                 // authorize a VersionRolling sequence start whatever the current step was
                 self.seq_step = SequenceStep::VersionRolling(0);
-                let hcn = self.board.hash_counting_number;
+                let hcn = self
+                    .board
+                    .hash_counting_number
+                    .unwrap_or_else(|| self.hash_counting_number(asic_addr_interval));
                 self.registers
                     .insert(HashCountingNumber::ADDR, hcn)
                     .unwrap();
