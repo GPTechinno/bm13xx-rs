@@ -44,13 +44,25 @@ impl ChipNonceOffsetV2 {
 
     /// ## Create a chip nonce offset for a given asic in a given chain.
     ///
+    /// Chip `i` of `n` gets `ceil(i * 0x10000 / n)`, as the stock firmware computes it
+    /// (`set_chain_asic_nonce_space_divide`).
+    ///
     /// ### Example
     ///
     /// ```
     /// use bm13xx_asic::register::ChipNonceOffsetV2;
     ///
+    /// assert_eq!(ChipNonceOffsetV2::new(0, 65), ChipNonceOffsetV2(0x8000_0000));
     /// assert_eq!(ChipNonceOffsetV2::new(1, 65), ChipNonceOffsetV2(0x8000_03f1));
     /// assert_eq!(ChipNonceOffsetV2::new(64, 65), ChipNonceOffsetV2(0x8000_fc10));
+    /// // S21 XP
+    /// assert_eq!(ChipNonceOffsetV2::new(1, 91), ChipNonceOffsetV2(0x8000_02d1));
+    /// assert_eq!(ChipNonceOffsetV2::new(2, 91), ChipNonceOffsetV2(0x8000_05a1));
+    /// // an exact division is not rounded up
+    /// assert_eq!(ChipNonceOffsetV2::new(1, 2), ChipNonceOffsetV2(0x8000_8000));
+    /// assert_eq!(ChipNonceOffsetV2::new(3, 4), ChipNonceOffsetV2(0x8000_c000));
+    /// assert_eq!(ChipNonceOffsetV2::new(3, 6), ChipNonceOffsetV2(0x8000_8000));
+    /// assert_eq!(ChipNonceOffsetV2::new(1, 6), ChipNonceOffsetV2(0x8000_2aab));
     /// ```
     pub fn new(asic_index: usize, chain_asic_num: usize) -> Self {
         if chain_asic_num == 0 {
@@ -58,8 +70,7 @@ impl ChipNonceOffsetV2 {
         } else {
             Self(
                 (Self::CNOV_MASK << Self::CNOV_OFFSET)
-                    + (Self::CNO_MASK + 1) * (asic_index as u32) / (chain_asic_num as u32)
-                    + if asic_index > 0 { 1 } else { 0 },
+                    + ((Self::CNO_MASK + 1) * (asic_index as u32)).div_ceil(chain_asic_num as u32),
             )
         }
     }
