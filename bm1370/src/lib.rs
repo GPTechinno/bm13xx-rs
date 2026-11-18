@@ -1262,7 +1262,7 @@ impl Asic for BM1370 {
                 self.seq_step = SequenceStep::SplitNonce(step + 1);
                 let cno = ChipNonceOffsetV2::new(step, chain_asic_num).val();
                 if step == 1 {
-                    self.cno_interval = cno as usize;
+                    self.cno_interval = ChipNonceOffsetV2(cno).offset() as usize;
                 }
                 self.registers.insert(ChipNonceOffsetV2::ADDR, cno).unwrap();
                 Some(CmdDelay {
