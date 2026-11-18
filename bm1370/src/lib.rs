@@ -24,8 +24,7 @@ const PREPARE_STEP: usize = 10;
 
 /// # Hashboard settings
 ///
-/// Values the stock firmware writes differently from one hashboard to another, read in captures of
-/// the original firmware.
+/// Settings that differ from one hashboard to another.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct BoardConfig {
@@ -49,8 +48,7 @@ impl BoardConfig {
         domain_end_clko_strength: 15,
         hash_counting_number: Some(0x0000_1eb5),
     };
-    /// Antminer S21 XP: 91 chips in 13 voltage domains. ESP-Miner's BM1370 init uses the same
-    /// clock delay, analog mux and IO driver strength.
+    /// Antminer S21 XP: 91 chips in 13 voltage domains.
     pub const S21_XP: Self = Self {
         clock_delay_pwth: 4,
         diode_vdd_mux_sel: Some(3),
@@ -595,7 +593,7 @@ impl Asic for BM1370 {
                         self.seq_step = SequenceStep::Init(1);
                         // 2 - [55, AA, 51, 09, 00, 3C, 80, 00, 80, 0C, 11] // S21 Pro: pwth 3
                         // 2 - [55, AA, 51, 09, 00, 3C, 80, 00, 80, 10, 12] // S21 XP: pwth 4
-                        // the stock firmware writes the whole register, other fields cleared
+                        // the whole register is written, other fields cleared
                         let clk_dly_ctrl = ClockDelayCtrlV3(0)
                             .set_ccdly(0)
                             .set_pwth(self.board.clock_delay_pwth)
@@ -1268,9 +1266,8 @@ impl Asic for BM1370 {
                 if self.hash_freq_prepared {
                     Some(self.hash_freq_start())
                 } else {
-                    // Before its first ramp, the stock firmware writes AdcCtrl1, AnalogMuxControl,
-                    // AdcCtrl1 again and core register 13 to all chips (S21 Pro and S21 XP
-                    // captures; ESP-Miner does the same).
+                    // Before the first ramp: AdcCtrl1, AnalogMuxControl, AdcCtrl1 again and
+                    // NonceBinOverflowControl to all chips.
                     // [55, AA, 51, 09, 00, B9, 00, 00, 44, 80, 0D]
                     self.seq_step = SequenceStep::HashFreq(PREPARE_STEP);
                     Some(self.write_adc_ctrl1())

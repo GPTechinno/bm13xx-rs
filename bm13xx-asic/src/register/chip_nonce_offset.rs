@@ -44,8 +44,7 @@ impl ChipNonceOffsetV2 {
 
     /// ## Create a chip nonce offset for a given asic in a given chain.
     ///
-    /// Chip `i` of `n` gets `ceil(i * 0x10000 / n)`, as the stock firmware computes it
-    /// (`set_chain_asic_nonce_space_divide`).
+    /// Chip `i` of `n` gets `ceil(i * 0x10000 / n)`.
     ///
     /// ### Example
     ///

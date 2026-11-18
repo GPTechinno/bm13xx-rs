@@ -22,8 +22,7 @@ pub const BM1366_PLL_OUT_UART: usize = 4; // specifically PLL1_OUT4 can be used 
 
 /// # Hashboard settings
 ///
-/// Values the stock firmware writes differently from one hashboard to another, read in captures of
-/// the original firmware.
+/// Settings that differ from one hashboard to another.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct BoardConfig {
@@ -1303,7 +1302,7 @@ impl Asic for BM1366 {
             _ => {
                 // authorize a VersionRolling sequence start whatever the current step was
                 self.seq_step = SequenceStep::VersionRolling(0);
-                // Same rule as the stock firmware: 80 % of the core nonce space share
+                // 80 % of the core nonce space share
                 // (asic_addr_interval << 17) * 25 MHz / (2 * hash frequency), minus 1.
                 let hcn = (asic_addr_interval as u64 * 1_310_720_000_000
                     / self.hash_freq().to_raw().max(1))
