@@ -358,7 +358,7 @@ impl Asic for BM1370 {
             .insert(PLL2Parameter::ADDR, 0x2050_0174)
             .unwrap();
         self.registers
-            .insert(PLL3Parameter::ADDR, 0x0000_0000)
+            .insert(RoscPadDisable::ADDR, 0x0000_0000)
             .unwrap();
         self.registers
             .insert(OrderedClockMonitor::ADDR, 0x0001_0200)
@@ -717,7 +717,7 @@ impl Asic for BM1370 {
     /// assert_eq!(bm1370.set_baudrate_next(3_125_000, 13, 7, 2), None);
     // assert!(bm1370.plls[BM1370_PLL_ID_UART].enabled());
     /// assert_eq!(bm1370.registers.get(&IoDriverStrenghtConfiguration::ADDR).unwrap(), &0x0001_1111);
-    /// assert_eq!(bm1370.registers.get(&PLL3Parameter::ADDR).unwrap(), &0x5aa5_5aa5);
+    /// assert_eq!(bm1370.registers.get(&RoscPadDisable::ADDR).unwrap(), &0x5aa5_5aa5);
     /// assert_eq!(bm1370.registers.get(&FastUARTConfigurationV2::ADDR).unwrap(), &0x0130_0000);
     ///
     /// // Seen on S21Pro: CLKO 15 on the last chip of each voltage domain
@@ -770,22 +770,12 @@ impl Asic for BM1370 {
                     })
                 } else if step == sub_seq2_start {
                     self.seq_step = SequenceStep::Baudrate(sub_seq3_start);
-                    self.plls[BM1370_PLL_ID_UART]
-                        .set_parameter(0x5aa5_5aa5) // TODO: replace these fixed values with equivalent individual ones below
-                        // .lock()
-                        // .enable()
-                        // .set_fb_div(112)
-                        // .set_ref_div(1)
-                        // .set_post1_div(1)
-                        // .set_post2_div(1)
-                        .set_out_div(BM1370_PLL_OUT_UART, pll3_div4);
-                    // send the captured value as is: `Pll::parameter()` can't re-encode all its bits
-                    let pll3_param = 0x5aa5_5aa5;
-                    self.registers
-                        .insert(PLL3Parameter::ADDR, pll3_param)
-                        .unwrap();
+                    let rosc = RoscPadDisable(*self.registers.get(&RoscPadDisable::ADDR).unwrap())
+                        .disable()
+                        .val();
+                    self.registers.insert(RoscPadDisable::ADDR, rosc).unwrap();
                     Some(CmdDelay {
-                        cmd: Command::write_reg(PLL3Parameter::ADDR, pll3_param, Destination::All),
+                        cmd: Command::write_reg(RoscPadDisable::ADDR, rosc, Destination::All),
                         delay_ms: 0,
                     })
                 } else if (sub_seq3_start..sub_seq4_start).contains(&step) {
@@ -867,6 +857,8 @@ impl Asic for BM1370 {
                         })
                     } else {
                         self.seq_step = SequenceStep::Baudrate(sub_seq6_start);
+                        // TODO: 0x68 is RoscPadDisable on the BM1370; above 3.125 Mbaud the UART
+                        // clock comes from PLL1 (0x60).
                         self.plls[BM1370_PLL_ID_UART]
                             // .set_parameter(0xC070_0111)
                             .lock()

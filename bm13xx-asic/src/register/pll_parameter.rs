@@ -27,6 +27,7 @@ impl PLL2Parameter {
     pub const ADDR: u8 = 0x64;
 }
 
+/// BM1397. On the BM1368 and later, `0x68` is [`RoscPadDisable`](crate::register::RoscPadDisable).
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub struct PLL3Parameter(pub u32);
 impl_boilerplate_for!(PLL3Parameter);
