@@ -440,21 +440,26 @@ impl Asic for BM1370 {
             .insert(ClockDelayCtrlV3::ID, 0x52)
             .unwrap();
         // self.core_registers.insert(1, 0x00).unwrap(); // not used anywhere in official FW
-        self.core_registers.insert(CoreReg2::ID, 0x55).unwrap();
+        self.core_registers.insert(CoreEnableV2::ID, 0x55).unwrap();
         // self.core_registers.insert(CoreError::ID, 0x00).unwrap();
         // self.core_registers.insert(CoreEnable::ID, 0x08).unwrap();
-        self.core_registers.insert(HashClockCtrl::ID, 0x00).unwrap();
         self.core_registers
-            .insert(HashClockCounter::ID, 0x08)
+            .insert(HashClockCtrlV2::ID, 0x00)
             .unwrap();
+        self.core_registers
+            .insert(HashClockCounterV2::ID, 0x00)
+            .unwrap();
+        self.core_registers.insert(PgMont::ID, 0x08).unwrap();
         // self
         //     .core_registers
         //     .insert(SweepClockCtrl::ID, 0x00)
         //     .unwrap();
-        self.core_registers.insert(CoreReg8::ID, 0x00).unwrap();
+        self.core_registers.insert(AutoClkEn::ID, 0x00).unwrap();
         // self.core_registers.insert(9, 0x00).unwrap();
         // self.core_registers.insert(9, 0x00).unwrap();
-        self.core_registers.insert(CoreReg11::ID, 0x00).unwrap();
+        self.core_registers
+            .insert(ClockSelectCtrl::ID, 0x00)
+            .unwrap();
         // self.core_registers.insert(12, 0x00).unwrap();
         // self.core_registers.insert(13, 0x15).unwrap();
         // self.core_registers.insert(14, 0x00).unwrap();
@@ -465,7 +470,7 @@ impl Asic for BM1370 {
         // self.core_registers.insert(19, 0x00).unwrap();
         // self.core_registers.insert(20, 0x00).unwrap();
         // self.core_registers.insert(21, 0x00).unwrap();
-        self.core_registers.insert(CoreReg22::ID, 0x00).unwrap();
+        self.core_registers.insert(OcvPulseWidth::ID, 0x00).unwrap();
         // self.core_registers.insert(23, 0x80).unwrap();
     }
 
@@ -563,7 +568,7 @@ impl Asic for BM1370 {
     /// assert_eq!(bm1370.init_next(256), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x14, 0x00, 0x00, 0x00, 0xFF, 0x08], delay_ms: 10}));
     /// assert_eq!(bm1370.init_next(256), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x54, 0x00, 0x00, 0x00, 0x03, 0x1d], delay_ms: 0}));
     /// assert_eq!(bm1370.init_next(256), None);
-    /// assert_eq!(bm1370.core_registers.get(&CoreReg11::ID).unwrap(), &0x00);
+    /// assert_eq!(bm1370.core_registers.get(&ClockSelectCtrl::ID).unwrap(), &0x00);
     /// assert_eq!(bm1370.core_registers.get(&ClockDelayCtrlV3::ID).unwrap(), &0x10);
     /// assert_eq!(bm1370.registers.get(&TicketMask::ADDR).unwrap(), &0x0000_00ff);
     /// assert_eq!(bm1370.registers.get(&AnalogMuxControlV2::ADDR).unwrap(), &0x0000_0003);
@@ -648,13 +653,16 @@ impl Asic for BM1370 {
             _ => {
                 // authorize an Init sequence start whatever the current step was
                 self.seq_step = SequenceStep::Init(0);
-                let reg11 = CoreReg11(*self.core_registers.get(&CoreReg11::ID).unwrap()).val();
+                let reg11 =
+                    ClockSelectCtrl(*self.core_registers.get(&ClockSelectCtrl::ID).unwrap()).val();
                 // reg11 = 0x00; // TODO: replace by some field specific method when they are known
-                self.core_registers.insert(CoreReg11::ID, reg11).unwrap();
+                self.core_registers
+                    .insert(ClockSelectCtrl::ID, reg11)
+                    .unwrap();
                 Some(CmdDelay {
                     cmd: Command::write_reg(
                         CoreRegisterControl::ADDR,
-                        CoreRegisterControl::write_core_reg(0, CoreReg11(reg11)),
+                        CoreRegisterControl::write_core_reg(0, ClockSelectCtrl(reg11)),
                         Destination::All,
                     ),
                     delay_ms: 10,
@@ -1054,16 +1062,19 @@ impl Asic for BM1370 {
                     1 => {
                         self.seq_step = SequenceStep::ResetCore(2);
                         // let core_reg_11 =
-                        //     CoreReg11(*self.core_registers.get(&CoreReg11::ID).unwrap())
+                        //     ClockSelectCtrl(*self.core_registers.get(&ClockSelectCtrl::ID).unwrap())
                         //         .val();
                         let core_reg_11 = 0x00;
                         self.core_registers
-                            .insert(CoreReg11::ID, core_reg_11)
+                            .insert(ClockSelectCtrl::ID, core_reg_11)
                             .unwrap();
                         Some(CmdDelay {
                             cmd: Command::write_reg(
                                 CoreRegisterControl::ADDR,
-                                CoreRegisterControl::write_core_reg(0, CoreReg11(core_reg_11)),
+                                CoreRegisterControl::write_core_reg(
+                                    0,
+                                    ClockSelectCtrl(core_reg_11),
+                                ),
                                 dest,
                             ),
                             delay_ms: 10,
@@ -1095,11 +1106,13 @@ impl Asic for BM1370 {
                     3 => {
                         self.seq_step = SequenceStep::ResetCore(4);
                         let core_reg2 = 0xAA;
-                        self.core_registers.insert(CoreReg2::ID, core_reg2).unwrap();
+                        self.core_registers
+                            .insert(CoreEnableV2::ID, core_reg2)
+                            .unwrap();
                         Some(CmdDelay {
                             cmd: Command::write_reg(
                                 CoreRegisterControl::ADDR,
-                                CoreRegisterControl::write_core_reg(0, CoreReg2(core_reg2)),
+                                CoreRegisterControl::write_core_reg(0, CoreEnableV2(core_reg2)),
                                 dest,
                             ),
                             delay_ms: 10,
@@ -1205,12 +1218,12 @@ impl Asic for BM1370 {
                 // [55, AA, 51, 09, 00, 3C, 80, 00, 8D, EE, 1B]
                 let core_reg13 = 0xee;
                 self.core_registers
-                    .insert(CoreReg13::ID, core_reg13)
+                    .insert(NonceBinOverflowControl::ID, core_reg13)
                     .unwrap();
                 Some(CmdDelay {
                     cmd: Command::write_reg(
                         CoreRegisterControl::ADDR,
-                        CoreRegisterControl::write_core_reg(0, CoreReg13(core_reg13)),
+                        CoreRegisterControl::write_core_reg(0, NonceBinOverflowControl(core_reg13)),
                         Destination::All,
                     ),
                     delay_ms: 10,

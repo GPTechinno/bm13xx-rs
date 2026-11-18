@@ -74,6 +74,8 @@ impl TryFrom<u8> for ProcessMonitorSelect {
 }
 
 /// # Process Monitor Ctrl core register
+///
+/// Core register 1 of the older numbering (BM1397). On the BM1368 and later, core register 1 is `CORE_FRONT_ERROR` and the process monitor control is core register 15.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub struct ProcessMonitorCtrl(pub u8);
 impl_boilerplate_for_core_reg!(ProcessMonitorCtrl);
@@ -133,6 +135,8 @@ impl defmt::Format for ProcessMonitorCtrl {
 }
 
 /// # Process Monitor Data core register
+///
+/// Core register 2 of the older numbering (BM1397). On the BM1368 and later, core register 2 is [`CoreEnableV2`](crate::core_register::CoreEnableV2) and the process monitor data is core register 16.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub struct ProcessMonitorData(pub u8);
 impl_boilerplate_for_core_reg!(ProcessMonitorData);

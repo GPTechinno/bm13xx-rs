@@ -1,6 +1,8 @@
 use crate::core_register::CoreRegister;
 
 /// # Sweep Clock Ctrl core register
+///
+/// Core register 7 of the older numbering (BM1397). The BM1368 and later have no core register 7.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub struct SweepClockCtrl(pub u8);
 impl_boilerplate_for_core_reg!(SweepClockCtrl);

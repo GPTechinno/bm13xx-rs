@@ -1,6 +1,8 @@
 use crate::core_register::CoreRegister;
 
 /// # Core Error core register
+///
+/// Core register 3 of the older numbering (BM1397). On the BM1368 and later, core register 3 is [`HashClockCtrlV2`](crate::core_register::HashClockCtrlV2).
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub struct CoreError(pub u8);
 impl_boilerplate_for_core_reg!(CoreError);

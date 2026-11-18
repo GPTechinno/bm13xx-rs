@@ -30,26 +30,26 @@ macro_rules! impl_boilerplate_for_core_reg {
     };
 }
 
+mod auto_clk_en;
 mod clock_delay;
+mod clock_select_ctrl;
 mod core_enable;
 mod core_error;
-mod core_reg11;
-mod core_reg13;
-mod core_reg2;
-mod core_reg22;
-mod core_reg8;
 mod hash_clock;
+mod nonce_bin_overflow;
+mod ocv_pulse_width;
+mod pg_mont;
 mod process_monitor;
 mod sweep_clock;
 
+pub use auto_clk_en::AutoClkEn;
 pub use clock_delay::{ClockDelayCtrl, ClockDelayCtrlV2, ClockDelayCtrlV3};
-pub use core_enable::CoreEnable;
+pub use clock_select_ctrl::ClockSelectCtrl;
+pub use core_enable::{CoreEnable, CoreEnableV2};
 pub use core_error::CoreError;
-pub use core_reg11::CoreReg11;
-pub use core_reg13::CoreReg13;
-pub use core_reg2::CoreReg2; // different than ProcessMonitorData but reuse of ID=2
-pub use core_reg22::CoreReg22;
-pub use core_reg8::CoreReg8;
-pub use hash_clock::{HashClockCounter, HashClockCtrl};
+pub use hash_clock::{HashClockCounter, HashClockCounterV2, HashClockCtrl, HashClockCtrlV2};
+pub use nonce_bin_overflow::NonceBinOverflowControl;
+pub use ocv_pulse_width::OcvPulseWidth;
+pub use pg_mont::PgMont;
 pub use process_monitor::{ProcessMonitorCtrl, ProcessMonitorData, ProcessMonitorSelect};
 pub use sweep_clock::SweepClockCtrl;

@@ -392,7 +392,7 @@ impl Asic for BM1366 {
             .insert(ClockDelayCtrlV2::ID, 0x98)
             .unwrap();
         // self.core_registers.insert(1, 0x00).unwrap(); // not used anywhere in official FW
-        self.core_registers.insert(CoreReg2::ID, 0x55).unwrap();
+        self.core_registers.insert(CoreEnableV2::ID, 0x55).unwrap();
         self.core_registers.insert(CoreError::ID, 0x00).unwrap();
         self.core_registers.insert(CoreEnable::ID, 0x00).unwrap();
         self.core_registers.insert(HashClockCtrl::ID, 0x40).unwrap();
@@ -402,10 +402,10 @@ impl Asic for BM1366 {
         self.core_registers
             .insert(SweepClockCtrl::ID, 0x11)
             .unwrap();
-        self.core_registers.insert(CoreReg8::ID, 0x00).unwrap();
+        self.core_registers.insert(AutoClkEn::ID, 0x00).unwrap();
         self.core_registers.insert(15, 0x00).unwrap();
         self.core_registers.insert(16, 0x00).unwrap();
-        self.core_registers.insert(CoreReg22::ID, 0x00).unwrap();
+        self.core_registers.insert(OcvPulseWidth::ID, 0x00).unwrap();
     }
 
     /// ## Get the Chip ID
@@ -1109,11 +1109,13 @@ impl Asic for BM1366 {
                         3 => {
                             self.seq_step = SequenceStep::ResetCore(4);
                             let core_reg2 = 0xAA;
-                            self.core_registers.insert(CoreReg2::ID, core_reg2).unwrap();
+                            self.core_registers
+                                .insert(CoreEnableV2::ID, core_reg2)
+                                .unwrap();
                             Some(CmdDelay {
                                 cmd: Command::write_reg(
                                     CoreRegisterControl::ADDR,
-                                    CoreRegisterControl::write_core_reg(0, CoreReg2(core_reg2)),
+                                    CoreRegisterControl::write_core_reg(0, CoreEnableV2(core_reg2)),
                                     dest,
                                 ),
                                 delay_ms: 10,
