@@ -1302,12 +1302,13 @@ impl Asic for BM1366 {
             _ => {
                 // authorize a VersionRolling sequence start whatever the current step was
                 self.seq_step = SequenceStep::VersionRolling(0);
-                // 80 % of the core nonce space share
-                // (asic_addr_interval << 17) * 25 MHz / (2 * hash frequency), minus 1.
-                let hcn = (asic_addr_interval as u64 * 1_310_720_000_000
-                    / self.hash_freq().to_raw().max(1))
-                .saturating_sub(1)
-                .min(u32::MAX as u64) as u32;
+                let hcn = bm13xx_asic::hash_counting::hash_counting_number(
+                    asic_addr_interval,
+                    BM1366_CORE_CNT,
+                    self.hash_freq(),
+                    80,
+                )
+                .saturating_sub(1);
                 self.registers
                     .insert(HashCountingNumber::ADDR, hcn)
                     .unwrap();

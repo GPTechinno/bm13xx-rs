@@ -104,17 +104,17 @@ impl BM1370 {
     ///
     /// let mut bm1370 = BM1370::default();
     /// bm1370.set_hash_freq(HertzU64::MHz(448));
-    /// assert_eq!(bm1370.hash_counting_number(2), 6230); // 91 chips
+    /// assert_eq!(bm1370.hash_counting_number(2), 6224); // 91 chips
     /// bm1370.set_hash_freq(HertzU64::MHz(525));
     /// assert_eq!(bm1370.hash_counting_number(256), 679_077); // single chip
     /// ```
     pub fn hash_counting_number(&self, asic_addr_interval: usize) -> u32 {
-        let f_mhz = (self.hash_freq().to_raw() / 1_000_000).max(1);
-        let base = ((asic_addr_interval as u64) << 24) / BM1370_CORE_CNT.next_power_of_two() as u64
-            * 25
-            / f_mhz
-            / 2;
-        (base * 85 / 100).min(u32::MAX as u64) as u32
+        bm13xx_asic::hash_counting::hash_counting_number(
+            asic_addr_interval,
+            BM1370_CORE_CNT,
+            self.hash_freq(),
+            85,
+        )
     }
 
     pub fn new_with_clk(clk: HertzU64) -> Self {

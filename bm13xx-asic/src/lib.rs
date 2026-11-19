@@ -5,6 +5,7 @@ pub(crate) mod fmt;
 
 pub mod core_register;
 mod error;
+pub mod hash_counting;
 pub mod pll;
 pub mod register;
 pub mod sha;
