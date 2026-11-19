@@ -67,11 +67,13 @@
 pub(crate) mod fmt;
 
 mod error;
+pub mod pattern;
 pub mod tuning;
 
 use core::time::Duration;
 
 pub use self::error::{Error, Result};
+use self::pattern::{KnownNonce, KnownNonceReport};
 
 use bm13xx_asic::{
     register::{ChipIdentification, I2CControl, OrderedClockMonitor, PLL0Parameter},
@@ -524,6 +526,69 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
             .i2c_transaction(asic_index, I2CControl::write(i2c_addr, reg, val))
             .await?
             .is_some())
+    }
+
+    /// ## Check that each chip finds the known nonces of its share
+    ///
+    /// Sends each header of `vectors` as a job and waits up to `timeout_ms` for its nonce. The chip
+    /// expected to find it is the one its nonce belongs to; headers whose nonce belongs to no chip
+    /// are skipped. The chips must be hashing: initialized, at their hash frequency, with the
+    /// nonce range split and version rolling enabled where they use them. Other responses
+    /// received meanwhile are dropped.
+    pub async fn known_nonce_test(
+        &mut self,
+        vectors: &[KnownNonce],
+        timeout_ms: u32,
+    ) -> Result<KnownNonceReport, U::Error, OB::Error, OR::Error> {
+        let mut report = KnownNonceReport {
+            expected: (0..self.asic_cnt.min(MAX_ASIC_CNT)).map(|_| 0).collect(),
+            found: (0..self.asic_cnt.min(MAX_ASIC_CNT)).map(|_| 0).collect(),
+            skipped: 0,
+        };
+        let version_rolling = self.version_rolling_mask.is_some();
+        for v in vectors {
+            let Some(chip) = self
+                .asic
+                .nonce_chip_index(
+                    v.nonce,
+                    version_rolling,
+                    self.asic_cnt,
+                    self.asic_addr_interval,
+                )
+                .filter(|&i| i < report.expected.len())
+            else {
+                report.skipped += 1;
+                continue;
+            };
+            report.expected[chip] += 1;
+            self.send_job(
+                v.version,
+                v.prev_block_header_hash,
+                v.merkle_root,
+                v.n_bits,
+                v.n_time,
+            )
+            .await?;
+            let mut waited_ms = 0;
+            while waited_ms < timeout_ms {
+                match self.poll_response().await? {
+                    Some(ResponseType::JobVer(j)) if j.nonce == v.nonce => {
+                        report.found[chip] += 1;
+                        break;
+                    }
+                    Some(ResponseType::Job(j)) if j.nonce == v.nonce => {
+                        report.found[chip] += 1;
+                        break;
+                    }
+                    Some(_) => {}
+                    None => {
+                        self.delay.delay_ms(1).await;
+                        waited_ms += 1;
+                    }
+                }
+            }
+        }
+        Ok(report)
     }
 
     /// ## Read the die temperature of one asic, in °C
@@ -1367,6 +1432,43 @@ mod tests {
         assert!(chain.chip_i2c_write(0, 0x4C, 0x09, 0x04).await.unwrap());
         assert!(!chain.chip_i2c_write(0, 0x4C, 0x09, 0x04).await.unwrap()); // no answer
         assert_eq!(chain.enable_chip_i2c(0).await, Err(Error::Unsupported));
+    }
+
+    /// Nonce response with version rolling, with its CRC.
+    fn job_ver_frame(nonce: u32) -> [u8; FRAME_SIZE_VER] {
+        let mut frame = [0xAA, 0x55, 0, 0, 0, 0, 0x00, 0x00, 0x00, 0x00, 0x80];
+        frame[2..6].copy_from_slice(&nonce.to_le_bytes());
+        frame[10] = (0x80..0xA0)
+            .find(|&b| {
+                frame[10] = b;
+                Response::parse_version(&frame, 8).is_ok()
+            })
+            .unwrap();
+        frame
+    }
+
+    #[tokio::test]
+    async fn known_nonce_test_reports_each_chip() {
+        use crate::pattern::BITCOIN_BLOCKS_0_TO_2;
+
+        let mut chain = chain_of(1, 256, 1);
+        chain.version_rolling_mask = Some(0x1fff_e000);
+        chain.uart.0 = job_ver_frame(BITCOIN_BLOCKS_0_TO_2[0].nonce)
+            .into_iter()
+            .collect();
+        let report = chain
+            .known_nonce_test(&BITCOIN_BLOCKS_0_TO_2[..2], 10)
+            .await
+            .unwrap();
+        // the genesis nonce came back, the block 1 one did not
+        assert_eq!(report.expected, [2]);
+        assert_eq!(report.found, [1]);
+        assert_eq!(report.failing_chips().collect::<Vec<_>>(), [0]);
+        // two jobs were sent
+        assert_eq!(
+            chain.uart.1.iter().filter(|&&b| b == 0x21).count() >= 2,
+            true
+        );
     }
 
     #[tokio::test]

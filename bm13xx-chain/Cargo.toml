@@ -40,6 +40,7 @@ defmt = [
 
 [dev-dependencies]
 bm1366 = { path = "../bm1366" }
+sha2 = { workspace = true }
 
 embedded-io = { version = "0.7", features = ["std"] }
 env_logger = "0.11"
