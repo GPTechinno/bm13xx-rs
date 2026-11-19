@@ -31,5 +31,9 @@ jobs:
         run: cargo fmt --check
       - name: Clippy
         run: cargo clippy --verbose -- -D warnings
+      - name: Test nonce-check
+        run: cargo test --verbose -p bm13xx-chain --features nonce-check
+      - name: Clippy nonce-check
+        run: cargo clippy --verbose -p bm13xx-chain --all-targets --features nonce-check -- -D warnings
       # - name: Audit
       #   run: cargo audit
