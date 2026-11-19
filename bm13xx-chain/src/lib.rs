@@ -381,7 +381,7 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
                     if chip_ident.core_num() == 0 {
                         post_s19jpro = true;
                     }
-                    if chip_ident.chip_id() == chain.asic.chip_id() {
+                    if chain.asic.chip_id_matches(chip_ident.chip_id()) {
                         asic_cnt += 1;
                     } else {
                         // Heterogeneous chain is forbidden
@@ -396,7 +396,8 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
             return Err(Error::EmptyChain);
         }
         debug!("Enumerated {} asics", asic_cnt);
-        chain.asic_addr_interval = 1 << (256usize / asic_cnt).max(1).ilog2();
+        chain.asic_addr_interval =
+            (1 << (256usize / asic_cnt).max(1).ilog2()).min(chain.asic.max_addr_interval());
         chain.asic_cnt = asic_cnt;
         chain.chip_nonce_space = chain.asic_addr_interval
             << (NONCE_BITS

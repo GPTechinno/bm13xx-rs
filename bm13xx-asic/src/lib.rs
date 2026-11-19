@@ -52,6 +52,14 @@ pub enum SensorStep {
 pub trait Asic {
     fn reset(&mut self);
     fn chip_id(&self) -> u16;
+    /// Whether a chip identification read with this chip ID is one of these chips.
+    fn chip_id_matches(&self, chip_id: u16) -> bool {
+        chip_id == self.chip_id()
+    }
+    /// Largest interval between two chip addresses.
+    fn max_addr_interval(&self) -> usize {
+        256
+    }
     fn core_count(&self) -> usize;
     fn core_small_core_count(&self) -> usize;
     fn small_core_count(&self) -> usize;
