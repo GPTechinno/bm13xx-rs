@@ -3,6 +3,7 @@
 #![no_std]
 pub(crate) mod fmt;
 
+pub mod adc;
 pub mod core_register;
 mod error;
 pub mod hash_counting;
@@ -37,6 +38,7 @@ pub enum SequenceStep {
     VersionRolling(usize),
     DieTemp(usize),
     ChipHashFreq(usize),
+    SupplyVoltage(usize),
 }
 
 /// One step of a sensor reading sequence.
@@ -125,6 +127,16 @@ pub trait Asic {
     }
     /// Die temperature in °C from the values read by `die_temp_next()`, in order.
     fn die_temp_celsius(&self, _samples: &[u32]) -> Option<f32> {
+        None
+    }
+    /// Supply voltage reading sequence of sense channel `channel` for one chip (`dest`). `None` at
+    /// once when the chip has no such reading.
+    fn supply_voltage_next(&mut self, _dest: Destination, _channel: u8) -> Option<SensorStep> {
+        None
+    }
+    /// Supply voltage of sense channel `channel` in mV from the values read by
+    /// `supply_voltage_next()`, in order.
+    fn supply_voltage_mv(&self, _channel: u8, _samples: &[u32]) -> Option<f32> {
         None
     }
 }

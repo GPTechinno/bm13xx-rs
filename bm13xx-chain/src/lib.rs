@@ -413,19 +413,18 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
             .map(|v| v & 0x8000_0000 != 0))
     }
 
-    /// ## Read the die temperature of one asic, in °C
-    ///
-    /// Returns `None` if the asic has no die temperature reading or did not answer. Other
-    /// responses received meanwhile, nonces included, are dropped.
-    pub async fn read_die_temp(
+    /// Run a sensor reading sequence for one asic, from `next` (`next(asic, dest)` gives the steps),
+    /// and collect the values read. `None` if the asic did not answer every read.
+    async fn read_sensor(
         &mut self,
         asic_index: usize,
-    ) -> Result<Option<f32>, U::Error, OB::Error, OR::Error> {
+        mut next: impl FnMut(&mut A, Destination) -> Option<SensorStep>,
+    ) -> Result<Option<Vec<u32, SENSOR_SAMPLES>>, U::Error, OB::Error, OR::Error> {
         let chip_addr = (asic_index * self.asic_addr_interval) as u8;
         let dest = Destination::Chip(chip_addr);
         let mut samples = Vec::<u32, SENSOR_SAMPLES>::new();
         let mut answered = true;
-        while let Some(step) = self.asic.die_temp_next(dest) {
+        while let Some(step) = next(&mut self.asic, dest) {
             match step {
                 SensorStep::Write(cmd) => self.send(cmd).await?,
                 SensorStep::Read { reg_addr, delay_ms } => {
@@ -441,10 +440,39 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
                 }
             }
         }
-        if !answered {
-            return Ok(None);
-        }
-        Ok(self.asic.die_temp_celsius(&samples))
+        Ok(answered.then_some(samples))
+    }
+
+    /// ## Read the die temperature of one asic, in °C
+    ///
+    /// Returns `None` if the asic has no die temperature reading or did not answer. Other
+    /// responses received meanwhile, nonces included, are dropped.
+    pub async fn read_die_temp(
+        &mut self,
+        asic_index: usize,
+    ) -> Result<Option<f32>, U::Error, OB::Error, OR::Error> {
+        Ok(self
+            .read_sensor(asic_index, |asic, dest| asic.die_temp_next(dest))
+            .await?
+            .and_then(|samples| self.asic.die_temp_celsius(&samples)))
+    }
+
+    /// ## Read a supply voltage of one asic, in mV
+    ///
+    /// `channel` is one of the chip's sense channels (0 to 3). Returns `None` if the asic has no
+    /// such reading or did not answer. Other responses received meanwhile, nonces included, are
+    /// dropped.
+    pub async fn read_chip_supply_voltage(
+        &mut self,
+        asic_index: usize,
+        channel: u8,
+    ) -> Result<Option<f32>, U::Error, OB::Error, OR::Error> {
+        Ok(self
+            .read_sensor(asic_index, |asic, dest| {
+                asic.supply_voltage_next(dest, channel)
+            })
+            .await?
+            .and_then(|samples| self.asic.supply_voltage_mv(channel, &samples)))
     }
 
     /// ## Enumerate all asics on the chain

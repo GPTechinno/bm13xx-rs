@@ -5,7 +5,9 @@
 #![no_std]
 pub(crate) mod fmt;
 
-use bm13xx_asic::{core_register::*, register::*, Asic, CmdDelay, SensorStep, SequenceStep};
+use bm13xx_asic::{
+    adc::SupplyAdc, core_register::*, register::*, Asic, CmdDelay, SensorStep, SequenceStep,
+};
 use bm13xx_protocol::command::{Command, Destination};
 
 use fugit::HertzU64;
@@ -22,6 +24,14 @@ pub const BM1372_PLL_ID_HASH: usize = 0; // PLL0 is used for Hashing
 pub const BM1372_PLL_OUT_HASH: usize = 0; // specifically PLL0_OUT0 is used for Hashing
 /// Largest interval between two chip addresses.
 pub const BM1372_MAX_ADDR_INTERVAL: usize = 0x10;
+
+/// Supply voltage readings through the ADC.
+const SUPPLY_ADC: SupplyAdc = SupplyAdc {
+    ctrl0_setup: 0x230C_000D,
+    ctrl1: 0x3F01_4081,
+    ctrl0_start: 0x232C_000D,
+    scale_mv: 600.0,
+};
 
 /// # Hashboard settings
 ///
@@ -967,6 +977,49 @@ impl Asic for BM1372 {
                 })
             }
         }
+    }
+
+    /// ## Supply voltage reading command list
+    ///
+    /// One of the four sense channels (0 to 3) through the ADC: four set-up writes, then ten
+    /// conversions 60 ms apart, each read in `ADC_VOLTAGE_DATAOUT` (`0xBD`).
+    ///
+    /// ### Example
+    /// ```
+    /// use bm1372::BM1372;
+    /// use bm13xx_asic::{adc::SUPPLY_CONVERSIONS, Asic, SensorStep};
+    /// use bm13xx_protocol::command::Destination;
+    ///
+    /// let mut bm1372 = BM1372::default();
+    /// let dest = Destination::Chip(0);
+    /// let mut reads = 0;
+    /// while let Some(step) = bm1372.supply_voltage_next(dest, 1) {
+    ///     if let SensorStep::Read { reg_addr, .. } = step {
+    ///         assert_eq!(reg_addr, 0xBD);
+    ///         reads += 1;
+    ///     }
+    /// }
+    /// assert_eq!(reads, SUPPLY_CONVERSIONS);
+    /// assert_eq!(bm1372.supply_voltage_next(dest, 4), None);
+    /// let samples = [0x8000_6000u32; SUPPLY_CONVERSIONS];
+    /// assert_eq!(bm1372.supply_voltage_mv(0, &samples), Some(300.0));
+    /// ```
+    fn supply_voltage_next(&mut self, dest: Destination, channel: u8) -> Option<SensorStep> {
+        let step = match self.seq_step {
+            SequenceStep::SupplyVoltage(step) => step,
+            _ => 0,
+        };
+        let out = SUPPLY_ADC.step(step, dest, channel);
+        self.seq_step = if out.is_some() {
+            SequenceStep::SupplyVoltage(step + 1)
+        } else {
+            SequenceStep::None
+        };
+        out
+    }
+
+    fn supply_voltage_mv(&self, channel: u8, samples: &[u32]) -> Option<f32> {
+        SUPPLY_ADC.millivolts(channel, samples)
     }
 
     /// ## Die temperature reading command list
