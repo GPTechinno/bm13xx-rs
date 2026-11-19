@@ -940,6 +940,39 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
         &self.chip_hw_errors
     }
 
+    /// ## Get the chips that returned no nonce while some were expected
+    ///
+    /// In chain order: the chips with no nonce counted since the last clear although at least
+    /// `min_expected` nonces were expected from them in `duration`.
+    pub fn silent_chips(
+        &self,
+        duration: Duration,
+        min_expected: f32,
+    ) -> impl Iterator<Item = usize> + '_ {
+        self.chip_nonces
+            .iter()
+            .enumerate()
+            .filter(move |(i, &count)| {
+                count == 0 && self.expected_chip_nonces(*i, duration) >= min_expected
+            })
+            .map(|(i, _)| i)
+    }
+
+    /// ## Reset the cores of one asic
+    ///
+    /// The per-chip core reset of the chip, as during the init, for a chip that stopped returning
+    /// nonces (see [`Chain::silent_chips`]).
+    pub async fn reset_chip_cores(
+        &mut self,
+        asic_index: usize,
+    ) -> Result<(), U::Error, OB::Error, OR::Error> {
+        let dest = Destination::Chip((asic_index * self.asic_addr_interval) as u8);
+        while let Some(step) = self.asic.reset_core_next(dest) {
+            self.send(step).await?;
+        }
+        Ok(())
+    }
+
     /// ## Get the number of nonces expected from one chip in `duration`
     ///
     /// `f × small cores × t / (2^32 × d)`, with `f` the chip's hash frequency and `d` the ticket
@@ -1469,6 +1502,22 @@ mod tests {
             chain.uart.1.iter().filter(|&&b| b == 0x21).count() >= 2,
             true
         );
+    }
+
+    #[tokio::test]
+    async fn silent_chips_get_their_cores_reset() {
+        let mut chain = chain_of(3, 64, 1);
+        chain.chip_freqs = (0..3).map(|_| HertzU64::MHz(500)).collect();
+        chain.chip_nonces = heapless::Vec::from_slice(&[12, 0, 9]).unwrap();
+        // about 40 nonces expected per chip in 100 s at difficulty 256
+        chain.ticket_difficulty = 256;
+        let silent: Vec<usize> = chain.silent_chips(Duration::from_secs(100), 20.0).collect();
+        assert_eq!(silent, [1]);
+        assert_eq!(chain.silent_chips(Duration::from_secs(1), 20.0).count(), 0);
+        chain.reset_chip_cores(1).await.unwrap();
+        // the per-chip core reset went to chip 64 only
+        assert!(!chain.uart.1.is_empty());
+        assert!(chain.uart.1.chunks(11).all(|c| c[2] == 0x41 && c[4] == 64));
     }
 
     #[tokio::test]
