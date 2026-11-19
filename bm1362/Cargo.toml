@@ -1,0 +1,24 @@
+[package]
+categories = ["embedded", "no-std"]
+edition = "2021"
+name = "bm1362"
+rust-version = "1.87.0"
+version = "0.3.0"
+
+[dependencies]
+"bm13xx-asic" = { path = "../bm13xx-asic" }
+"bm13xx-protocol" = { path = "../bm13xx-protocol" }
+
+defmt = { workspace = true, optional = true }
+fugit = { workspace = true }
+heapless = { workspace = true }
+log = { workspace = true, optional = true }
+
+[features]
+defmt = [
+    "dep:defmt",
+    "bm13xx-asic/defmt",
+    "bm13xx-protocol/defmt",
+    "fugit/defmt",
+    "heapless/defmt",
+]
