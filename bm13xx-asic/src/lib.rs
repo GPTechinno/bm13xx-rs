@@ -35,6 +35,18 @@ pub enum SequenceStep {
     HashFreq(usize),
     SplitNonce(usize),
     VersionRolling(usize),
+    DieTemp(usize),
+}
+
+/// One step of a sensor reading sequence.
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum SensorStep {
+    /// Send this command, then wait.
+    Write(CmdDelay),
+    /// Read this register of the chip the sequence is for, wait `delay_ms`, then collect the
+    /// chip's answer.
+    Read { reg_addr: u8, delay_ms: u32 },
 }
 
 pub trait Asic {
@@ -66,4 +78,13 @@ pub trait Asic {
         mask: u32,
         asic_addr_interval: usize,
     ) -> Option<CmdDelay>;
+    /// Die temperature reading sequence for one chip (`dest`). `None` at once when the chip has no
+    /// die temperature reading.
+    fn die_temp_next(&mut self, _dest: Destination) -> Option<SensorStep> {
+        None
+    }
+    /// Die temperature in °C from the values read by `die_temp_next()`, in order.
+    fn die_temp_celsius(&self, _samples: &[u32]) -> Option<f32> {
+        None
+    }
 }

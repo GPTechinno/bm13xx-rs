@@ -3,7 +3,7 @@
 #![no_std]
 pub(crate) mod fmt;
 
-use bm13xx_asic::{core_register::*, register::*, Asic, CmdDelay, SequenceStep};
+use bm13xx_asic::{core_register::*, register::*, Asic, CmdDelay, SensorStep, SequenceStep};
 use bm13xx_protocol::command::{Command, Destination};
 
 use fugit::HertzU64;
@@ -1394,5 +1394,107 @@ impl Asic for BM1370 {
                 })
             }
         }
+    }
+
+    /// ## Die temperature reading command list
+    ///
+    /// Through the ADC: two series of 21 conversions read in `ADC_VOLTAGE_DATAOUT` (`0xBD`).
+    ///
+    /// ### Example
+    /// ```
+    /// use bm1370::BM1370;
+    /// use bm13xx_asic::{Asic, CmdDelay, SensorStep};
+    /// use bm13xx_protocol::command::Destination;
+    ///
+    /// let mut bm1370 = BM1370::default();
+    /// let dest = Destination::Chip(0);
+    /// let mut writes = 0;
+    /// let mut reads = 0;
+    /// while let Some(step) = bm1370.die_temp_next(dest) {
+    ///     match step {
+    ///         SensorStep::Write(_) => writes += 1,
+    ///         SensorStep::Read{reg_addr, ..} => {
+    ///             assert_eq!(reg_addr, 0xBD);
+    ///             reads += 1;
+    ///         }
+    ///     }
+    /// }
+    /// assert_eq!((writes, reads), (3 + 21 * 2 + 4 + 21 * 2, 42));
+    /// // a = 8000, b = 8100
+    /// let mut samples = [8000u32; 42];
+    /// for s in samples[21..].iter_mut() {
+    ///     *s = 8100 << 16;
+    /// }
+    /// let t = bm1370.die_temp_celsius(&samples).unwrap();
+    /// assert!((t - (16334.0 * 0.0309 - 769.25)).abs() < 0.001);
+    /// assert_eq!(bm1370.die_temp_celsius(&samples[..41]), None);
+    /// ```
+    fn die_temp_next(&mut self, dest: Destination) -> Option<SensorStep> {
+        const ADC_CTRL2: u8 = 0xBA;
+        const ADC_CTRL3: u8 = 0xBB;
+        const ADC_VOLTAGE_DATAOUT: u8 = 0xBD;
+        const CONVERSIONS: usize = 21;
+        // phase A: set-up, then CONVERSIONS x (start, ADC_CTRL1, read)
+        const A_SETUP: [(u8, u32); 3] = [
+            (AdcCtrl0::ADDR, 0x238C_000D),
+            (ADC_CTRL2, 0x0004_0010),
+            (ADC_CTRL3, 0x0334_0E80),
+        ];
+        const B_SETUP: [(u8, u32); 4] = [
+            (AdcCtrl0::ADDR, 0x238C_E00D),
+            (AdcCtrl1::ADDR, 0x3F01_41AF),
+            (ADC_CTRL2, 0x0004_0010),
+            (ADC_CTRL3, 0x0334_0E80),
+        ];
+        let step = match self.seq_step {
+            SequenceStep::DieTemp(step) => step,
+            _ => 0,
+        };
+        let a_end = A_SETUP.len() + CONVERSIONS * 3;
+        let b_setup_end = a_end + B_SETUP.len();
+        let b_end = b_setup_end + CONVERSIONS * 3;
+        let write = |addr: u8, value: u32, delay_ms: u32| {
+            SensorStep::Write(CmdDelay {
+                cmd: Command::write_reg(addr, value, dest),
+                delay_ms,
+            })
+        };
+        let conversion = |i: usize, start: u32| match i % 3 {
+            0 => write(AdcCtrl0::ADDR, start, 0),
+            1 => write(AdcCtrl1::ADDR, 0x3F41_41AF, 60),
+            _ => SensorStep::Read {
+                reg_addr: ADC_VOLTAGE_DATAOUT,
+                delay_ms: 0,
+            },
+        };
+        let out = if step < A_SETUP.len() {
+            let (addr, value) = A_SETUP[step];
+            write(addr, value, if step + 1 == A_SETUP.len() { 20 } else { 0 })
+        } else if step < a_end {
+            conversion(step - A_SETUP.len(), 0x23AC_000D)
+        } else if step < b_setup_end {
+            let (addr, value) = B_SETUP[step - a_end];
+            write(addr, value, if step + 1 == b_setup_end { 20 } else { 0 })
+        } else if step < b_end {
+            conversion(step - b_setup_end, 0x23AC_E00D)
+        } else {
+            self.seq_step = SequenceStep::None;
+            return None;
+        };
+        self.seq_step = SequenceStep::DieTemp(step + 1);
+        Some(out)
+    }
+
+    fn die_temp_celsius(&self, samples: &[u32]) -> Option<f32> {
+        if samples.len() != 42 {
+            return None;
+        }
+        let mut dv0 = [0u16; 21];
+        let mut dv1 = [0u16; 21];
+        for i in 0..21 {
+            dv0[i] = (samples[i] & 0x7FFF) as u16;
+            dv1[i] = ((samples[21 + i] >> 16) & 0x7FFF) as u16;
+        }
+        bm13xx_asic::temperature::adc_to_celsius(&dv0, &dv1)
     }
 }

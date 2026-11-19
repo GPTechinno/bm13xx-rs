@@ -72,7 +72,7 @@ use core::time::Duration;
 
 pub use self::error::{Error, Result};
 
-use bm13xx_asic::{register::ChipIdentification, Asic, CmdDelay};
+use bm13xx_asic::{register::ChipIdentification, Asic, CmdDelay, SensorStep};
 use bm13xx_protocol::{
     command::{Command, Destination},
     response::{Response, ResponseType, FRAME_SIZE, FRAME_SIZE_VER},
@@ -92,6 +92,10 @@ const RX_BUF_SIZE: usize = 256;
 
 /// Enumeration stops once no ChipIdentification reply has come for this long.
 const ENUM_QUIET_MS: u32 = 100;
+/// Time to wait for the answer to a register read.
+const READ_TIMEOUT_MS: u32 = 100;
+/// Values read by one sensor reading sequence.
+const SENSOR_SAMPLES: usize = 64;
 
 const NONCE_BITS: u32 = u32::BITS;
 const CHIP_ADDR_BITS: u32 = u8::BITS;
@@ -238,6 +242,80 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
     /// A growing count is a sign of a noisy serial line or a wrong baudrate.
     pub fn rx_dropped_bytes(&self) -> usize {
         self.rx_dropped
+    }
+
+    /// Wait for the answer of chip `chip_addr` to a read of `reg_addr`. Other responses received
+    /// meanwhile, nonces included, are dropped.
+    async fn wait_register(
+        &mut self,
+        chip_addr: u8,
+        reg_addr: u8,
+    ) -> Result<Option<u32>, U::Error, OB::Error, OR::Error> {
+        let mut waited_ms = 0;
+        while waited_ms < READ_TIMEOUT_MS {
+            match self.poll_response().await? {
+                Some(ResponseType::Reg(r))
+                    if r.chip_addr == chip_addr && r.reg_addr == reg_addr =>
+                {
+                    return Ok(Some(r.reg_value));
+                }
+                Some(_) => {}
+                None => {
+                    self.delay.delay_ms(1).await;
+                    waited_ms += 1;
+                }
+            }
+        }
+        Ok(None)
+    }
+
+    /// ## Read a register of one asic
+    ///
+    /// Returns `None` if the asic did not answer. Other responses received meanwhile, nonces
+    /// included, are dropped.
+    pub async fn read_register(
+        &mut self,
+        asic_index: usize,
+        reg_addr: u8,
+    ) -> Result<Option<u32>, U::Error, OB::Error, OR::Error> {
+        let chip_addr = (asic_index * self.asic_addr_interval) as u8;
+        let cmd = Command::read_reg(reg_addr, Destination::Chip(chip_addr));
+        self.uart.write_all(&cmd).await.map_err(Error::Io)?;
+        self.wait_register(chip_addr, reg_addr).await
+    }
+
+    /// ## Read the die temperature of one asic, in °C
+    ///
+    /// Returns `None` if the asic has no die temperature reading or did not answer. Other
+    /// responses received meanwhile, nonces included, are dropped.
+    pub async fn read_die_temp(
+        &mut self,
+        asic_index: usize,
+    ) -> Result<Option<f32>, U::Error, OB::Error, OR::Error> {
+        let chip_addr = (asic_index * self.asic_addr_interval) as u8;
+        let dest = Destination::Chip(chip_addr);
+        let mut samples = Vec::<u32, SENSOR_SAMPLES>::new();
+        let mut answered = true;
+        while let Some(step) = self.asic.die_temp_next(dest) {
+            match step {
+                SensorStep::Write(cmd) => self.send(cmd).await?,
+                SensorStep::Read { reg_addr, delay_ms } => {
+                    let cmd = Command::read_reg(reg_addr, dest);
+                    self.uart.write_all(&cmd).await.map_err(Error::Io)?;
+                    self.delay.delay_ms(delay_ms).await;
+                    match self.wait_register(chip_addr, reg_addr).await? {
+                        Some(value) => {
+                            let _ = samples.push(value);
+                        }
+                        None => answered = false,
+                    }
+                }
+            }
+        }
+        if !answered {
+            return Ok(None);
+        }
+        Ok(self.asic.die_temp_celsius(&samples))
     }
 
     /// ## Enumerate all asics on the chain
