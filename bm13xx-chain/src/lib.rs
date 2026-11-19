@@ -590,6 +590,21 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
         Ok(())
     }
 
+    /// ## Get the difficulty of a share from its nonce response
+    ///
+    /// A nonce response with version rolling tells how many zero bits the share's hash has beyond
+    /// those of the ticket mask: the share's difficulty is at least the ticket mask difficulty
+    /// times `2^extra_zero_bits`, and less than twice that. `None` for other responses.
+    pub fn share_difficulty(&self, resp: &ResponseType) -> Option<u64> {
+        match resp {
+            ResponseType::JobVer(j) => Some(
+                ((self.ticket_difficulty as u128) << j.extra_zero_bits.min(64))
+                    .min(u64::MAX as u128) as u64,
+            ),
+            _ => None,
+        }
+    }
+
     /// ## Get the hash frequency of each chip
     ///
     /// In chain order. [`Chain::set_hash_freq`] sets them all, [`Chain::set_chip_hash_freqs`] one by
@@ -793,7 +808,7 @@ mod tests {
 
     use super::*;
     use bm1366::BM1366;
-    use bm13xx_protocol::response::RegisterResponse;
+    use bm13xx_protocol::response::{JobVersionResponse, RegisterResponse};
     use core::convert::Infallible;
     use std::{collections::VecDeque, vec::Vec};
 
@@ -1067,6 +1082,25 @@ mod tests {
         chain.uart.0 = reg_frame(0x40A2_0255, 0, 0x08).into_iter().collect();
         assert_eq!(chain.read_chip_pll_locked(0).await.unwrap(), Some(false));
         assert_eq!(chain.read_chip_pll_locked(0).await.unwrap(), None); // no answer
+    }
+
+    #[test]
+    fn share_difficulty_counts_the_extra_zero_bits() {
+        let mut chain = chain(&[]);
+        chain.ticket_difficulty = 256;
+        let share = |extra_zero_bits| {
+            ResponseType::JobVer(JobVersionResponse {
+                nonce: 0,
+                extra_zero_bits,
+                job_id: 0,
+                small_core_id: 0,
+                version_bit: 0,
+            })
+        };
+        assert_eq!(chain.share_difficulty(&share(0)), Some(256));
+        assert_eq!(chain.share_difficulty(&share(3)), Some(2048));
+        assert_eq!(chain.share_difficulty(&share(255)), Some(u64::MAX));
+        assert_eq!(chain.share_difficulty(&chip_id_resp()), None);
     }
 
     #[tokio::test]
