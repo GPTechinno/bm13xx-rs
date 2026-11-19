@@ -311,6 +311,19 @@ impl Asic for BM1397 {
         BM1397_CHIP_ID
     }
 
+    /// ## The chain enumeration sends chain inactive three times and resets no core
+    ///
+    /// ### Example
+    /// ```
+    /// use bm1397::BM1397;
+    /// use bm13xx_asic::Asic;
+    ///
+    /// assert!(!BM1397::default().core_reset_at_enumeration());
+    /// ```
+    fn core_reset_at_enumeration(&self) -> bool {
+        false
+    }
+
     /// ## Get the Chip Core count
     ///
     /// ### Example

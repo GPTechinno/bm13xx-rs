@@ -363,7 +363,6 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
         chain.uart.write_all(&cmd).await.map_err(Error::Io)?;
 
         let mut asic_cnt = 0;
-        let mut post_s19jpro = false;
         // `poll_response` can return None while replies are still coming, so only stop once
         // no reply has come for `ENUM_QUIET_MS`.
         let mut quiet_ms = 0;
@@ -378,9 +377,6 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
                         return Err(Error::BadRegisterResponse { reg_resp });
                     }
                     let chip_ident = ChipIdentification(reg_resp.reg_value);
-                    if chip_ident.core_num() == 0 {
-                        post_s19jpro = true;
-                    }
                     if chain.asic.chip_id_matches(chip_ident.chip_id()) {
                         asic_cnt += 1;
                     } else {
@@ -410,7 +406,8 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
                 - CHIP_ADDR_BITS);
         // TODO: try to determine domain_cnt according to known topologies
         chain.delay.delay_ms(50).await;
-        if post_s19jpro {
+        let core_reset = chain.asic.core_reset_at_enumeration();
+        if core_reset {
             chain.delay.delay_ms(100).await;
             while let Some(step) = chain.asic.reset_core_next(Destination::All) {
                 chain.send(step).await?;
@@ -418,7 +415,7 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
         }
         let cmd = Command::chain_inactive();
         chain.uart.write_all(&cmd).await.map_err(Error::Io)?;
-        if !post_s19jpro {
+        if !core_reset {
             chain.delay.delay_ms(2).await;
             chain.uart.write_all(&cmd).await.map_err(Error::Io)?;
             chain.delay.delay_ms(2).await;

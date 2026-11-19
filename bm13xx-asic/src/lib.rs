@@ -60,6 +60,12 @@ pub trait Asic {
     fn max_addr_interval(&self) -> usize {
         256
     }
+    /// Whether the chain enumeration resets the cores of all chips (`reset_core_next()` to
+    /// `Destination::All`) and sends a single chain inactive before addressing the chips. When it
+    /// does not, it sends chain inactive three times and no core reset.
+    fn core_reset_at_enumeration(&self) -> bool {
+        true
+    }
     fn core_count(&self) -> usize;
     fn core_small_core_count(&self) -> usize;
     fn small_core_count(&self) -> usize;
