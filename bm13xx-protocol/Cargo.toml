@@ -1,7 +1,12 @@
 [package]
 categories = ["embedded", "no-std"]
+description = "UART protocol of the Bitmain BM13xx Bitcoin mining ASICs: command frames and response parsing"
 edition = "2021"
+keywords = ["bitcoin", "mining", "asic", "bitmain", "embedded"]
+license = "MIT OR Apache-2.0"
 name = "bm13xx-protocol"
+readme = "../README.md"
+repository = "https://github.com/GPTechinno/bm13xx-rs"
 rust-version = "1.87.0"
 version = "0.3.0"
 
