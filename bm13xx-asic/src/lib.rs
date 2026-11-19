@@ -39,6 +39,7 @@ pub enum SequenceStep {
     DieTemp(usize),
     ChipHashFreq(usize),
     SupplyVoltage(usize),
+    I2cEnable(usize),
 }
 
 /// One step of a sensor reading sequence.
@@ -127,6 +128,11 @@ pub trait Asic {
     }
     /// Die temperature in °C from the values read by `die_temp_next()`, in order.
     fn die_temp_celsius(&self, _samples: &[u32]) -> Option<f32> {
+        None
+    }
+    /// Route the I2C master of one chip (`dest`) to its pins, to reach the I2C devices behind it
+    /// through `I2CControl`. `None` at once when the chip has no I2C master.
+    fn i2c_master_enable_next(&mut self, _dest: Destination) -> Option<CmdDelay> {
         None
     }
     /// Supply voltage reading sequence of sense channel `channel` for one chip (`dest`). `None` at

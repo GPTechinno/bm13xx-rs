@@ -74,7 +74,7 @@ use core::time::Duration;
 pub use self::error::{Error, Result};
 
 use bm13xx_asic::{
-    register::{ChipIdentification, OrderedClockMonitor, PLL0Parameter},
+    register::{ChipIdentification, I2CControl, OrderedClockMonitor, PLL0Parameter},
     Asic, CmdDelay, SensorStep,
 };
 use bm13xx_protocol::{
@@ -98,6 +98,8 @@ const RX_BUF_SIZE: usize = 256;
 const ENUM_QUIET_MS: u32 = 100;
 /// Time to wait for the answer to a register read.
 const READ_TIMEOUT_MS: u32 = 100;
+/// Reads of `I2CControl` waiting for the end of an I2C transaction.
+const I2C_POLLS: usize = 16;
 /// Values read by one sensor reading sequence.
 const SENSOR_SAMPLES: usize = 64;
 
@@ -441,6 +443,87 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
             }
         }
         Ok(answered.then_some(samples))
+    }
+
+    /// ## Enable the I2C master of one asic
+    ///
+    /// Routes the chip's I2C master to its pins, to reach the I2C devices behind it (temperature
+    /// sensors) with [`Chain::chip_i2c_read`] and [`Chain::chip_i2c_write`].
+    ///
+    /// ### Errors
+    ///
+    /// - I/O error
+    /// - Unsupported: the chip has no I2C master
+    pub async fn enable_chip_i2c(
+        &mut self,
+        asic_index: usize,
+    ) -> Result<(), U::Error, OB::Error, OR::Error> {
+        let dest = Destination::Chip((asic_index * self.asic_addr_interval) as u8);
+        let mut sent = false;
+        while let Some(step) = self.asic.i2c_master_enable_next(dest) {
+            self.send(step).await?;
+            sent = true;
+        }
+        if sent {
+            Ok(())
+        } else {
+            Err(Error::Unsupported)
+        }
+    }
+
+    /// Run one I2C transaction through the I2C master of one asic: write `I2CControl`, then read it
+    /// until the transaction is no longer busy. `None` if the asic did not answer or stayed busy.
+    async fn i2c_transaction(
+        &mut self,
+        asic_index: usize,
+        ctrl: I2CControl,
+    ) -> Result<Option<I2CControl>, U::Error, OB::Error, OR::Error> {
+        let dest = Destination::Chip((asic_index * self.asic_addr_interval) as u8);
+        let cmd = Command::write_reg(I2CControl::ADDR, ctrl.0, dest);
+        self.uart.write_all(&cmd).await.map_err(Error::Io)?;
+        for _ in 0..I2C_POLLS {
+            self.delay.delay_ms(1).await;
+            match self.read_register(asic_index, I2CControl::ADDR).await? {
+                None => return Ok(None),
+                Some(v) if !I2CControl(v).busy() => return Ok(Some(I2CControl(v))),
+                Some(_) => {}
+            }
+        }
+        Ok(None)
+    }
+
+    /// ## Read a register of an I2C device behind one asic
+    ///
+    /// `i2c_addr` is the device's 7-bit address. Returns `None` if the transaction did not
+    /// complete. Enable the asic's I2C master first ([`Chain::enable_chip_i2c`]).
+    pub async fn chip_i2c_read(
+        &mut self,
+        asic_index: usize,
+        i2c_addr: u8,
+        reg: u8,
+    ) -> Result<Option<u8>, U::Error, OB::Error, OR::Error> {
+        Ok(self
+            .i2c_transaction(asic_index, I2CControl::read(i2c_addr, reg))
+            .await?
+            .filter(|ctrl| ctrl.reg_addr() == reg)
+            .map(|ctrl| ctrl.reg_val()))
+    }
+
+    /// ## Write a register of an I2C device behind one asic
+    ///
+    /// `i2c_addr` is the device's 7-bit address. Returns whether the transaction completed.
+    /// Enable the asic's I2C master first ([`Chain::enable_chip_i2c`]).
+    pub async fn chip_i2c_write(
+        &mut self,
+        asic_index: usize,
+        i2c_addr: u8,
+        reg: u8,
+        val: u8,
+    ) -> Result<bool, U::Error, OB::Error, OR::Error> {
+        Ok(self
+            .i2c_transaction(asic_index, I2CControl::write(i2c_addr, reg, val))
+            .await?
+            .is_some())
     }
 
     /// ## Read the die temperature of one asic, in °C
@@ -1262,6 +1345,28 @@ mod tests {
         assert_eq!(chain.chip_hw_error_counts(), &[1]);
         chain.clear_chip_nonce_counts();
         assert_eq!(chain.chip_hw_error_counts(), &[0]);
+    }
+
+    #[tokio::test]
+    async fn chip_i2c_read_polls_until_not_busy() {
+        let mut chain = chain_of(1, 256, 1);
+        chain.uart.0 = [
+            reg_frame(0x8198_0100, 0, 0x1C),
+            reg_frame(0x0198_0157, 0, 0x1C),
+        ]
+        .concat()
+        .into_iter()
+        .collect();
+        assert_eq!(
+            chain.chip_i2c_read(0, 0x4C, 0x01).await.unwrap(),
+            Some(0x57)
+        );
+        // I2CControl = read register 0x01 of device 0x4C
+        assert_eq!(chain.uart.1[5..10], [0x1C, 0x01, 0x98, 0x01, 0x00]);
+        chain.uart.0 = reg_frame(0x0199_0904, 0, 0x1C).into_iter().collect();
+        assert!(chain.chip_i2c_write(0, 0x4C, 0x09, 0x04).await.unwrap());
+        assert!(!chain.chip_i2c_write(0, 0x4C, 0x09, 0x04).await.unwrap()); // no answer
+        assert_eq!(chain.enable_chip_i2c(0).await, Err(Error::Unsupported));
     }
 
     #[tokio::test]

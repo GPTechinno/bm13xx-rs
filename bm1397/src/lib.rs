@@ -894,6 +894,53 @@ impl Asic for BM1397 {
         (index < chain_asic_num).then_some(index)
     }
 
+    /// ## Enable the I2C master of one chip
+    ///
+    /// `MiscControl` with the RF pin on SDA and the TF pin on SCL, then `AnalogMuxControl`, both to
+    /// `dest`. The baudrate bits of `MiscControl` are kept.
+    ///
+    /// ### Example
+    /// ```
+    /// use bm1397::BM1397;
+    /// use bm13xx_asic::Asic;
+    /// use bm13xx_protocol::command::Destination;
+    ///
+    /// let mut bm1397 = BM1397::default();
+    /// let misc = bm1397.i2c_master_enable_next(Destination::Chip(0x40)).unwrap();
+    /// assert_eq!(misc.cmd[2..10], [0x41, 0x09, 0x40, 0x18, 0x00, 0x00, 0x7a, 0x31]);
+    /// let mux = bm1397.i2c_master_enable_next(Destination::Chip(0x40)).unwrap();
+    /// assert_eq!(mux.cmd[2..10], [0x41, 0x09, 0x40, 0x54, 0x00, 0x00, 0x00, 0x00]);
+    /// assert_eq!(bm1397.i2c_master_enable_next(Destination::Chip(0x40)), None);
+    /// ```
+    fn i2c_master_enable_next(&mut self, dest: Destination) -> Option<CmdDelay> {
+        match self.seq_step {
+            SequenceStep::I2cEnable(0) => {
+                self.seq_step = SequenceStep::I2cEnable(1);
+                let ana_mux = *self.registers.get(&AnalogMuxControl::ADDR).unwrap();
+                Some(CmdDelay {
+                    cmd: Command::write_reg(AnalogMuxControl::ADDR, ana_mux, dest),
+                    delay_ms: 10,
+                })
+            }
+            SequenceStep::I2cEnable(_) => {
+                self.seq_step = SequenceStep::None;
+                None
+            }
+            _ => {
+                self.seq_step = SequenceStep::I2cEnable(0);
+                let misc = MiscControl(*self.registers.get(&MiscControl::ADDR).unwrap())
+                    .set_rfs(true)
+                    .set_tfs(3)
+                    .val();
+                self.registers.insert(MiscControl::ADDR, misc).unwrap();
+                Some(CmdDelay {
+                    cmd: Command::write_reg(MiscControl::ADDR, misc, dest),
+                    delay_ms: 10,
+                })
+            }
+        }
+    }
+
     /// ## Send Split Nonce Between Chips command list
     ///
     /// ### Example

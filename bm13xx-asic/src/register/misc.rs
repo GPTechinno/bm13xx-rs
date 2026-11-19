@@ -50,11 +50,11 @@ impl MiscControl {
     // const TOP_CLK_SEL_OFFSET: u8 = 17;
     const BCK_SEL_OFFSET: u8 = 16;
     // const RET_ERR_NONCE_OFFSET: u8 = 15;
-    // const RFS_OFFSET: u8 = 14;
+    const RFS_OFFSET: u8 = 14;
     // const INV_CLKO_OFFSET: u8 = 13;
     const BT8D_4_0_OFFSET: u8 = 8;
     // const RET_WORK_ERR_FLAG_OFFSET: u8 = 7;
-    // const TFS_OFFSET: u8 = 4;
+    const TFS_OFFSET: u8 = 4;
     // const HASHRATE_TWS_OFFSET: u8 = 0;
 
     const BT8D_8_5_MASK: u32 = 0b1111;
@@ -65,12 +65,59 @@ impl MiscControl {
     // const TOP_CLK_SEL_MASK: u32 = 0b1;
     const BCK_SEL_MASK: u32 = 0b1;
     // const RET_ERR_NONCE_MASK: u32 = 0b1;
-    // const RFS_MASK: u32 = 0b1;
+    const RFS_MASK: u32 = 0b1;
     // const INV_CLKO_MASK: u32 = 0b1;
     const BT8D_4_0_MASK: u32 = 0b11111;
     // const RET_WORK_ERR_FLAG_MASK: u32 = 0b1;
-    // const TFS_MASK: u32 = 0xb111;
+    const TFS_MASK: u32 = 0b111;
     // const HASHRATE_TWS_MASK: u32 = 0xb11;
+
+    /// ## Handle the RF pin Selector field.
+    ///
+    /// `false`: open drain, `true`: SDA of the I2C master.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use bm13xx_asic::register::MiscControl;
+    ///
+    /// let mut misc = MiscControl(0x0000_3A01); // BM1397 default value
+    /// assert!(!misc.rfs());
+    /// assert!(misc.set_rfs(true).rfs());
+    /// assert!(!misc.set_rfs(false).rfs());
+    /// ```
+    pub const fn rfs(&self) -> bool {
+        (self.0 >> Self::RFS_OFFSET) & Self::RFS_MASK == Self::RFS_MASK
+    }
+    pub fn set_rfs(&mut self, sda: bool) -> &mut Self {
+        self.0 &= !(Self::RFS_MASK << Self::RFS_OFFSET);
+        self.0 |= (sda as u32) << Self::RFS_OFFSET;
+        self
+    }
+
+    /// ## Handle the TF pin Selector field.
+    ///
+    /// 0: hash doing, 1: UART RX, 2: UART TX, 3: SCL of the I2C master.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use bm13xx_asic::register::{MiscControl, Register};
+    ///
+    /// let mut misc = MiscControl(0x0000_3A01); // BM1397 default value
+    /// assert_eq!(misc.tfs(), 0);
+    /// assert_eq!(misc.set_tfs(3).tfs(), 3);
+    /// assert_eq!(misc.set_tfs(8).tfs(), 0); // out of bound value
+    /// assert_eq!(MiscControl(0x0000_3A01).set_rfs(true).set_tfs(3).val(), 0x0000_7A31);
+    /// ```
+    pub const fn tfs(&self) -> u8 {
+        ((self.0 >> Self::TFS_OFFSET) & Self::TFS_MASK) as u8
+    }
+    pub fn set_tfs(&mut self, tfs: u8) -> &mut Self {
+        self.0 &= !(Self::TFS_MASK << Self::TFS_OFFSET);
+        self.0 |= (tfs as u32 & Self::TFS_MASK) << Self::TFS_OFFSET;
+        self
+    }
 
     /// ## Handle the BT8D field.
     ///
