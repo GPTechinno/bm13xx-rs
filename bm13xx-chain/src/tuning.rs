@@ -16,6 +16,9 @@
 //! frequencies of the voltage domains spread too far apart, when every chip is done, when the
 //! average frequency reaches the target, or when the rate-weighted average frequency stops rising.
 //!
+//! [`DomainGuard`] watches the voltage domains while hashing and slows down one that falls behind
+//! the others.
+//!
 //! A nonce rate needs enough nonces to be meaningful: a lower ticket mask difficulty during the
 //! sweep gives more of them (about 10 000 nonces per chip for a rate within 1 %).
 //!
@@ -303,6 +306,147 @@ impl<const N: usize> FreqSweep<N> {
     }
 }
 
+/// # Settings of a domain guard
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct DomainGuardConfig {
+    /// Fewest nonces a domain must be expected to return before it is judged.
+    pub min_domain_nonces: f32,
+    /// A domain whose nonce rate is below this fraction of the chain's is lagging.
+    pub rate_ratio: f32,
+    /// With voltages given, a lagging domain is slowed down only if its voltage is below this
+    /// fraction of the expected one.
+    pub voltage_ratio: f32,
+    /// Frequency taken off the chips of a lagging domain.
+    pub step: HertzU64,
+    /// Most slow-downs per chain.
+    pub max_slow_downs: u32,
+}
+
+impl Default for DomainGuardConfig {
+    /// At least 2000 nonces expected per domain, rate below 95 % of the chain's, voltage below
+    /// 97 % of the expected one, 15 MHz off, twice at most.
+    fn default() -> Self {
+        Self {
+            min_domain_nonces: 2000.0,
+            rate_ratio: 0.95,
+            voltage_ratio: 0.97,
+            step: HertzU64::MHz(15),
+            max_slow_downs: 2,
+        }
+    }
+}
+
+/// # Guard slowing down the voltage domains that fall behind while hashing
+///
+/// Call [`DomainGuard::check`] from time to time with the nonces each chip returned and the nonces
+/// expected over the same time; when it names a domain, lower its chips with
+/// [`DomainGuard::slow_down`] and apply the frequencies with
+/// [`Chain::set_chip_hash_freqs`](crate::Chain::set_chip_hash_freqs).
+///
+/// ### Example
+///
+/// ```
+/// use bm13xx_chain::tuning::{DomainGuard, DomainGuardConfig};
+/// use fugit::HertzU64;
+///
+/// let mut guard = DomainGuard::new(DomainGuardConfig::default(), 2);
+/// let expected = [1500.0; 4];
+/// // the second domain (chips 2 and 3) returns 10 % fewer nonces
+/// let nonces = [1500, 1500, 1350, 1350];
+/// assert_eq!(guard.check(&nonces, &expected, None), Some(1));
+/// let mut freqs = [HertzU64::MHz(500); 4];
+/// guard.slow_down(&mut freqs, 1);
+/// assert_eq!(freqs[2..], [HertzU64::MHz(485); 2]);
+/// ```
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct DomainGuard {
+    cfg: DomainGuardConfig,
+    domain_cnt: usize,
+    slow_downs: u32,
+}
+
+impl DomainGuard {
+    /// ## Guard a chain whose chips are split into `domain_cnt` equal voltage domains
+    pub fn new(cfg: DomainGuardConfig, domain_cnt: usize) -> Self {
+        Self {
+            cfg,
+            domain_cnt: domain_cnt.max(1),
+            slow_downs: 0,
+        }
+    }
+
+    /// ## Slow-downs done so far
+    pub fn slow_downs(&self) -> u32 {
+        self.slow_downs
+    }
+
+    /// ## Find a domain to slow down
+    ///
+    /// `nonces` and `expected` hold, for each chip, the nonces received and the nonces expected
+    /// over the same time. `voltages`, when given, holds each domain's voltage and the voltage
+    /// expected for a domain. Returns the lagging domain with the lowest nonce rate, if any, and
+    /// counts it as a slow-down; `None` once `max_slow_downs` is reached.
+    pub fn check(
+        &mut self,
+        nonces: &[u32],
+        expected: &[f32],
+        voltages: Option<(&[f32], f32)>,
+    ) -> Option<usize> {
+        if self.slow_downs >= self.cfg.max_slow_downs || nonces.len() != expected.len() {
+            return None;
+        }
+        let n = nonces.len();
+        let domain_asic_cnt = n.div_ceil(self.domain_cnt).max(1);
+        let total_expected: f32 = expected.iter().sum();
+        if total_expected <= 0.0 {
+            return None;
+        }
+        let chain_rate = nonces.iter().map(|&c| c as f32).sum::<f32>() / total_expected;
+        let mut lagging: Option<(usize, f32)> = None;
+        for (domain, (counts, exp)) in nonces
+            .chunks(domain_asic_cnt)
+            .zip(expected.chunks(domain_asic_cnt))
+            .enumerate()
+        {
+            let domain_expected: f32 = exp.iter().sum();
+            if domain_expected < self.cfg.min_domain_nonces {
+                continue;
+            }
+            let rate = counts.iter().map(|&c| c as f32).sum::<f32>() / domain_expected;
+            if rate >= chain_rate * self.cfg.rate_ratio {
+                continue;
+            }
+            if let Some((volts, expected_volts)) = voltages {
+                match volts.get(domain) {
+                    Some(v) if *v < expected_volts * self.cfg.voltage_ratio => {}
+                    _ => continue,
+                }
+            }
+            if lagging.is_none_or(|(_, r)| rate < r) {
+                lagging = Some((domain, rate));
+            }
+        }
+        let (domain, _) = lagging?;
+        self.slow_downs += 1;
+        Some(domain)
+    }
+
+    /// ## Lower the frequency of the chips of `domain` by `step`
+    pub fn slow_down(&self, freqs: &mut [HertzU64], domain: usize) {
+        let domain_asic_cnt = freqs.len().div_ceil(self.domain_cnt).max(1);
+        let step = self.cfg.step.to_raw();
+        for f in freqs
+            .iter_mut()
+            .skip(domain * domain_asic_cnt)
+            .take(domain_asic_cnt)
+        {
+            *f = HertzU64::from_raw(f.to_raw().saturating_sub(step).max(step));
+        }
+    }
+}
+
 fn mean_mhz(freqs: &[HertzU64]) -> f32 {
     if freqs.is_empty() {
         return 0.0;
@@ -410,6 +554,37 @@ mod tests {
         );
         run(&mut sweep, &[480, 500, 520, 540], 300);
         assert_eq!(sweep.chip_done(), &[true, true, false, false]);
+    }
+
+    #[test]
+    fn domain_guard_needs_enough_nonces_and_a_low_voltage() {
+        let mut guard = DomainGuard::new(DomainGuardConfig::default(), 2);
+        let nonces = [1500, 1500, 1350, 1350];
+        // not enough nonces yet
+        assert_eq!(guard.check(&nonces, &[900.0; 4], None), None);
+        // the lagging domain's voltage is normal
+        let voltages = [3.3, 3.3];
+        assert_eq!(
+            guard.check(&nonces, &[1500.0; 4], Some((&voltages, 3.3))),
+            None
+        );
+        // and low
+        let voltages = [3.3, 3.1];
+        assert_eq!(
+            guard.check(&nonces, &[1500.0; 4], Some((&voltages, 3.3))),
+            Some(1)
+        );
+        assert_eq!(guard.check(&nonces, &[1500.0; 4], None), Some(1));
+        // two slow-downs at most
+        assert_eq!(guard.check(&nonces, &[1500.0; 4], None), None);
+        assert_eq!(guard.slow_downs(), 2);
+    }
+
+    #[test]
+    fn domain_guard_picks_the_slowest_domain() {
+        let mut guard = DomainGuard::new(DomainGuardConfig::default(), 3);
+        let nonces = [3000, 3000, 2600, 2600, 2400, 2400];
+        assert_eq!(guard.check(&nonces, &[3000.0; 6], None), Some(2));
     }
 
     #[test]
