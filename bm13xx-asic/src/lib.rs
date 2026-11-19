@@ -36,6 +36,7 @@ pub enum SequenceStep {
     SplitNonce(usize),
     VersionRolling(usize),
     DieTemp(usize),
+    ChipHashFreq(usize),
 }
 
 /// One step of a sensor reading sequence.
@@ -82,6 +83,24 @@ pub trait Asic {
     ) -> Option<CmdDelay>;
     fn reset_core_next(&mut self, dest: Destination) -> Option<CmdDelay>;
     fn set_hash_freq_next(&mut self, target_freq: HertzU64) -> Option<CmdDelay>;
+    /// Set the hash frequency of one chip (`dest`) to `freq` at once, without ramp, leaving
+    /// `hash_freq()` (the frequency of the whole chain) unchanged. `None` at once when the chip
+    /// cannot be set alone.
+    fn set_chip_hash_freq_next(&mut self, _dest: Destination, _freq: HertzU64) -> Option<CmdDelay> {
+        None
+    }
+    /// Index in the chain of the chip that found `nonce`, received with or without version
+    /// rolling, in a chain of `chain_asic_num` chips `asic_addr_interval` apart. `None` when the
+    /// nonce does not tell.
+    fn nonce_chip_index(
+        &self,
+        _nonce: u32,
+        _version_rolling: bool,
+        _chain_asic_num: usize,
+        _asic_addr_interval: usize,
+    ) -> Option<usize> {
+        None
+    }
     fn split_nonce_between_chips_next(
         &mut self,
         chain_asic_num: usize,

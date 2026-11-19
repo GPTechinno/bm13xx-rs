@@ -811,6 +811,45 @@ impl Asic for BM1372 {
         }
     }
 
+    /// ## Set the hash frequency of one chip
+    ///
+    /// One `PLL0Parameter` write to `dest`, without ramp. `hash_freq()` keeps the frequency of the
+    /// whole chain.
+    ///
+    /// ### Example
+    /// ```
+    /// use bm1372::{BM1372, BM1372_PLL_ID_HASH};
+    /// use bm13xx_asic::{register::PLL0Parameter, Asic};
+    /// use bm13xx_protocol::command::Destination;
+    /// use fugit::HertzU64;
+    ///
+    /// let mut bm1372 = BM1372::default();
+    /// let step = bm1372.set_chip_hash_freq_next(Destination::Chip(4), HertzU64::MHz(75)).unwrap();
+    /// assert_eq!(step.cmd[2..6], [0x41, 0x09, 0x04, PLL0Parameter::ADDR]);
+    /// let mut at_75_mhz = BM1372::default();
+    /// at_75_mhz.set_hash_freq(HertzU64::MHz(75));
+    /// assert_eq!(step.cmd[6..10], at_75_mhz.plls[BM1372_PLL_ID_HASH].parameter().to_be_bytes());
+    /// assert_eq!(bm1372.set_chip_hash_freq_next(Destination::Chip(4), HertzU64::MHz(75)), None);
+    /// assert_eq!(bm1372.hash_freq(), HertzU64::MHz(50));
+    /// ```
+    fn set_chip_hash_freq_next(&mut self, dest: Destination, freq: HertzU64) -> Option<CmdDelay> {
+        match self.seq_step {
+            SequenceStep::ChipHashFreq(_) => {
+                self.seq_step = SequenceStep::None;
+                None
+            }
+            _ => {
+                self.seq_step = SequenceStep::ChipHashFreq(0);
+                let mut pll = self.plls[BM1372_PLL_ID_HASH];
+                pll.set_frequency(self.input_clock_freq, BM1372_PLL_OUT_HASH, freq, false);
+                Some(CmdDelay {
+                    cmd: Command::write_reg(PLL0Parameter::ADDR, pll.parameter(), dest),
+                    delay_ms: 0,
+                })
+            }
+        }
+    }
+
     /// ## Send Split Nonce Between Chips command list
     ///
     /// ### Example

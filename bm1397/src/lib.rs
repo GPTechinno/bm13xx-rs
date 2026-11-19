@@ -820,6 +820,76 @@ impl Asic for BM1397 {
         }
     }
 
+    /// ## Set the hash frequency of one chip
+    ///
+    /// `PLL0Divider` = `0x0F0F_0F00` then `PLL0Parameter`, written to `dest`, without ramp.
+    /// `hash_freq()` keeps the frequency of the whole chain.
+    ///
+    /// ### Example
+    /// ```
+    /// use bm1397::{BM1397, BM1397_PLL_ID_HASH};
+    /// use bm13xx_asic::{register::*, Asic};
+    /// use bm13xx_protocol::command::Destination;
+    /// use fugit::HertzU64;
+    ///
+    /// let mut bm1397 = BM1397::default();
+    /// let div = bm1397.set_chip_hash_freq_next(Destination::Chip(8), HertzU64::MHz(60)).unwrap();
+    /// assert_eq!(div.cmd[2..10], [0x41, 0x09, 0x08, PLL0Divider::ADDR, 0x0f, 0x0f, 0x0f, 0x00]);
+    /// let pll0 = bm1397.set_chip_hash_freq_next(Destination::Chip(8), HertzU64::MHz(60)).unwrap();
+    /// assert_eq!(pll0.cmd[2..10], [0x41, 0x09, 0x08, PLL0Parameter::ADDR, 0xc0, 0xa8, 0x02, 0x75]);
+    /// assert_eq!(bm1397.set_chip_hash_freq_next(Destination::Chip(8), HertzU64::MHz(60)), None);
+    /// assert_eq!(bm1397.hash_freq(), HertzU64::MHz(50));
+    /// ```
+    fn set_chip_hash_freq_next(&mut self, dest: Destination, freq: HertzU64) -> Option<CmdDelay> {
+        match self.seq_step {
+            SequenceStep::ChipHashFreq(0) => {
+                self.seq_step = SequenceStep::ChipHashFreq(1);
+                let mut pll = self.plls[BM1397_PLL_ID_HASH];
+                pll.set_divider(0x0f0f_0f00);
+                pll.set_frequency(self.input_clock_freq, BM1397_PLL_OUT_HASH, freq, true);
+                Some(CmdDelay {
+                    cmd: Command::write_reg(PLL0Parameter::ADDR, pll.parameter(), dest),
+                    delay_ms: 0,
+                })
+            }
+            SequenceStep::ChipHashFreq(_) => {
+                self.seq_step = SequenceStep::None;
+                None
+            }
+            _ => {
+                self.seq_step = SequenceStep::ChipHashFreq(0);
+                Some(CmdDelay {
+                    cmd: Command::write_reg(PLL0Divider::ADDR, 0x0f0f_0f00, dest),
+                    delay_ms: 0,
+                })
+            }
+        }
+    }
+
+    /// ## Index of the chip that found a nonce
+    ///
+    /// The chip address is in nonce bits 21:14.
+    ///
+    /// ### Example
+    /// ```
+    /// use bm1397::BM1397;
+    /// use bm13xx_asic::Asic;
+    ///
+    /// let bm1397 = BM1397::default();
+    /// assert_eq!(bm1397.nonce_chip_index(0x0004_0000, false, 30, 8), Some(2)); // address 0x10
+    /// assert_eq!(bm1397.nonce_chip_index(0x003c_0000, false, 30, 8), None); // address 0xF0
+    /// ```
+    fn nonce_chip_index(
+        &self,
+        nonce: u32,
+        _version_rolling: bool,
+        chain_asic_num: usize,
+        asic_addr_interval: usize,
+    ) -> Option<usize> {
+        let index = ((nonce >> 14) & 0xff) as usize / asic_addr_interval.max(1);
+        (index < chain_asic_num).then_some(index)
+    }
+
     /// ## Send Split Nonce Between Chips command list
     ///
     /// ### Example
