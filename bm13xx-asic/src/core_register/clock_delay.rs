@@ -451,3 +451,127 @@ impl defmt::Format for ClockDelayCtrlV3 {
         );
     }
 }
+
+/// # Clock Delay Control register, BM1362 layout
+///
+/// Same register as [`ClockDelayCtrlV2`], with another layout:
+/// - CCdly in bits \[7:5\],
+/// - PWth in bits \[4:3\],
+/// - Sweep Frequency Mode in bit 0.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+pub struct ClockDelayCtrlV4(pub u8);
+impl_boilerplate_for_core_reg!(ClockDelayCtrlV4);
+
+impl ClockDelayCtrlV4 {
+    pub const ID: u8 = 0;
+
+    const CCDLY_SEL_OFFSET: u8 = 5;
+    const PWTH_SEL_OFFSET: u8 = 3;
+    const SWPF_MODE_OFFSET: u8 = 0;
+
+    const CCDLY_SEL_MASK: u8 = 0b111;
+    const PWTH_SEL_MASK: u8 = 0b11;
+    const SWPF_MODE_MASK: u8 = 0b1;
+
+    /// ## Handle the CCdly field.
+    ///
+    /// Get and set the CCdly value.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use bm13xx_asic::core_register::{ClockDelayCtrlV4, CoreRegister};
+    ///
+    /// let mut cdc = ClockDelayCtrlV4(0x98);
+    /// assert_eq!(cdc.ccdly(), 4);
+    /// assert_eq!(cdc.set_ccdly(0).ccdly(), 0); // BM1362 init() value
+    /// assert_eq!(cdc.set_ccdly(7).ccdly(), 7); // max value
+    /// assert_eq!(cdc.set_ccdly(8).ccdly(), 0); // out of bound value
+    /// assert_eq!(ClockDelayCtrlV4(0xFF).set_ccdly(0).set_pwth(0).val(), 0x07); // other fields are kept
+    /// ```
+    pub const fn ccdly(&self) -> u8 {
+        (self.0 >> Self::CCDLY_SEL_OFFSET) & Self::CCDLY_SEL_MASK
+    }
+    pub fn set_ccdly(&mut self, ccdly: u8) -> &mut Self {
+        self.0 &= !(Self::CCDLY_SEL_MASK << Self::CCDLY_SEL_OFFSET);
+        self.0 |= (ccdly & Self::CCDLY_SEL_MASK) << Self::CCDLY_SEL_OFFSET;
+        self
+    }
+
+    /// ## Handle the PWth field.
+    ///
+    /// Get and set the PWth value.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use bm13xx_asic::core_register::{ClockDelayCtrlV4, CoreRegister};
+    ///
+    /// let mut cdc = ClockDelayCtrlV4(0x98);
+    /// assert_eq!(cdc.pwth(), 3);
+    /// assert_eq!(cdc.set_pwth(1).pwth(), 1); // BM1362 init() value
+    /// assert_eq!(cdc.set_pwth(3).pwth(), 3); // max value
+    /// assert_eq!(cdc.set_pwth(4).pwth(), 0); // out of bound value
+    /// assert_eq!(ClockDelayCtrlV4(0x98).set_ccdly(0).set_pwth(1).val(), 0x08);
+    /// ```
+    pub const fn pwth(&self) -> u8 {
+        (self.0 >> Self::PWTH_SEL_OFFSET) & Self::PWTH_SEL_MASK
+    }
+    pub fn set_pwth(&mut self, pwth: u8) -> &mut Self {
+        self.0 &= !(Self::PWTH_SEL_MASK << Self::PWTH_SEL_OFFSET);
+        self.0 |= (pwth & Self::PWTH_SEL_MASK) << Self::PWTH_SEL_OFFSET;
+        self
+    }
+
+    /// ## Handle the Sweep Frequency Mode field.
+    ///
+    /// Get and set the Sweep Frequency Mode state.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use bm13xx_asic::core_register::ClockDelayCtrlV4;
+    ///
+    /// let mut cdc = ClockDelayCtrlV4(0x98);
+    /// assert!(!cdc.sweep_frequency_mode_enabled());
+    /// assert!(cdc.enable_sweep_frequency_mode().sweep_frequency_mode_enabled());
+    /// assert!(!cdc.disable_sweep_frequency_mode().sweep_frequency_mode_enabled()); // BM1362 init() value
+    /// ```
+    pub const fn sweep_frequency_mode_enabled(&self) -> bool {
+        (self.0 >> Self::SWPF_MODE_OFFSET) & Self::SWPF_MODE_MASK == Self::SWPF_MODE_MASK
+    }
+    pub fn enable_sweep_frequency_mode(&mut self) -> &mut Self {
+        self.0 |= 1 << Self::SWPF_MODE_OFFSET;
+        self
+    }
+    pub fn disable_sweep_frequency_mode(&mut self) -> &mut Self {
+        self.0 &= !(1 << Self::SWPF_MODE_OFFSET);
+        self
+    }
+}
+
+impl ::core::fmt::Display for ClockDelayCtrlV4 {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+        f.debug_struct("ClockDelayCtrlV4")
+            .field("ccdly", &self.ccdly())
+            .field("pwth", &self.pwth())
+            .field(
+                "sweep_frequency_mode_enabled",
+                &self.sweep_frequency_mode_enabled(),
+            )
+            .finish()
+    }
+}
+
+#[cfg(feature = "defmt")]
+impl defmt::Format for ClockDelayCtrlV4 {
+    fn format(&self, fmt: defmt::Formatter) {
+        defmt::write!(
+            fmt,
+            "ClockDelayCtrlV4 {{ ccdly: {}, pwth: {}, sweep_frequency_mode_enabled: {} }}",
+            self.ccdly(),
+            self.pwth(),
+            self.sweep_frequency_mode_enabled(),
+        );
+    }
+}

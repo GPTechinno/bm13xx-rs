@@ -97,13 +97,13 @@ impl BM1362 {
     /// Core register 0: `ccdly` 0, `pwth` 1, no frequency sweep.
     fn clock_delay_ctrl(&mut self) -> u8 {
         let clk_dly_ctrl =
-            ClockDelayCtrlV2(*self.core_registers.get(&ClockDelayCtrlV2::ID).unwrap())
+            ClockDelayCtrlV4(*self.core_registers.get(&ClockDelayCtrlV4::ID).unwrap())
                 .set_ccdly(0)
                 .set_pwth(1)
                 .disable_sweep_frequency_mode()
                 .val();
         self.core_registers
-            .insert(ClockDelayCtrlV2::ID, clk_dly_ctrl)
+            .insert(ClockDelayCtrlV4::ID, clk_dly_ctrl)
             .unwrap();
         clk_dly_ctrl
     }
@@ -187,7 +187,7 @@ impl Asic for BM1362 {
             .unwrap();
         // Default Core Registers Value
         self.core_registers
-            .insert(ClockDelayCtrlV2::ID, 0x98)
+            .insert(ClockDelayCtrlV4::ID, 0x98)
             .unwrap();
         self.core_registers.insert(CoreEnableV2::ID, 0x55).unwrap();
         self.core_registers.insert(HashClockCtrl::ID, 0x40).unwrap();
@@ -288,7 +288,7 @@ impl Asic for BM1362 {
     /// assert_eq!(bm1362.init_next(256), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x54, 0x00, 0x00, 0x00, 0x03, 0x1d], delay_ms: 0}));
     /// assert_eq!(bm1362.init_next(256), None);
     /// assert_eq!(bm1362.core_registers.get(&HashClockCtrl::ID).unwrap(), &0x40);
-    /// assert_eq!(bm1362.core_registers.get(&ClockDelayCtrlV2::ID).unwrap(), &0x08);
+    /// assert_eq!(bm1362.core_registers.get(&ClockDelayCtrlV4::ID).unwrap(), &0x08);
     /// assert_eq!(bm1362.registers.get(&TicketMask::ADDR).unwrap(), &0x0000_00ff);
     /// assert_eq!(bm1362.registers.get(&AnalogMuxControlV2::ADDR).unwrap(), &0x0000_0003);
     /// ```
@@ -301,7 +301,7 @@ impl Asic for BM1362 {
                     Some(CmdDelay {
                         cmd: Command::write_reg(
                             CoreRegisterControl::ADDR,
-                            CoreRegisterControl::write_core_reg(0, ClockDelayCtrlV2(clk_dly_ctrl)),
+                            CoreRegisterControl::write_core_reg(0, ClockDelayCtrlV4(clk_dly_ctrl)),
                             Destination::All,
                         ),
                         delay_ms: 10,
@@ -606,7 +606,7 @@ impl Asic for BM1362 {
                                 CoreRegisterControl::ADDR,
                                 CoreRegisterControl::write_core_reg(
                                     0,
-                                    ClockDelayCtrlV2(clk_dly_ctrl),
+                                    ClockDelayCtrlV4(clk_dly_ctrl),
                                 ),
                                 dest,
                             ),

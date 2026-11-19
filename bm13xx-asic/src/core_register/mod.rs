@@ -43,7 +43,7 @@ mod process_monitor;
 mod sweep_clock;
 
 pub use auto_clk_en::AutoClkEn;
-pub use clock_delay::{ClockDelayCtrl, ClockDelayCtrlV2, ClockDelayCtrlV3};
+pub use clock_delay::{ClockDelayCtrl, ClockDelayCtrlV2, ClockDelayCtrlV3, ClockDelayCtrlV4};
 pub use clock_select_ctrl::ClockSelectCtrl;
 pub use core_enable::{CoreEnable, CoreEnableV2};
 pub use core_error::CoreError;
