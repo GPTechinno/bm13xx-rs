@@ -24,7 +24,9 @@ pub struct JobResponse {
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct JobVersionResponse {
     pub nonce: u32,
-    pub unknown: u8,
+    /// Leading zero bits of the share's hash beyond what the ticket mask requires: the share
+    /// difficulty is the ticket mask difficulty times `2^extra_zero_bits`.
+    pub extra_zero_bits: u8,
     pub job_id: usize,
     pub small_core_id: usize,
     pub version_bit: u32,
@@ -201,7 +203,7 @@ impl Response {
     /// match resp.unwrap() {
     ///     ResponseType::JobVer(j) => {
     ///         assert_eq!(j.nonce, 0xCE96_D52F);
-    ///         assert_eq!(j.unknown, 2);
+    ///         assert_eq!(j.extra_zero_bits, 2);
     ///         assert_eq!(j.job_id, 18);
     ///         assert_eq!(j.small_core_id, 3);
     ///         assert_eq!(j.version_bit, 0x129F_6000);
@@ -214,7 +216,7 @@ impl Response {
     /// match resp.unwrap() {
     ///     ResponseType::JobVer(j) => {
     ///         assert_eq!(j.nonce, 0xCFCD_3507);
-    ///         assert_eq!(j.unknown, 1);
+    ///         assert_eq!(j.extra_zero_bits, 1);
     ///         assert_eq!(j.job_id, 5);
     ///         assert_eq!(j.small_core_id, 14);
     ///         assert_eq!(j.version_bit, 0x0005_C000);
@@ -244,7 +246,7 @@ impl Response {
             let chunk = ((data[6] as u16) << 8) | data[7] as u16;
             return Ok(ResponseType::JobVer(JobVersionResponse {
                 nonce: u32::from_le_bytes(data[2..6].try_into().unwrap()),
-                unknown: (chunk >> (small_core_bits + 5)) as u8,
+                extra_zero_bits: (chunk >> (small_core_bits + 5)) as u8,
                 job_id: ((chunk >> small_core_bits) as usize) & 0b1_1111,
                 small_core_id: (data[7] as usize) & small_core_mask,
                 version_bit: (u16::from_be_bytes(data[8..10].try_into().unwrap()) as u32) << 13,
