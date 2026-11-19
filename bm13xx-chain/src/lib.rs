@@ -67,6 +67,7 @@
 pub(crate) mod fmt;
 
 mod error;
+pub mod tuning;
 
 use core::time::Duration;
 
