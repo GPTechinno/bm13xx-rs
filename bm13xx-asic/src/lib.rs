@@ -9,6 +9,7 @@ pub mod hash_counting;
 pub mod pll;
 pub mod register;
 pub mod sha;
+pub mod temperature;
 
 pub use self::error::{Error, Result};
 

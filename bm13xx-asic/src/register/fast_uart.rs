@@ -255,3 +255,158 @@ impl defmt::Format for FastUARTConfigurationV2 {
         );
     }
 }
+
+/// # Fast UART Configuration register, BM1372 layout
+///
+/// With `BCLK_SEL` 0 (CLKI), the baudrate is `CLKI / ((BT8D + 1) * 8)`. The other clock dividers are in [`FastUARTConfigurationAdd`](crate::register::FastUARTConfigurationAdd).
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+pub struct FastUARTConfigurationV3(pub u32);
+impl_boilerplate_for!(FastUARTConfigurationV3);
+
+impl FastUARTConfigurationV3 {
+    pub const ADDR: u8 = 0x28;
+
+    const VCO_CLK_EN_OFFSET: u8 = 31;
+    const BCLK_SEL_OFFSET: u8 = 18;
+    const BT8D_OFFSET: u8 = 8;
+    const USRC_DIV_OFFSET: u8 = 2;
+    const USRC_ODDSET_OFFSET: u8 = 0;
+
+    const VCO_CLK_EN_MASK: u32 = 0b1;
+    const BCLK_SEL_MASK: u32 = 0b1111;
+    const BT8D_MASK: u32 = 0b111111111;
+    const USRC_DIV_MASK: u32 = 0b111111;
+    const USRC_ODDSET_MASK: u32 = 0b11;
+
+    /// ## Handle the `VCO_CLK_EN` field.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use bm13xx_asic::register::FastUARTConfigurationV3;
+    ///
+    /// let mut reg = FastUARTConfigurationV3(0x00001A00); // reset value
+    /// assert_eq!(reg.vco_clk_en(), false);
+    /// assert!(reg.set_vco_clk_en(true).vco_clk_en());
+    /// assert!(!reg.set_vco_clk_en(false).vco_clk_en());
+    /// ```
+    pub const fn vco_clk_en(&self) -> bool {
+        (self.0 >> Self::VCO_CLK_EN_OFFSET) & Self::VCO_CLK_EN_MASK != 0
+    }
+    pub fn set_vco_clk_en(&mut self, value: bool) -> &mut Self {
+        self.0 &= !(Self::VCO_CLK_EN_MASK << Self::VCO_CLK_EN_OFFSET);
+        self.0 |= (value as u32) << Self::VCO_CLK_EN_OFFSET;
+        self
+    }
+
+    /// ## Handle the `BCLK_SEL` field.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use bm13xx_asic::register::FastUARTConfigurationV3;
+    ///
+    /// let mut reg = FastUARTConfigurationV3(0x00001A00); // reset value
+    /// assert_eq!(reg.bclk_sel(), 0x0);
+    /// assert_eq!(reg.set_bclk_sel(0xf).bclk_sel(), 0xf); // max value
+    /// assert_eq!(reg.set_bclk_sel(0x10).bclk_sel(), 0x0); // out of bound value
+    /// ```
+    pub const fn bclk_sel(&self) -> u8 {
+        ((self.0 >> Self::BCLK_SEL_OFFSET) & Self::BCLK_SEL_MASK) as u8
+    }
+    pub fn set_bclk_sel(&mut self, value: u8) -> &mut Self {
+        self.0 &= !(Self::BCLK_SEL_MASK << Self::BCLK_SEL_OFFSET);
+        self.0 |= ((value as u32) & Self::BCLK_SEL_MASK) << Self::BCLK_SEL_OFFSET;
+        self
+    }
+
+    /// ## Handle the `BT8D` field.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use bm13xx_asic::register::FastUARTConfigurationV3;
+    ///
+    /// let mut reg = FastUARTConfigurationV3(0x00001A00); // reset value
+    /// assert_eq!(reg.bt8d(), 0x1a);
+    /// assert_eq!(reg.set_bt8d(0x1ff).bt8d(), 0x1ff); // max value
+    /// assert_eq!(reg.set_bt8d(0x200).bt8d(), 0x0); // out of bound value
+    /// ```
+    pub const fn bt8d(&self) -> u16 {
+        ((self.0 >> Self::BT8D_OFFSET) & Self::BT8D_MASK) as u16
+    }
+    pub fn set_bt8d(&mut self, value: u16) -> &mut Self {
+        self.0 &= !(Self::BT8D_MASK << Self::BT8D_OFFSET);
+        self.0 |= ((value as u32) & Self::BT8D_MASK) << Self::BT8D_OFFSET;
+        self
+    }
+
+    /// ## Handle the `USRC_DIV` field.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use bm13xx_asic::register::FastUARTConfigurationV3;
+    ///
+    /// let mut reg = FastUARTConfigurationV3(0x00001A00); // reset value
+    /// assert_eq!(reg.usrc_div(), 0x0);
+    /// assert_eq!(reg.set_usrc_div(0x3f).usrc_div(), 0x3f); // max value
+    /// assert_eq!(reg.set_usrc_div(0x40).usrc_div(), 0x0); // out of bound value
+    /// ```
+    pub const fn usrc_div(&self) -> u8 {
+        ((self.0 >> Self::USRC_DIV_OFFSET) & Self::USRC_DIV_MASK) as u8
+    }
+    pub fn set_usrc_div(&mut self, value: u8) -> &mut Self {
+        self.0 &= !(Self::USRC_DIV_MASK << Self::USRC_DIV_OFFSET);
+        self.0 |= ((value as u32) & Self::USRC_DIV_MASK) << Self::USRC_DIV_OFFSET;
+        self
+    }
+
+    /// ## Handle the `USRC_ODDSET` field.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use bm13xx_asic::register::FastUARTConfigurationV3;
+    ///
+    /// let mut reg = FastUARTConfigurationV3(0x00001A00); // reset value
+    /// assert_eq!(reg.usrc_oddset(), 0x0);
+    /// assert_eq!(reg.set_usrc_oddset(0x3).usrc_oddset(), 0x3); // max value
+    /// assert_eq!(reg.set_usrc_oddset(0x4).usrc_oddset(), 0x0); // out of bound value
+    /// ```
+    pub const fn usrc_oddset(&self) -> u8 {
+        ((self.0 >> Self::USRC_ODDSET_OFFSET) & Self::USRC_ODDSET_MASK) as u8
+    }
+    pub fn set_usrc_oddset(&mut self, value: u8) -> &mut Self {
+        self.0 &= !(Self::USRC_ODDSET_MASK << Self::USRC_ODDSET_OFFSET);
+        self.0 |= ((value as u32) & Self::USRC_ODDSET_MASK) << Self::USRC_ODDSET_OFFSET;
+        self
+    }
+}
+
+impl core::fmt::Display for FastUARTConfigurationV3 {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("FastUARTConfigurationV3")
+            .field("vco_clk_en", &self.vco_clk_en())
+            .field("bclk_sel", &self.bclk_sel())
+            .field("bt8d", &self.bt8d())
+            .field("usrc_div", &self.usrc_div())
+            .field("usrc_oddset", &self.usrc_oddset())
+            .finish()
+    }
+}
+
+#[cfg(feature = "defmt")]
+impl defmt::Format for FastUARTConfigurationV3 {
+    fn format(&self, fmt: defmt::Formatter) {
+        defmt::write!(
+            fmt,
+            "FastUARTConfigurationV3 {{ vco_clk_en: {}, bclk_sel: {}, bt8d: {}, usrc_div: {}, usrc_oddset: {} }}",
+            self.vco_clk_en(),
+            self.bclk_sel(),
+            self.bt8d(),
+            self.usrc_div(),
+            self.usrc_oddset(),
+        );
+    }
+}
