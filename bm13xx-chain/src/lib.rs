@@ -97,6 +97,9 @@ const READ_TIMEOUT_MS: u32 = 100;
 /// Values read by one sensor reading sequence.
 const SENSOR_SAMPLES: usize = 64;
 
+/// Largest number of chips in a chain: a chip address is one byte.
+pub const MAX_ASIC_CNT: usize = 256;
+
 const NONCE_BITS: u32 = u32::BITS;
 const CHIP_ADDR_BITS: u32 = u8::BITS;
 
@@ -117,6 +120,12 @@ pub struct Chain<A, U, OB, OR, D> {
     job_id: u8,
     version_rolling_mask: Option<u32>,
     chip_nonce_space: usize,
+    /// Hash frequency of each chip.
+    chip_freqs: Vec<HertzU64, MAX_ASIC_CNT>,
+    /// Nonces received from each chip since the last clear.
+    chip_nonces: Vec<u32, MAX_ASIC_CNT>,
+    /// Difficulty of the ticket mask the chips use.
+    ticket_difficulty: u32,
 }
 
 impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, D: DelayNs>
@@ -222,7 +231,31 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
             trace!("{:?}", &self.rx_buf[self.rx_free_pos..self.rx_free_pos + n]);
             self.rx_free_pos += n;
         }
+        if let Some(r) = &resp {
+            self.count_nonce(r);
+        }
         Ok(resp)
+    }
+
+    /// Count a nonce response for the chip that found it.
+    fn count_nonce(&mut self, resp: &ResponseType) {
+        let (nonce, version_rolling) = match resp {
+            ResponseType::Job(j) => (j.nonce, false),
+            ResponseType::JobVer(j) => (j.nonce, true),
+            ResponseType::Reg(_) => return,
+        };
+        if let Some(count) = self
+            .asic
+            .nonce_chip_index(
+                nonce,
+                version_rolling,
+                self.asic_cnt,
+                self.asic_addr_interval,
+            )
+            .and_then(|i| self.chip_nonces.get_mut(i))
+        {
+            *count = count.wrapping_add(1);
+        }
     }
 
     /// Number of bytes to drop from the rx buffer to reach the next possible Preamble after the first byte.
@@ -354,6 +387,9 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
             job_id: 0,
             version_rolling_mask: None,
             chip_nonce_space: 0,
+            chip_freqs: Vec::new(),
+            chip_nonces: Vec::new(),
+            ticket_difficulty: 1,
         };
 
         chain.reset.set_high().map_err(Error::Reset)?;
@@ -395,6 +431,9 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
         chain.asic_addr_interval =
             (1 << (256usize / asic_cnt).max(1).ilog2()).min(chain.asic.max_addr_interval());
         chain.asic_cnt = asic_cnt;
+        let freq = chain.asic.hash_freq();
+        chain.chip_freqs = (0..asic_cnt).map(|_| freq).collect();
+        chain.chip_nonces = (0..asic_cnt).map(|_| 0).collect();
         chain.chip_nonce_space = chain.asic_addr_interval
             << (NONCE_BITS
                 - (chain.asic.core_count().next_power_of_two().ilog2())
@@ -446,6 +485,10 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
     pub async fn reset(&mut self) -> Result<(), U::Error, OB::Error, OR::Error> {
         self.reset.set_low().map_err(Error::Reset)?;
         self.asic.reset();
+        let freq = self.asic.hash_freq();
+        self.chip_freqs.iter_mut().for_each(|f| *f = freq);
+        self.clear_chip_nonce_counts();
+        self.ticket_difficulty = 1;
         self.uart.set_baudrate(115_200);
         Ok(())
     }
@@ -457,6 +500,8 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
         while let Some(step) = self.asic.init_next(difficulty) {
             self.send(step).await?;
         }
+        // the ticket mask keeps the largest power of two not above the difficulty
+        self.ticket_difficulty = 1 << (31 - difficulty.max(1).leading_zeros());
         self.delay.delay_ms(100).await;
         Ok(())
     }
@@ -504,8 +549,102 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
         while let Some(step) = self.asic.set_hash_freq_next(freq) {
             self.send(step).await?;
         }
+        let freq = self.asic.hash_freq();
+        self.chip_freqs.iter_mut().for_each(|f| *f = freq);
         self.delay.delay_ms(100).await;
         Ok(())
+    }
+
+    /// ## Get the hash frequency of each chip
+    ///
+    /// In chain order. [`Chain::set_hash_freq`] sets them all, [`Chain::set_chip_hash_freqs`] one by
+    /// one.
+    pub fn chip_hash_freqs(&self) -> &[HertzU64] {
+        &self.chip_freqs
+    }
+
+    /// ## Set the hash frequency of each chip
+    ///
+    /// Moves each chip towards its target in `targets` (in chain order) by steps of `step`, one
+    /// chip per voltage domain at a time: in each pass, the first chip of each domain that is not
+    /// at its target moves one step, then the chain waits `pass_delay_ms`. Passes go on until every
+    /// chip is at its target. The domains are the chips split into equal groups along the chain
+    /// (see [`Chain::set_domain_cnt`]), so the current drawn by each domain changes little at a time.
+    ///
+    /// ### Errors
+    ///
+    /// - I/O error
+    /// - Unsupported: the chip cannot be set alone
+    pub async fn set_chip_hash_freqs(
+        &mut self,
+        targets: &[HertzU64],
+        step: HertzU64,
+        pass_delay_ms: u32,
+    ) -> Result<(), U::Error, OB::Error, OR::Error> {
+        let cnt = self.asic_cnt.min(targets.len()).min(self.chip_freqs.len());
+        if cnt == 0 {
+            return Ok(());
+        }
+        let domain_cnt = self.domain_cnt.clamp(1, cnt);
+        let domain_asic_cnt = cnt.div_ceil(domain_cnt);
+        loop {
+            let mut moved = false;
+            for domain in 0..domain_cnt {
+                let start = domain * domain_asic_cnt;
+                let end = (start + domain_asic_cnt).min(cnt);
+                let Some(i) = (start..end).find(|&i| self.chip_freqs[i] != targets[i]) else {
+                    continue;
+                };
+                let (current, target) = (self.chip_freqs[i], targets[i]);
+                let freq = if target > current + step {
+                    current + step
+                } else if current > target + step {
+                    current - step
+                } else {
+                    target
+                };
+                let dest = Destination::Chip((i * self.asic_addr_interval) as u8);
+                let mut sent = false;
+                while let Some(cmd) = self.asic.set_chip_hash_freq_next(dest, freq) {
+                    self.send(cmd).await?;
+                    sent = true;
+                }
+                if !sent {
+                    return Err(Error::Unsupported);
+                }
+                self.chip_freqs[i] = freq;
+                moved = true;
+            }
+            if !moved {
+                return Ok(());
+            }
+            self.delay.delay_ms(pass_delay_ms).await;
+        }
+    }
+
+    /// ## Get the nonces received from each chip since the last clear
+    ///
+    /// In chain order, counted by [`Chain::poll_response`] when the nonce tells which chip found it.
+    pub fn chip_nonce_counts(&self) -> &[u32] {
+        &self.chip_nonces
+    }
+
+    /// ## Clear the nonce count of each chip
+    pub fn clear_chip_nonce_counts(&mut self) {
+        self.chip_nonces.iter_mut().for_each(|c| *c = 0);
+    }
+
+    /// ## Get the number of nonces expected from one chip in `duration`
+    ///
+    /// `f × small cores × t / (2^32 × d)`, with `f` the chip's hash frequency and `d` the ticket
+    /// mask difficulty set by [`Chain::init`].
+    pub fn expected_chip_nonces(&self, asic_index: usize, duration: Duration) -> f32 {
+        let freq = self
+            .chip_freqs
+            .get(asic_index)
+            .map_or(0.0, |f| f.to_raw() as f32);
+        freq * self.asic.small_core_count() as f32 * duration.as_secs_f32()
+            / (4_294_967_296.0 * self.ticket_difficulty as f32)
     }
 
     /// ## Split some Nonce space between chips
@@ -626,8 +765,8 @@ mod tests {
     /// ChipIdentification register response of a BM1397.
     const CHIP_ID: [u8; FRAME_SIZE] = [0xAA, 0x55, 0x13, 0x97, 0x18, 0x00, 0x00, 0x00, 0x06];
 
-    /// A serial interface that returns the queued bytes and discards what is written.
-    struct MockUart(VecDeque<u8>);
+    /// A serial interface that returns the queued bytes and keeps what is written.
+    struct MockUart(VecDeque<u8>, Vec<u8>);
 
     impl embedded_io_async::ErrorType for MockUart {
         type Error = Infallible;
@@ -651,6 +790,7 @@ mod tests {
 
     impl Write for MockUart {
         async fn write(&mut self, buf: &[u8]) -> core::result::Result<usize, Infallible> {
+            self.1.extend_from_slice(buf);
             Ok(buf.len())
         }
         async fn flush(&mut self) -> core::result::Result<(), Infallible> {
@@ -691,7 +831,7 @@ mod tests {
             asic: BM1366::default(),
             asic_addr_interval: 256,
             domain_cnt: 1,
-            uart: MockUart(rx.iter().copied().collect()),
+            uart: MockUart(rx.iter().copied().collect(), Vec::new()),
             rx_buf: [0; RX_BUF_SIZE],
             rx_free_pos: 0,
             rx_dropped: 0,
@@ -701,6 +841,9 @@ mod tests {
             job_id: 0,
             version_rolling_mask: None,
             chip_nonce_space: 0,
+            chip_freqs: heapless::Vec::from_slice(&[HertzU64::MHz(50)]).unwrap(),
+            chip_nonces: heapless::Vec::from_slice(&[0]).unwrap(),
+            ticket_difficulty: 1,
         }
     }
 
@@ -761,7 +904,7 @@ mod tests {
 
     async fn enumerate(asic_cnt: usize) -> MockChain {
         let rx = bm1366_chip_id().repeat(asic_cnt);
-        let uart = MockUart(rx.into_iter().collect());
+        let uart = MockUart(rx.into_iter().collect(), Vec::new());
         Chain::enumerate(BM1366::default(), uart, MockPin, MockPin, MockDelay)
             .await
             .unwrap()
@@ -779,6 +922,79 @@ mod tests {
         let chain = enumerate(3).await;
         assert_eq!(chain.asic_cnt, 3);
         assert_eq!(chain.asic_addr_interval, 64);
+    }
+
+    /// A chain of `asic_cnt` BM1366 chips `asic_addr_interval` apart in `domain_cnt` domains.
+    fn chain_of(asic_cnt: usize, asic_addr_interval: usize, domain_cnt: usize) -> MockChain {
+        let mut chain = chain(&[]);
+        chain.asic_cnt = asic_cnt;
+        chain.asic_addr_interval = asic_addr_interval;
+        chain.domain_cnt = domain_cnt;
+        chain.chip_freqs = (0..asic_cnt).map(|_| HertzU64::MHz(50)).collect();
+        chain.chip_nonces = (0..asic_cnt).map(|_| 0).collect();
+        chain
+    }
+
+    #[tokio::test]
+    async fn set_chip_hash_freqs_moves_one_chip_per_domain_per_pass() {
+        let mut chain = chain_of(4, 64, 2);
+        let targets = [
+            HertzU64::kHz(62_500),
+            HertzU64::kHz(62_500),
+            HertzU64::MHz(50),
+            HertzU64::kHz(56_250),
+        ];
+        chain
+            .set_chip_hash_freqs(&targets, HertzU64::kHz(6250), 0)
+            .await
+            .unwrap();
+        assert_eq!(chain.chip_hash_freqs(), &targets);
+        // one PLL0 write per step: chip 0 and chip 3, chip 0, chip 1, chip 1
+        let writes: Vec<(u8, u8)> = chain.uart.1.chunks(11).map(|c| (c[4], c[5])).collect();
+        assert_eq!(
+            writes,
+            [
+                (0x00, 0x08),
+                (0xC0, 0x08),
+                (0x00, 0x08),
+                (0x40, 0x08),
+                (0x40, 0x08)
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn nonces_are_counted_per_chip() {
+        // nonce from chip address 0x80 (bits 24:17), version rolling on
+        let nonce: u32 = 0x80 << 17;
+        let mut frame = [0xAA, 0x55, 0, 0, 0, 0, 0x00, 0x00, 0x00, 0x00, 0x80];
+        frame[2..6].copy_from_slice(&nonce.to_le_bytes());
+        frame[10] = (0x80..0xA0)
+            .find(|&b| {
+                frame[10] = b;
+                Response::parse_version(&frame, 8).is_ok()
+            })
+            .unwrap();
+        let mut chain = chain_of(4, 64, 1);
+        chain.uart.0 = frame.repeat(3).into_iter().collect();
+        chain.version_rolling_mask = Some(0x1fff_e000);
+        for _ in 0..8 {
+            chain.poll_response().await.unwrap();
+        }
+        assert_eq!(chain.chip_nonce_counts(), &[0, 0, 3, 0]);
+        chain.clear_chip_nonce_counts();
+        assert_eq!(chain.chip_nonce_counts(), &[0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn expected_chip_nonces_follow_frequency_and_ticket_mask() {
+        let mut chain = chain_of(1, 256, 1);
+        chain.chip_freqs[0] = HertzU64::MHz(500);
+        chain.ticket_difficulty = 256;
+        // 500 MHz × 894 small cores / 2^32 / 256 = 0.4065 nonce per second
+        let n = chain.expected_chip_nonces(0, Duration::from_secs(100));
+        assert!((n - 40.65).abs() < 0.01, "{n}");
+        assert_eq!(chain.expected_chip_nonces(1, Duration::from_secs(100)), 0.0);
     }
 
     #[tokio::test]

@@ -26,6 +26,8 @@ pub enum Error<IO, B, R> {
     Reset(R),
     /// The serial interface returned an error while setting baudrate
     SetBaudrate,
+    /// The chip does not support the operation
+    Unsupported,
 }
 
 impl<IO: core::fmt::Debug, B: core::fmt::Debug, R: core::fmt::Debug> core::error::Error
@@ -64,6 +66,7 @@ impl<IO: core::fmt::Debug, B: core::fmt::Debug, R: core::fmt::Debug> core::fmt::
             Error::Busy(gpio_err) => f.debug_tuple("Busy").field(gpio_err).finish(),
             Error::Reset(gpio_err) => f.debug_tuple("Reset").field(gpio_err).finish(),
             Error::SetBaudrate => f.debug_struct("SetBaudrate").finish(),
+            Error::Unsupported => f.debug_struct("Unsupported").finish(),
         }
     }
 }
