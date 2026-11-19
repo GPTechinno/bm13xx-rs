@@ -87,9 +87,12 @@ pub trait Asic {
         chain_asic_num: usize,
         asic_addr_interval: usize,
     ) -> Option<CmdDelay>;
+    /// Enable version rolling with `mask`. The hash counting number written first depends on the
+    /// current hash frequency, the chain's chip count and their address interval.
     fn set_version_rolling_next(
         &mut self,
         mask: u32,
+        chain_asic_num: usize,
         asic_addr_interval: usize,
     ) -> Option<CmdDelay>;
     /// Die temperature reading sequence for one chip (`dest`). `None` at once when the chip has no

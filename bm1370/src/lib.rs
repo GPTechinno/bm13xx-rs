@@ -35,9 +35,9 @@ pub struct BoardConfig {
     /// `CLKO` driver strength in `IoDriverStrenghtConfiguration` of the last chip of each voltage
     /// domain, written by `set_baudrate_next()`.
     pub domain_end_clko_strength: u8,
-    /// `HashCountingNumber`, written by `set_version_rolling_next()`. `None`: computed from the
-    /// address interval and the hash frequency.
-    pub hash_counting_number: Option<u32>,
+    /// Frequency the `HashCountingNumber` written by `set_version_rolling_next()` is computed for.
+    /// `None`: the current hash frequency.
+    pub hash_counting_freq: Option<HertzU64>,
 }
 
 impl BoardConfig {
@@ -46,22 +46,22 @@ impl BoardConfig {
         clock_delay_pwth: 3,
         diode_vdd_mux_sel: None,
         domain_end_clko_strength: 15,
-        hash_counting_number: Some(0x0000_1eb5),
+        hash_counting_freq: Some(HertzU64::MHz(596)),
     };
     /// Antminer S21 XP: 91 chips in 13 voltage domains.
     pub const S21_XP: Self = Self {
         clock_delay_pwth: 4,
         diode_vdd_mux_sel: Some(3),
         domain_end_clko_strength: 3,
-        hash_counting_number: Some(0x0000_1a44),
+        hash_counting_freq: Some(HertzU64::MHz(490)),
     };
 }
 
 impl Default for BoardConfig {
-    /// The S21 XP settings, with a computed `HashCountingNumber`.
+    /// The S21 XP settings, with the `HashCountingNumber` computed for the current hash frequency.
     fn default() -> Self {
         Self {
-            hash_counting_number: None,
+            hash_counting_freq: None,
             ..Self::S21_XP
         }
     }
@@ -91,10 +91,11 @@ pub struct BM1370 {
 }
 
 impl BM1370 {
-    /// ## Hash counting number for an address interval at the current hash frequency
+    /// ## Hash counting number for a chain of `chain_asic_num` chips
     ///
-    /// 85 % of the time a core takes to cover its share of the nonce range:
-    /// `(interval << 24) / next_pow2(cores) * 25 MHz / (2 * hash frequency)`.
+    /// 80 % of a core's half nonce range time when the chips split the whole nonce range, minus
+    /// 800, at least 2800: `⌊0.4 × ⌊⌊⌊2^32 / chain_asic_num⌋ / 128⌋ × 25 / f⌋ − 800⌋`, `f` in MHz: the
+    /// board's `hash_counting_freq`, or else the current hash frequency.
     ///
     /// ### Example
     ///
@@ -104,17 +105,21 @@ impl BM1370 {
     ///
     /// let mut bm1370 = BM1370::default();
     /// bm1370.set_hash_freq(HertzU64::MHz(448));
-    /// assert_eq!(bm1370.hash_counting_number(2), 6224); // 91 chips
+    /// assert_eq!(bm1370.hash_counting_number(91), 7430);
     /// bm1370.set_hash_freq(HertzU64::MHz(525));
-    /// assert_eq!(bm1370.hash_counting_number(256), 679_077); // single chip
+    /// assert_eq!(bm1370.hash_counting_number(1), 638_332); // single chip
     /// ```
-    pub fn hash_counting_number(&self, asic_addr_interval: usize) -> u32 {
+    pub fn hash_counting_number(&self, chain_asic_num: usize) -> u32 {
         bm13xx_asic::hash_counting::hash_counting_number(
-            asic_addr_interval,
+            (1u64 << 32) / chain_asic_num.max(1) as u64,
             BM1370_CORE_CNT,
-            self.hash_freq(),
-            85,
+            self.board
+                .hash_counting_freq
+                .unwrap_or_else(|| self.hash_freq()),
+            80,
         )
+        .saturating_sub(800)
+        .max(2800)
     }
 
     pub fn new_with_clk(clk: HertzU64) -> Self {
@@ -131,7 +136,7 @@ impl BM1370 {
     /// use bm1370::{BoardConfig, BM1370};
     ///
     /// assert_eq!(BM1370::default().board, BoardConfig::default());
-    /// assert_eq!(BoardConfig::default().hash_counting_number, None);
+    /// assert_eq!(BoardConfig::default().hash_counting_freq, None);
     /// let bm1370 = BM1370::new_with_board(BoardConfig::S21_PRO);
     /// assert_eq!(bm1370.board, BoardConfig::S21_PRO);
     /// ```
@@ -1339,22 +1344,24 @@ impl Asic for BM1370 {
     /// use bm13xx_asic::{Asic, CmdDelay};
     ///
     /// let mut bm1370 = BM1370::default(); // computed at the 50 MHz reset frequency
-    /// assert_eq!(bm1370.set_version_rolling_next(0x1fff_e000, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x10, 0x00, 0x00, 0xd9, 0x99, 0x13], delay_ms: 1}));
-    /// assert_eq!(bm1370.set_version_rolling_next(0x1fff_e000, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0xa4, 0x90, 0x00, 0xff, 0xff, 0x1c], delay_ms: 1}));
-    /// assert_eq!(bm1370.set_version_rolling_next(0x1fff_e000, 2), None);
+    /// let hcn = bm1370.set_version_rolling_next(0x1fff_e000, 91, 2).unwrap();
+    /// assert_eq!(hcn.cmd[5..10], [0x10, 0x00, 0x01, 0x1c, 0xf2]); // 72946
+    /// assert_eq!(bm1370.set_version_rolling_next(0x1fff_e000, 91, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0xa4, 0x90, 0x00, 0xff, 0xff, 0x1c], delay_ms: 1}));
+    /// assert_eq!(bm1370.set_version_rolling_next(0x1fff_e000, 91, 2), None);
     ///
     /// let mut bm1370 = BM1370::new_with_board(BoardConfig::S21_XP);
-    /// assert_eq!(bm1370.set_version_rolling_next(0x1fff_e000, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x10, 0x00, 0x00, 0x1a, 0x44, 0x17], delay_ms: 1})); // S21XP
-    /// assert_eq!(bm1370.set_version_rolling_next(0x1fff_e000, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0xa4, 0x90, 0x00, 0xff, 0xff, 0x1c], delay_ms: 1}));
-    /// assert_eq!(bm1370.set_version_rolling_next(0x1fff_e000, 2), None);
+    /// assert_eq!(bm1370.set_version_rolling_next(0x1fff_e000, 91, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x10, 0x00, 0x00, 0x1a, 0x44, 0x17], delay_ms: 1})); // S21XP
+    /// assert_eq!(bm1370.set_version_rolling_next(0x1fff_e000, 91, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0xa4, 0x90, 0x00, 0xff, 0xff, 0x1c], delay_ms: 1}));
+    /// assert_eq!(bm1370.set_version_rolling_next(0x1fff_e000, 91, 2), None);
     ///
     /// let mut bm1370 = BM1370::new_with_board(BoardConfig::S21_PRO);
-    /// assert_eq!(bm1370.set_version_rolling_next(0x1fff_e000, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x10, 0x00, 0x00, 0x1e, 0xb5, 0x0f], delay_ms: 1})); // S21Pro
+    /// assert_eq!(bm1370.set_version_rolling_next(0x1fff_e000, 65, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x10, 0x00, 0x00, 0x1e, 0xb5, 0x0f], delay_ms: 1})); // S21Pro
     /// ```
     fn set_version_rolling_next(
         &mut self,
         mask: u32,
-        asic_addr_interval: usize,
+        chain_asic_num: usize,
+        _asic_addr_interval: usize,
     ) -> Option<CmdDelay> {
         match self.seq_step {
             SequenceStep::VersionRolling(step) => match step {
@@ -1381,10 +1388,7 @@ impl Asic for BM1370 {
             _ => {
                 // authorize a VersionRolling sequence start whatever the current step was
                 self.seq_step = SequenceStep::VersionRolling(0);
-                let hcn = self
-                    .board
-                    .hash_counting_number
-                    .unwrap_or_else(|| self.hash_counting_number(asic_addr_interval));
+                let hcn = self.hash_counting_number(chain_asic_num);
                 self.registers
                     .insert(HashCountingNumber::ADDR, hcn)
                     .unwrap();

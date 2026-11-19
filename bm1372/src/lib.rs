@@ -74,7 +74,6 @@ pub struct BM1372 {
     pub registers: FnvIndexMap<u8, u32, 64>,
     pub core_registers: FnvIndexMap<u8, u8, 16>,
     cno_interval: usize,
-    chain_asic_num: usize,
     /// Settings of the hashboard the chip is on.
     pub board: BoardConfig,
 }
@@ -130,9 +129,9 @@ impl BM1372 {
 
     /// ## Hash counting number for a chain of `chain_asic_num` chips
     ///
-    /// 85 % of the time a core takes to cover its share of the nonce range. The BM1372 counts its
-    /// address interval over 7 address bits, `min(128 / chips, 3)`, so twice that in the 8-bit
-    /// address space.
+    /// 85 % of a core's half nonce range time: `⌊85 × ⌊⌊⌊((2 × interval) << 24) / 512⌋ × 25 / f⌋ / 2⌋ / 100⌋`,
+    /// `f` the current hash frequency in MHz. The BM1372 counts its address interval over 7 address
+    /// bits, `min(128 / chips, 3)`, so twice that in the 8-bit address space.
     ///
     /// ### Example
     /// ```
@@ -141,17 +140,18 @@ impl BM1372 {
     ///
     /// let mut bm1372 = BM1372::default();
     /// bm1372.set_hash_freq(HertzU64::MHz(490));
-    /// assert_eq!(bm1372.hash_counting_number(2), 4263);
-    /// assert_eq!(bm1372.hash_counting_number(60), 2842);
+    /// assert_eq!(bm1372.hash_counting_number(2), 4262);
+    /// assert_eq!(bm1372.hash_counting_number(60), 2841);
     /// ```
     pub fn hash_counting_number(&self, chain_asic_num: usize) -> u32 {
         let addr_interval = (128 / chain_asic_num.max(1)).clamp(1, 3);
         bm13xx_asic::hash_counting::hash_counting_number(
-            2 * addr_interval,
+            ((2 * addr_interval) as u64) << 24,
             BM1372_CORE_CNT,
             self.hash_freq(),
-            85,
-        )
+            100,
+        ) * 85
+            / 100
     }
 }
 
@@ -166,7 +166,6 @@ impl Default for BM1372 {
             registers: FnvIndexMap::<_, _, 64>::new(),
             core_registers: FnvIndexMap::<_, _, 16>::new(),
             cno_interval: 0,
-            chain_asic_num: 0,
             board: BoardConfig::default(),
         };
         bm1372.reset();
@@ -185,7 +184,6 @@ impl Asic for BM1372 {
         self.registers = FnvIndexMap::<_, _, 64>::new();
         self.core_registers = FnvIndexMap::<_, _, 16>::new();
         self.cno_interval = 0;
-        self.chain_asic_num = 0;
         // Default PLLs Parameter: PLL0 (0x08), PLL1 (0x60), PLL2 (0x61)
         self.plls[0].set_parameter(0xc054_0165);
         self.plls[1].set_parameter(0x2050_0174);
@@ -857,7 +855,6 @@ impl Asic for BM1372 {
             _ => {
                 // authorize a SplitNonce sequence start whatever the current step was
                 self.seq_step = SequenceStep::SplitNonce(1);
-                self.chain_asic_num = chain_asic_num;
                 let cno = ChipNonceOffsetV2::new(0, chain_asic_num).val();
                 self.registers.insert(ChipNonceOffsetV2::ADDR, cno).unwrap();
                 Some(CmdDelay {
@@ -870,7 +867,8 @@ impl Asic for BM1372 {
 
     /// ## Send Enable Version Rolling command list
     ///
-    /// Writes the hash counting number of the chain given to `split_nonce_between_chips_next()`.
+    /// The Hash Counting Number is [`BM1372::hash_counting_number()`] at the current hash frequency, so
+    /// set it first.
     ///
     /// ### Example
     /// ```
@@ -880,15 +878,15 @@ impl Asic for BM1372 {
     ///
     /// let mut bm1372 = BM1372::default();
     /// bm1372.set_hash_freq(HertzU64::MHz(490));
-    /// while bm1372.split_nonce_between_chips_next(2, 0x10).is_some() {}
-    /// let hcn = bm1372.set_version_rolling_next(0x1fff_e000, 0x10).unwrap();
-    /// assert_eq!(hcn.cmd[5..10], [HashCountingNumber::ADDR, 0x00, 0x00, 0x10, 0xa7]); // 4263
-    /// assert_eq!(bm1372.set_version_rolling_next(0x1fff_e000, 0x10), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0xa4, 0x90, 0x00, 0xff, 0xff, 0x1c], delay_ms: 1}));
-    /// assert_eq!(bm1372.set_version_rolling_next(0x1fff_e000, 0x10), None);
+    /// let hcn = bm1372.set_version_rolling_next(0x1fff_e000, 2, 0x10).unwrap();
+    /// assert_eq!(hcn.cmd[5..10], [HashCountingNumber::ADDR, 0x00, 0x00, 0x10, 0xa6]); // 4262
+    /// assert_eq!(bm1372.set_version_rolling_next(0x1fff_e000, 2, 0x10), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0xa4, 0x90, 0x00, 0xff, 0xff, 0x1c], delay_ms: 1}));
+    /// assert_eq!(bm1372.set_version_rolling_next(0x1fff_e000, 2, 0x10), None);
     /// ```
     fn set_version_rolling_next(
         &mut self,
         mask: u32,
+        chain_asic_num: usize,
         _asic_addr_interval: usize,
     ) -> Option<CmdDelay> {
         match self.seq_step {
@@ -916,7 +914,7 @@ impl Asic for BM1372 {
             _ => {
                 // authorize a VersionRolling sequence start whatever the current step was
                 self.seq_step = SequenceStep::VersionRolling(0);
-                let hcn = self.hash_counting_number(self.chain_asic_num);
+                let hcn = self.hash_counting_number(chain_asic_num);
                 self.registers
                     .insert(HashCountingNumber::ADDR, hcn)
                     .unwrap();

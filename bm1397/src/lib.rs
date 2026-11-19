@@ -846,11 +846,12 @@ impl Asic for BM1397 {
     /// use bm13xx_asic::Asic;
     ///
     /// let mut bm1397 = BM1397::default();
-    /// assert_eq!(bm1397.set_version_rolling_next(0x1fff_e000, 8), None);
+    /// assert_eq!(bm1397.set_version_rolling_next(0x1fff_e000, 30, 8), None);
     /// ```
     fn set_version_rolling_next(
         &mut self,
         _mask: u32,
+        _chain_asic_num: usize,
         _asic_addr_interval: usize,
     ) -> Option<CmdDelay> {
         None

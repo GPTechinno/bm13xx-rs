@@ -120,6 +120,34 @@ impl BM1368 {
         self
     }
 
+    /// ## Hash counting number for a chain of `chain_asic_num` chips at the current hash frequency
+    ///
+    /// 80 % of a core's half nonce range time when the chips split the whole nonce range, minus
+    /// 800, at least 2800: `⌊0.4 × ⌊⌊⌊2^32 / chain_asic_num⌋ / 128⌋ × 25 / f⌋ − 800⌋`, `f` in MHz.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use bm1368::BM1368;
+    /// use fugit::HertzU64;
+    ///
+    /// let mut bm1368 = BM1368::default();
+    /// bm1368.set_hash_freq(HertzU64::MHz(490));
+    /// assert_eq!(bm1368.hash_counting_number(108), 0x15A4);
+    /// bm1368.set_hash_freq(HertzU64::MHz(500));
+    /// assert_eq!(bm1368.hash_counting_number(1), 670_288); // single chip
+    /// ```
+    pub fn hash_counting_number(&self, chain_asic_num: usize) -> u32 {
+        bm13xx_asic::hash_counting::hash_counting_number(
+            (1u64 << 32) / chain_asic_num.max(1) as u64,
+            BM1368_CORE_CNT,
+            self.hash_freq(),
+            80,
+        )
+        .saturating_sub(800)
+        .max(2800)
+    }
+
     /*
     const BM1368_NONCE_CORES_BITS: usize = 7; // Core ID is hardcoded on Nonce[31:25] -> 7 bits
     const BM1368_NONCE_CORES_MASK: u32 = 0b111_1111;
@@ -1179,6 +1207,9 @@ impl Asic for BM1368 {
 
     /// ## Send Enable Version Rolling command list
     ///
+    /// The Hash Counting Number is [`BM1368::hash_counting_number()`] at the current hash frequency, so
+    /// set it first.
+    ///
     /// ### Example
     /// ```
     /// use bm1368::BM1368;
@@ -1186,15 +1217,17 @@ impl Asic for BM1368 {
     /// use fugit::HertzU64;
     ///
     /// let mut bm1368 = BM1368::default();
-    /// bm1368.set_hash_freq(HertzU64::MHz(475));
-    /// assert_eq!(bm1368.set_version_rolling_next(0x1fff_e000, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x10, 0x00, 0x00, 0x15, 0x8d, 0x13], delay_ms: 1}));
-    /// assert_eq!(bm1368.set_version_rolling_next(0x1fff_e000, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0xa4, 0x90, 0x00, 0xff, 0xff, 0x1c], delay_ms: 1}));
-    /// assert_eq!(bm1368.set_version_rolling_next(0x1fff_e000, 2), None);
+    /// // real example from S21
+    /// bm1368.set_hash_freq(HertzU64::MHz(490));
+    /// assert_eq!(bm1368.set_version_rolling_next(0x1fff_e000, 108, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0x10, 0x00, 0x00, 0x15, 0xa4, 0x0a], delay_ms: 1}));
+    /// assert_eq!(bm1368.set_version_rolling_next(0x1fff_e000, 108, 2), Some(CmdDelay{cmd: [0x55, 0xaa, 0x51, 0x09, 0x00, 0xa4, 0x90, 0x00, 0xff, 0xff, 0x1c], delay_ms: 1}));
+    /// assert_eq!(bm1368.set_version_rolling_next(0x1fff_e000, 108, 2), None);
     /// ```
     fn set_version_rolling_next(
         &mut self,
         mask: u32,
-        asic_addr_interval: usize,
+        chain_asic_num: usize,
+        _asic_addr_interval: usize,
     ) -> Option<CmdDelay> {
         match self.seq_step {
             SequenceStep::VersionRolling(step) => match step {
@@ -1221,13 +1254,7 @@ impl Asic for BM1368 {
             _ => {
                 // authorize a VersionRolling sequence start whatever the current step was
                 self.seq_step = SequenceStep::VersionRolling(0);
-                let hcn = bm13xx_asic::hash_counting::hash_counting_number(
-                    asic_addr_interval,
-                    BM1368_CORE_CNT,
-                    self.hash_freq(),
-                    80,
-                )
-                .saturating_sub(1);
+                let hcn = self.hash_counting_number(chain_asic_num);
                 self.registers
                     .insert(HashCountingNumber::ADDR, hcn)
                     .unwrap();
