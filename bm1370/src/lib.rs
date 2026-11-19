@@ -392,7 +392,7 @@ impl Asic for BM1370 {
             .insert(ReturnedGroupPatternStatus::ADDR, 0x0000_0000)
             .unwrap();
         self.registers
-            .insert(NonceReturnedTimeout::ADDR, 0x00f7_0073)
+            .insert(NonceReturnedTimeout::ADDR, 0x00f7_0077)
             .unwrap();
         self.registers
             .insert(ReturnedSinglePatternStatus::ADDR, 0x0000_0000)
