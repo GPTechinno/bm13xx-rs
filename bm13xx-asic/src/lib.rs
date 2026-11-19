@@ -73,6 +73,10 @@ pub trait Asic {
     fn cno_interval(&self) -> usize;
     fn cno_bits(&self) -> u32;
     fn hash_freq(&self) -> HertzU64;
+    /// Frequency of the chip's input clock.
+    fn input_clock_freq(&self) -> HertzU64 {
+        HertzU64::MHz(25)
+    }
     fn init_next(&mut self, difficulty: u32) -> Option<CmdDelay>;
     fn set_baudrate_next(
         &mut self,

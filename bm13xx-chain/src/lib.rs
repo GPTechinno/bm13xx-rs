@@ -73,7 +73,10 @@ use core::time::Duration;
 
 pub use self::error::{Error, Result};
 
-use bm13xx_asic::{register::ChipIdentification, Asic, CmdDelay, SensorStep};
+use bm13xx_asic::{
+    register::{ChipIdentification, OrderedClockMonitor, PLL0Parameter},
+    Asic, CmdDelay, SensorStep,
+};
 use bm13xx_protocol::{
     command::{Command, Destination},
     response::{Response, ResponseType, FRAME_SIZE, FRAME_SIZE_VER},
@@ -316,6 +319,37 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
         let cmd = Command::read_reg(reg_addr, Destination::Chip(chip_addr));
         self.uart.write_all(&cmd).await.map_err(Error::Io)?;
         self.wait_register(chip_addr, reg_addr).await
+    }
+
+    /// ## Read the hash clock of one asic
+    ///
+    /// The chip counts its hash clock cycles during 256 cycles of its input clock: the frequency
+    /// it really runs at. `None` if the asic did not answer or has no count ready.
+    pub async fn read_chip_hash_clock(
+        &mut self,
+        asic_index: usize,
+    ) -> Result<Option<HertzU64>, U::Error, OB::Error, OR::Error> {
+        let input_clock_freq = self.asic.input_clock_freq();
+        Ok(self
+            .read_register(asic_index, OrderedClockMonitor::ADDR)
+            .await?
+            .map(OrderedClockMonitor)
+            .filter(|m| m.data_ready())
+            .map(|m| m.hash_freq(input_clock_freq)))
+    }
+
+    /// ## Read whether the hash PLL of one asic is locked
+    ///
+    /// The chip sets `PLL0Parameter` bit 31 once its PLL has locked. `None` if the asic did not
+    /// answer.
+    pub async fn read_chip_pll_locked(
+        &mut self,
+        asic_index: usize,
+    ) -> Result<Option<bool>, U::Error, OB::Error, OR::Error> {
+        Ok(self
+            .read_register(asic_index, PLL0Parameter::ADDR)
+            .await?
+            .map(|v| v & 0x8000_0000 != 0))
     }
 
     /// ## Read the die temperature of one asic, in °C
@@ -996,6 +1030,43 @@ mod tests {
         let n = chain.expected_chip_nonces(0, Duration::from_secs(100));
         assert!((n - 40.65).abs() < 0.01, "{n}");
         assert_eq!(chain.expected_chip_nonces(1, Duration::from_secs(100)), 0.0);
+    }
+
+    /// Register response of chip `chip_addr` without version rolling, with its CRC.
+    fn reg_frame(value: u32, chip_addr: u8, reg_addr: u8) -> [u8; FRAME_SIZE] {
+        let mut frame = [0xAA, 0x55, 0, 0, 0, 0, chip_addr, reg_addr, 0];
+        frame[2..6].copy_from_slice(&value.to_be_bytes());
+        frame[8] = (0..0x20)
+            .find(|&crc| {
+                frame[8] = crc;
+                Response::parse(&frame, 8).is_ok()
+            })
+            .unwrap();
+        frame
+    }
+
+    #[tokio::test]
+    async fn read_chip_hash_clock_converts_the_count() {
+        let mut chain = chain_of(2, 128, 1);
+        chain.uart.0 = reg_frame(0x0001_1800, 128, 0x6C).into_iter().collect();
+        assert_eq!(
+            chain.read_chip_hash_clock(1).await.unwrap(),
+            Some(HertzU64::MHz(600))
+        );
+        // the read command went to chip 128
+        assert_eq!(chain.uart.1[2..6], [0x42, 0x05, 128, 0x6C]);
+        chain.uart.0 = reg_frame(0x0000_1800, 0, 0x6C).into_iter().collect();
+        assert_eq!(chain.read_chip_hash_clock(0).await.unwrap(), None); // no count ready
+    }
+
+    #[tokio::test]
+    async fn read_chip_pll_locked_reads_bit_31() {
+        let mut chain = chain_of(1, 256, 1);
+        chain.uart.0 = reg_frame(0xC0A2_0255, 0, 0x08).into_iter().collect();
+        assert_eq!(chain.read_chip_pll_locked(0).await.unwrap(), Some(true));
+        chain.uart.0 = reg_frame(0x40A2_0255, 0, 0x08).into_iter().collect();
+        assert_eq!(chain.read_chip_pll_locked(0).await.unwrap(), Some(false));
+        assert_eq!(chain.read_chip_pll_locked(0).await.unwrap(), None); // no answer
     }
 
     #[tokio::test]

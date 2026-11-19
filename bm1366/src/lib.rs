@@ -477,6 +477,10 @@ impl Asic for BM1366 {
         ChipNonceOffsetV2::CNO_MASK.count_ones()
     }
 
+    fn input_clock_freq(&self) -> HertzU64 {
+        self.input_clock_freq
+    }
+
     /// ## Get the SHA Hashing Frequency
     ///
     /// ### Example

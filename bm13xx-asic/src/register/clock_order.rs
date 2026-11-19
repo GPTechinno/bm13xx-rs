@@ -1,6 +1,9 @@
 use crate::register::Register;
 
 /// # Ordered Clock Monitor register
+///
+/// Counts the cycles of the monitored clock, the hash clock from reset, during 256 cycles of the
+/// input clock.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub struct OrderedClockMonitor(pub u32);
 impl_boilerplate_for!(OrderedClockMonitor);
@@ -9,24 +12,78 @@ impl OrderedClockMonitor {
     pub const ADDR: u8 = 0x6C;
 
     // const START_OFFSET: u8 = 31;
-    // const CLK_SEL_OFFSET: u8 = 24;
-    // const CLK_COUNT_OFFSET: u8 = 0;
+    const DATA_READY_OFFSET: u8 = 16;
+    const CLK_COUNT_OFFSET: u8 = 0;
 
     // const START_MASK: u32 = 0b1;
-    // const CLK_SEL_MASK: u32 = 0b1111;
-    // const CLK_COUNT_MASK: u32 = 0xffff;
+    const DATA_READY_MASK: u32 = 0b1;
+    const CLK_COUNT_MASK: u32 = 0xffff;
+
+    /// ## Handle the Data Ready field.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use bm13xx_asic::register::OrderedClockMonitor;
+    ///
+    /// assert!(OrderedClockMonitor(0x0001_0200).data_ready());
+    /// assert!(!OrderedClockMonitor(0x0000_0000).data_ready());
+    /// ```
+    pub const fn data_ready(&self) -> bool {
+        (self.0 >> Self::DATA_READY_OFFSET) & Self::DATA_READY_MASK == Self::DATA_READY_MASK
+    }
+
+    /// ## Handle the Clock Count field.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use bm13xx_asic::register::OrderedClockMonitor;
+    ///
+    /// assert_eq!(OrderedClockMonitor(0x0001_0200).clk_count(), 0x0200);
+    /// ```
+    pub const fn clk_count(&self) -> u16 {
+        ((self.0 >> Self::CLK_COUNT_OFFSET) & Self::CLK_COUNT_MASK) as u16
+    }
+
+    /// ## Get the frequency of the monitored clock
+    ///
+    /// `clk_count × input clock / 256`.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use bm13xx_asic::register::OrderedClockMonitor;
+    /// use fugit::HertzU64;
+    ///
+    /// let clki = HertzU64::MHz(25);
+    /// assert_eq!(OrderedClockMonitor(0x0001_0200).hash_freq(clki), HertzU64::MHz(50));
+    /// assert_eq!(OrderedClockMonitor(0x0001_1800).hash_freq(clki), HertzU64::MHz(600));
+    /// assert_eq!(OrderedClockMonitor(0x0001_139A).hash_freq(clki), HertzU64::Hz(490_039_062));
+    /// ```
+    pub fn hash_freq(&self, input_clock_freq: fugit::HertzU64) -> fugit::HertzU64 {
+        fugit::HertzU64::from_raw(input_clock_freq.to_raw() * self.clk_count() as u64 / 256)
+    }
 }
 
 impl core::fmt::Display for OrderedClockMonitor {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("OrderedClockMonitor").finish()
+        f.debug_struct("OrderedClockMonitor")
+            .field("data_ready", &self.data_ready())
+            .field("clk_count", &self.clk_count())
+            .finish()
     }
 }
 
 #[cfg(feature = "defmt")]
 impl defmt::Format for OrderedClockMonitor {
     fn format(&self, fmt: defmt::Formatter) {
-        defmt::write!(fmt, "OrderedClockMonitor {{  }}",);
+        defmt::write!(
+            fmt,
+            "OrderedClockMonitor {{ data_ready: {}, clk_count: {} }}",
+            self.data_ready(),
+            self.clk_count(),
+        );
     }
 }
 
