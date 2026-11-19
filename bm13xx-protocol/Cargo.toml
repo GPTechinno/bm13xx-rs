@@ -8,7 +8,7 @@ name = "bm13xx-protocol"
 readme = "../README.md"
 repository = "https://github.com/GPTechinno/bm13xx-rs"
 rust-version = "1.87.0"
-version = "0.3.0"
+version = "0.4.0"
 
 [dependencies]
 crc = { workspace = true }

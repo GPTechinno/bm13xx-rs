@@ -8,11 +8,11 @@ name = "bm1397"
 readme = "../README.md"
 repository = "https://github.com/GPTechinno/bm13xx-rs"
 rust-version = "1.87.0"
-version = "0.3.0"
+version = "0.4.0"
 
 [dependencies]
-"bm13xx-asic" = { path = "../bm13xx-asic", version = "0.3.0" }
-"bm13xx-protocol" = { path = "../bm13xx-protocol", version = "0.3.0" }
+"bm13xx-asic" = { path = "../bm13xx-asic", version = "0.4.0" }
+"bm13xx-protocol" = { path = "../bm13xx-protocol", version = "0.4.0" }
 
 defmt = { workspace = true, optional = true }
 fugit = { workspace = true }
