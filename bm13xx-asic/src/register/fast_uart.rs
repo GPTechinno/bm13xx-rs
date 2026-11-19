@@ -120,27 +120,53 @@ impl_boilerplate_for!(FastUARTConfigurationV2);
 impl FastUARTConfigurationV2 {
     pub const ADDR: u8 = 0x28;
 
-    // const B31_OFFSET: u8 = 31;
+    const B31_OFFSET: u8 = 31;
     // const B29_OFFSET: u8 = 30;
     // const B28_OFFSET: u8 = 29;
     const B28_OFFSET: u8 = 28;
     const BCK_SEL_OFFSET: u8 = 26;
-    // const B24_OFFSET: u8 = 24;
+    const B24_OFFSET: u8 = 24;
     const PLL1_DIV4_OFFSET: u8 = 20;
     // const B16_19_OFFSET: u8 = 16;
     const BT8D_OFFSET: u8 = 8;
     // const CLKO_DIV_OFFSET: u8 = 0;
 
-    // const B31_MASK: u32 = 0b1;
+    const B31_MASK: u32 = 0b1;
     // const B30_MASK: u32 = 0b1;
     // const B29_MASK: u32 = 0b1;
     const B28_MASK: u32 = 0b1;
     const BCK_SEL_MASK: u32 = 0b1; /* should be 0b11 but only 1 values are known for now */
-    // const B24_MASK: u32 = 0b1;
+    const B24_MASK: u32 = 0b1;
     const PLL1_DIV4_MASK: u32 = 0b1111;
     // const B16_19_MASK: u32 = 0b1111;
     const BT8D_MASK: u32 = 0xff;
     // const CLKO_DIV_MASK: u32 = 0xff;
+
+    /// ## Handle the B31 field.
+    ///
+    /// Get and set the B31 state.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use bm13xx_asic::register::FastUARTConfigurationV2;
+    ///
+    /// let mut fast_uart_cfg = FastUARTConfigurationV2(0x0130_1A00); // BM1366 default value
+    /// assert!(!fast_uart_cfg.is_b31());
+    /// assert!(fast_uart_cfg.set_b31().is_b31());
+    /// assert!(!fast_uart_cfg.clr_b31().is_b31());
+    /// ```
+    pub const fn is_b31(&self) -> bool {
+        (self.0 >> Self::B31_OFFSET) & Self::B31_MASK == Self::B31_MASK
+    }
+    pub fn set_b31(&mut self) -> &mut Self {
+        self.0 |= Self::B31_MASK << Self::B31_OFFSET;
+        self
+    }
+    pub fn clr_b31(&mut self) -> &mut Self {
+        self.0 &= !(Self::B31_MASK << Self::B31_OFFSET);
+        self
+    }
 
     /// ## Handle the B28 field.
     ///
@@ -187,6 +213,32 @@ impl FastUARTConfigurationV2 {
     pub fn set_bclk_sel(&mut self, bclk_sel: BaudrateClockSelectV2) -> &mut Self {
         self.0 &= !(Self::BCK_SEL_MASK << Self::BCK_SEL_OFFSET);
         self.0 |= ((bclk_sel as u32) & Self::BCK_SEL_MASK) << Self::BCK_SEL_OFFSET;
+        self
+    }
+
+    /// ## Handle the B24 field.
+    ///
+    /// Get and set the B24 state.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use bm13xx_asic::register::FastUARTConfigurationV2;
+    ///
+    /// let mut fast_uart_cfg = FastUARTConfigurationV2(0x0130_1A00); // BM1366 default value
+    /// assert!(fast_uart_cfg.is_b24());
+    /// assert!(!fast_uart_cfg.clr_b24().is_b24());
+    /// assert!(fast_uart_cfg.set_b24().is_b24());
+    /// ```
+    pub const fn is_b24(&self) -> bool {
+        (self.0 >> Self::B24_OFFSET) & Self::B24_MASK == Self::B24_MASK
+    }
+    pub fn set_b24(&mut self) -> &mut Self {
+        self.0 |= Self::B24_MASK << Self::B24_OFFSET;
+        self
+    }
+    pub fn clr_b24(&mut self) -> &mut Self {
+        self.0 &= !(Self::B24_MASK << Self::B24_OFFSET);
         self
     }
 
