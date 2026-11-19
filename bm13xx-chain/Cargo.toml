@@ -22,8 +22,11 @@ embedded-io-async = { workspace = true }
 fugit = { workspace = true }
 heapless = { workspace = true }
 log = { workspace = true, optional = true }
+sha2 = { workspace = true, optional = true }
 
 [features]
+# check each nonce against the job it was found for, counting hardware errors per chip
+nonce-check = ["dep:sha2"]
 defmt = [
     "dep:defmt",
     "bm13xx-asic/defmt",

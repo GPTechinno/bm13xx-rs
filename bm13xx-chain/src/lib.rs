@@ -107,6 +107,18 @@ pub const MAX_ASIC_CNT: usize = 256;
 const NONCE_BITS: u32 = u32::BITS;
 const CHIP_ADDR_BITS: u32 = u8::BITS;
 
+/// A job sent with version rolling, kept to check the nonces found for it.
+#[cfg(feature = "nonce-check")]
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+struct SentJob {
+    version: u32,
+    prev_block_header_hash: [u8; 32],
+    merkle_root: [u8; 32],
+    n_bits: u32,
+    n_time: u32,
+}
+
 #[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Chain<A, U, OB, OR, D> {
@@ -130,6 +142,12 @@ pub struct Chain<A, U, OB, OR, D> {
     chip_nonces: Vec<u32, MAX_ASIC_CNT>,
     /// Difficulty of the ticket mask the chips use.
     ticket_difficulty: u32,
+    /// Jobs sent, by job ID.
+    #[cfg(feature = "nonce-check")]
+    jobs: [Option<SentJob>; 32],
+    /// Nonces from each chip that do not meet the ticket mask since the last clear.
+    #[cfg(feature = "nonce-check")]
+    chip_hw_errors: Vec<u32, MAX_ASIC_CNT>,
 }
 
 impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, D: DelayNs>
@@ -241,25 +259,68 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
         Ok(resp)
     }
 
-    /// Count a nonce response for the chip that found it.
+    /// Count a nonce response for the chip that found it. With the nonce check, a nonce that does
+    /// not meet the ticket mask counts as a hardware error of that chip instead.
     fn count_nonce(&mut self, resp: &ResponseType) {
         let (nonce, version_rolling) = match resp {
             ResponseType::Job(j) => (j.nonce, false),
             ResponseType::JobVer(j) => (j.nonce, true),
             ResponseType::Reg(_) => return,
         };
-        if let Some(count) = self
-            .asic
-            .nonce_chip_index(
-                nonce,
-                version_rolling,
-                self.asic_cnt,
-                self.asic_addr_interval,
-            )
-            .and_then(|i| self.chip_nonces.get_mut(i))
-        {
+        let Some(i) = self.asic.nonce_chip_index(
+            nonce,
+            version_rolling,
+            self.asic_cnt,
+            self.asic_addr_interval,
+        ) else {
+            return;
+        };
+        #[cfg(feature = "nonce-check")]
+        if let Some(zero_bits) = self.share_zero_bits(resp) {
+            if zero_bits < 32 + self.ticket_difficulty.trailing_zeros() {
+                if let Some(errors) = self.chip_hw_errors.get_mut(i) {
+                    *errors = errors.wrapping_add(1);
+                }
+                return;
+            }
+        }
+        if let Some(count) = self.chip_nonces.get_mut(i) {
             *count = count.wrapping_add(1);
         }
+    }
+
+    /// ## Count the leading zero bits of a share's hash
+    ///
+    /// Rebuilds the block header of a nonce response with version rolling from the job sent with
+    /// its job ID, and double-hashes it: a nonce meets the ticket mask when its hash has at least
+    /// `32 + log2(ticket mask difficulty)` leading zero bits. `None` for other responses or an
+    /// unknown job.
+    #[cfg(feature = "nonce-check")]
+    pub fn share_zero_bits(&self, resp: &ResponseType) -> Option<u32> {
+        use sha2::{Digest, Sha256};
+
+        let ResponseType::JobVer(j) = resp else {
+            return None;
+        };
+        let job = self.jobs.get(j.job_id)?.as_ref()?;
+        let mut header = [0u8; 80];
+        header[0..4].copy_from_slice(&(job.version | j.version_bit).to_le_bytes());
+        header[4..36].copy_from_slice(&job.prev_block_header_hash);
+        header[4..36].reverse();
+        header[36..68].copy_from_slice(&job.merkle_root);
+        header[36..68].reverse();
+        header[68..72].copy_from_slice(&job.n_time.to_le_bytes());
+        header[72..76].copy_from_slice(&job.n_bits.to_le_bytes());
+        header[76..80].copy_from_slice(&j.nonce.to_le_bytes());
+        let hash = Sha256::digest(Sha256::digest(header));
+        let mut zero_bits = 0;
+        for b in hash.iter().rev() {
+            zero_bits += b.leading_zeros();
+            if *b != 0 {
+                break;
+            }
+        }
+        Some(zero_bits)
     }
 
     /// Number of bytes to drop from the rx buffer to reach the next possible Preamble after the first byte.
@@ -425,6 +486,10 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
             chip_freqs: Vec::new(),
             chip_nonces: Vec::new(),
             ticket_difficulty: 1,
+            #[cfg(feature = "nonce-check")]
+            jobs: [None; 32],
+            #[cfg(feature = "nonce-check")]
+            chip_hw_errors: Vec::new(),
         };
 
         chain.reset.set_high().map_err(Error::Reset)?;
@@ -469,6 +534,10 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
         let freq = chain.asic.hash_freq();
         chain.chip_freqs = (0..asic_cnt).map(|_| freq).collect();
         chain.chip_nonces = (0..asic_cnt).map(|_| 0).collect();
+        #[cfg(feature = "nonce-check")]
+        {
+            chain.chip_hw_errors = (0..asic_cnt).map(|_| 0).collect();
+        }
         chain.chip_nonce_space = chain.asic_addr_interval
             << (NONCE_BITS
                 - (chain.asic.core_count().next_power_of_two().ilog2())
@@ -682,6 +751,17 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
     /// ## Clear the nonce count of each chip
     pub fn clear_chip_nonce_counts(&mut self) {
         self.chip_nonces.iter_mut().for_each(|c| *c = 0);
+        #[cfg(feature = "nonce-check")]
+        self.chip_hw_errors.iter_mut().for_each(|c| *c = 0);
+    }
+
+    /// ## Get the nonces from each chip that did not meet the ticket mask since the last clear
+    ///
+    /// In chain order: the hardware errors found by checking each nonce of a job sent with version
+    /// rolling (see [`Chain::share_zero_bits`]).
+    #[cfg(feature = "nonce-check")]
+    pub fn chip_hw_error_counts(&self) -> &[u32] {
+        &self.chip_hw_errors
     }
 
     /// ## Get the number of nonces expected from one chip in `duration`
@@ -770,7 +850,16 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
             32
         };
         self.job_id = (self.job_id + 1) % job_id_cnt;
-        // TODO: store the job in a `heapless::HistoryBuffer` to be able to compute corrsponding share difficulty
+        #[cfg(feature = "nonce-check")]
+        {
+            self.jobs[self.job_id as usize] = self.version_rolling_mask.map(|_| SentJob {
+                version,
+                prev_block_header_hash,
+                merkle_root,
+                n_bits,
+                n_time,
+            });
+        }
         if self.version_rolling_mask.is_some() {
             let cmd = Command::job_header(
                 self.job_id,
@@ -894,6 +983,10 @@ mod tests {
             chip_freqs: heapless::Vec::from_slice(&[HertzU64::MHz(50)]).unwrap(),
             chip_nonces: heapless::Vec::from_slice(&[0]).unwrap(),
             ticket_difficulty: 1,
+            #[cfg(feature = "nonce-check")]
+            jobs: [None; 32],
+            #[cfg(feature = "nonce-check")]
+            chip_hw_errors: heapless::Vec::from_slice(&[0]).unwrap(),
         }
     }
 
@@ -982,6 +1075,10 @@ mod tests {
         chain.domain_cnt = domain_cnt;
         chain.chip_freqs = (0..asic_cnt).map(|_| HertzU64::MHz(50)).collect();
         chain.chip_nonces = (0..asic_cnt).map(|_| 0).collect();
+        #[cfg(feature = "nonce-check")]
+        {
+            chain.chip_hw_errors = (0..asic_cnt).map(|_| 0).collect();
+        }
         chain
     }
 
@@ -1101,6 +1198,42 @@ mod tests {
         assert_eq!(chain.share_difficulty(&share(3)), Some(2048));
         assert_eq!(chain.share_difficulty(&share(255)), Some(u64::MAX));
         assert_eq!(chain.share_difficulty(&chip_id_resp()), None);
+    }
+
+    /// The block header fields of the Bitcoin genesis block, hashes in display order.
+    #[cfg(feature = "nonce-check")]
+    const GENESIS_MERKLE_ROOT: [u8; 32] = [
+        0x4a, 0x5e, 0x1e, 0x4b, 0xaa, 0xb8, 0x9f, 0x3a, 0x32, 0x51, 0x8a, 0x88, 0xc3, 0x1b, 0xc8,
+        0x7f, 0x61, 0x8f, 0x76, 0x67, 0x3e, 0x2c, 0xc7, 0x7a, 0xb2, 0x12, 0x7b, 0x7a, 0xfd, 0xed,
+        0xa3, 0x3b,
+    ];
+
+    #[cfg(feature = "nonce-check")]
+    #[tokio::test]
+    async fn nonces_are_checked_against_their_job() {
+        let mut chain = chain_of(1, 256, 1);
+        chain.version_rolling_mask = Some(0x1fff_e000);
+        let job_id = chain
+            .send_job(1, [0; 32], GENESIS_MERKLE_ROOT, 0x1d00_ffff, 1_231_006_505)
+            .await
+            .unwrap();
+        let share = |nonce| {
+            ResponseType::JobVer(JobVersionResponse {
+                nonce,
+                extra_zero_bits: 0,
+                job_id: job_id as usize,
+                small_core_id: 0,
+                version_bit: 0,
+            })
+        };
+        // the genesis block hash 000000000019d6689c08…
+        assert_eq!(chain.share_zero_bits(&share(2_083_236_893)), Some(43));
+        chain.count_nonce(&share(2_083_236_893));
+        chain.count_nonce(&share(2_083_236_894));
+        assert_eq!(chain.chip_nonce_counts(), &[1]);
+        assert_eq!(chain.chip_hw_error_counts(), &[1]);
+        chain.clear_chip_nonce_counts();
+        assert_eq!(chain.chip_hw_error_counts(), &[0]);
     }
 
     #[tokio::test]
