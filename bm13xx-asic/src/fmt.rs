@@ -224,3 +224,26 @@ impl<T, E> Try for Result<T, E> {
         self
     }
 }
+
+/// A byte slice that logs in hex, through `log` as through `defmt`.
+#[allow(unused)]
+pub(crate) struct Bytes<'a>(pub &'a [u8]);
+
+impl core::fmt::Debug for Bytes<'_> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{:02x?}", self.0)
+    }
+}
+
+impl core::fmt::Display for Bytes<'_> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{:02x?}", self.0)
+    }
+}
+
+#[cfg(feature = "defmt")]
+impl defmt::Format for Bytes<'_> {
+    fn format(&self, fmt: defmt::Formatter) {
+        defmt::write!(fmt, "{:02x}", self.0)
+    }
+}

@@ -73,6 +73,7 @@ pub mod tuning;
 use core::time::Duration;
 
 pub use self::error::{Error, Result};
+use self::fmt::Bytes;
 use self::pattern::{KnownNonce, KnownNonceReport};
 
 use bm13xx_asic::{
@@ -218,6 +219,7 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
         };
         if self.rx_free_pos >= expected_frame_size {
             let frame = &self.rx_buf[..expected_frame_size];
+            let hex = Bytes(frame);
             let (used, dropped) = match if self.version_rolling_mask.is_some() {
                 Response::parse_version(
                     frame.try_into().unwrap(),
@@ -233,23 +235,23 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
                 Err(bm13xx_protocol::Error::InvalidCrc { expected, actual }) => {
                     let offset = self.next_preamble_offset();
                     error!(
-                        "Resync Frame {:x} because bad CRC {:02x}!={:02x}, dropping first {} bytes",
-                        frame, expected, actual, offset
+                        "Resync Frame {} because bad CRC {:02x}!={:02x}, dropping first {} bytes",
+                        hex, expected, actual, offset
                     );
                     (offset, offset)
                 }
                 Err(bm13xx_protocol::Error::InvalidPreamble) => {
                     let offset = self.next_preamble_offset();
                     error!(
-                        "Resync Frame {:x} because bad preamble, dropping first {} bytes",
-                        frame, offset
+                        "Resync Frame {} because bad preamble, dropping first {} bytes",
+                        hex, offset
                     );
                     (offset, offset)
                 }
                 Err(bm13xx_protocol::Error::UnsupportedCoreSmallCoreCnt) => {
                     error!(
-                        "Ignoring Frame {:x} because bad CoreSmallCoreCnt {}",
-                        frame,
+                        "Ignoring Frame {} because bad CoreSmallCoreCnt {}",
+                        hex,
                         self.asic.core_small_core_count()
                     );
                     (expected_frame_size, 0)
