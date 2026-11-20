@@ -95,7 +95,8 @@ pub use timeout::TimeOut;
 pub use uart_relay::UARTRelay;
 pub use unknown::{
     AdcCtrl0, AdcCtrl1, AutoWorkCfg, CoreNumber, Domain0GotNonceCounter, Domain1GotNonceCounter,
-    Domain2GotNonceCounter, Domain3GotNonceCounter, FrequencySweepControl, GotNonceCounter,
+    Domain2GotNonceCounter, Domain3GotNonceCounter, Domain4GotNonceCounter, Domain5GotNonceCounter,
+    Domain6GotNonceCounter, Domain7GotNonceCounter, FrequencySweepControl, GotNonceCounter,
     NtickNonceCounter, Pll0ChargePumpProgramming, Pll0OffsetCalibration, Reg34, RegAC, RegB0,
     RegB4, RegC8, RegCC, RegD4, RegD8, RegE0, RegE4, RegE8, RegEC, RegF0, RegF4, RegF8, RegFC,
     SweepNonceRetTimeout, TickNonceCounter, Time1sCounter, TopProcessMonitor,

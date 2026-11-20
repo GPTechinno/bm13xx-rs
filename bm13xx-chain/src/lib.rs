@@ -111,6 +111,12 @@ const SENSOR_SAMPLES: usize = 64;
 /// Largest number of chips in a chain: a chip address is one byte.
 pub const MAX_ASIC_CNT: usize = 256;
 
+/// Hashes behind one count of a chip's hash counter (a nonce at difficulty 1, on average).
+pub const HASHES_PER_COUNT: u64 = 1 << 32;
+
+/// Most hash domains a chip has.
+pub const MAX_HASH_DOMAINS: usize = 8;
+
 const NONCE_BITS: u32 = u32::BITS;
 const CHIP_ADDR_BITS: u32 = u8::BITS;
 
@@ -409,6 +415,44 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
         let cmd = Command::read_reg(reg_addr, Destination::Chip(chip_addr));
         self.uart.write_all(&cmd).await.map_err(Error::Io)?;
         self.wait_register(chip_addr, reg_addr).await
+    }
+
+    /// ## Read the hash counter of one asic
+    ///
+    /// The total of the chip's hash-domain counters: one count per [`HASHES_PER_COUNT`] hashes,
+    /// wrapping around, so the hashrate is the difference between two readings over the time
+    /// between them. `None` if the chip has no hash counter or did not answer. Other responses
+    /// received meanwhile, nonces included, are kept for [`Chain::poll_response`].
+    pub async fn read_hash_counter(
+        &mut self,
+        asic_index: usize,
+    ) -> Result<Option<u32>, U::Error, OB::Error, OR::Error> {
+        let Some(reg_addr) = self.asic.hash_counter_reg() else {
+            return Ok(None);
+        };
+        self.read_register(asic_index, reg_addr).await
+    }
+
+    /// ## Read the hash-domain counters of one asic
+    ///
+    /// One counter per hash domain, in domain order, each counting one per [`HASHES_PER_COUNT`]
+    /// hashes of its domain and wrapping around. Empty if the chip has none, `None` if it did not
+    /// answer every read. Other responses received meanwhile, nonces included, are kept for
+    /// [`Chain::poll_response`].
+    pub async fn read_hash_domain_counters(
+        &mut self,
+        asic_index: usize,
+    ) -> Result<Option<Vec<u32, MAX_HASH_DOMAINS>>, U::Error, OB::Error, OR::Error> {
+        let mut values = Vec::new();
+        for &reg_addr in self.asic.hash_domain_counter_regs() {
+            match self.read_register(asic_index, reg_addr).await? {
+                Some(value) => {
+                    let _ = values.push(value);
+                }
+                None => return Ok(None),
+            }
+        }
+        Ok(Some(values))
     }
 
     /// ## Read the hash clock of one asic
@@ -1593,5 +1637,24 @@ mod tests {
         assert_eq!(nonces, [nonce, nonce + 1]);
         // each nonce is counted once, when it is received
         assert_eq!(chain.chip_nonce_counts(), &[2]);
+    }
+
+    #[tokio::test]
+    async fn read_hash_counter_reads_the_total_counter() {
+        let mut chain = chain(&reg_frame(0x0001_2345, 0, 0x8C));
+        assert_eq!(chain.read_hash_counter(0).await.unwrap(), Some(0x0001_2345));
+        assert_eq!(chain.uart.1, Command::read_reg(0x8C, Destination::Chip(0)));
+    }
+
+    #[tokio::test]
+    async fn read_hash_domain_counters_reads_each_domain() {
+        let rx: Vec<u8> = (0..4u8)
+            .flat_map(|d| reg_frame(100 + u32::from(d), 0, 0x88 + d))
+            .collect();
+        let mut chain = chain(&rx);
+        let counters = chain.read_hash_domain_counters(0).await.unwrap().unwrap();
+        assert_eq!(counters.as_slice(), &[100, 101, 102, 103]);
+        // a chip that does not answer
+        assert_eq!(chain.read_hash_domain_counters(0).await.unwrap(), None);
     }
 }

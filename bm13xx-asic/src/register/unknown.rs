@@ -38,6 +38,12 @@ unknown!(Domain1GotNonceCounter, 0x89);
 unknown!(Domain2GotNonceCounter, 0x8A);
 unknown!(Domain3GotNonceCounter, 0x8B);
 unknown!(GotNonceCounter, 0x8C);
+// Hash-domain counters 4 to 7 of the BM1372, which has eight domains; on the chips before, `0xAC` is
+// `RegAC`.
+unknown!(Domain4GotNonceCounter, 0xAC);
+unknown!(Domain5GotNonceCounter, 0xAD);
+unknown!(Domain6GotNonceCounter, 0xAE);
+unknown!(Domain7GotNonceCounter, 0xAF);
 unknown!(NtickNonceCounter, 0x90);
 unknown!(TickNonceCounter, 0x94);
 unknown!(RegAC, 0xAC);

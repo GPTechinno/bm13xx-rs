@@ -279,6 +279,44 @@ impl Default for BM1370 {
 }
 
 impl Asic for BM1370 {
+    /// ## Register of the hash counter
+    ///
+    /// `GotNonceCounter`, the total of the four hash-domain counters, one count per 2^32 hashes.
+    ///
+    /// ### Example
+    /// ```
+    /// use bm1370::BM1370;
+    /// use bm13xx_asic::Asic;
+    ///
+    /// assert_eq!(BM1370::default().hash_counter_reg(), Some(0x8C));
+    /// ```
+    fn hash_counter_reg(&self) -> Option<u8> {
+        Some(GotNonceCounter::ADDR)
+    }
+
+    /// ## Registers of the hash-domain counters
+    ///
+    /// `Domain0GotNonceCounter` to `Domain3GotNonceCounter`, one per hash domain.
+    ///
+    /// ### Example
+    /// ```
+    /// use bm1370::BM1370;
+    /// use bm13xx_asic::Asic;
+    ///
+    /// assert_eq!(
+    ///     BM1370::default().hash_domain_counter_regs(),
+    ///     [0x88, 0x89, 0x8A, 0x8B]
+    /// );
+    /// ```
+    fn hash_domain_counter_regs(&self) -> &'static [u8] {
+        &[
+            Domain0GotNonceCounter::ADDR,
+            Domain1GotNonceCounter::ADDR,
+            Domain2GotNonceCounter::ADDR,
+            Domain3GotNonceCounter::ADDR,
+        ]
+    }
+
     /// ## Reset the Chip to default state
     fn reset(&mut self) {
         self.seq_step = SequenceStep::default();

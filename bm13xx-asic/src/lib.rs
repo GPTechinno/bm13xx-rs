@@ -121,6 +121,16 @@ pub trait Asic {
         chain_asic_num: usize,
         asic_addr_interval: usize,
     ) -> Option<CmdDelay>;
+    /// Register of the chip's hash counter: the total of its hash-domain counters, one count per
+    /// 2^32 hashes (a nonce at difficulty 1), wrapping around. `None` when the chip has none.
+    fn hash_counter_reg(&self) -> Option<u8> {
+        None
+    }
+    /// Registers of the chip's hash-domain counters, in domain order, each counting one per 2^32
+    /// hashes of its domain and wrapping around. Empty when the chip has none.
+    fn hash_domain_counter_regs(&self) -> &'static [u8] {
+        &[]
+    }
     /// Die temperature reading sequence for one chip (`dest`). `None` at once when the chip has no
     /// die temperature reading.
     fn die_temp_next(&mut self, _dest: Destination) -> Option<SensorStep> {
