@@ -88,13 +88,15 @@ use embedded_hal::digital::OutputPin;
 use embedded_hal_async::delay::DelayNs;
 use embedded_io_async::{Read, ReadReady, Write};
 use fugit::HertzU64;
-use heapless::Vec;
+use heapless::{Deque, Vec};
 
 pub trait Baud {
     fn set_baudrate(&mut self, baudrate: u32);
 }
 
 const RX_BUF_SIZE: usize = 256;
+/// Responses kept while waiting for a register answer, for [`Chain::poll_response`].
+const PENDING_SIZE: usize = 16;
 
 /// Enumeration stops once no ChipIdentification reply has come for this long.
 const ENUM_QUIET_MS: u32 = 100;
@@ -134,6 +136,10 @@ pub struct Chain<A, U, OB, OR, D> {
     rx_buf: [u8; RX_BUF_SIZE],
     rx_free_pos: usize,
     rx_dropped: usize,
+    /// Responses received while waiting for a register answer, returned first by
+    /// [`Chain::poll_response`].
+    #[cfg_attr(feature = "defmt", defmt(Debug2Format))]
+    pending: Deque<ResponseType, PENDING_SIZE>,
     busy: OB,
     reset: OR,
     delay: D,
@@ -192,9 +198,18 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
     /// If more than the first frame has been received, this function will keep the extra data in the internal rx buffer.
     /// In case of receiving a Frame with bad CRC or bad Preamble, this function will drop bytes up to the next
     /// possible Preamble, count them (see [`Chain::rx_dropped_bytes`]) and return None.
+    /// The responses received while a register read waited for its answer come first.
     pub async fn poll_response(
         &mut self,
     ) -> Result<Option<ResponseType>, U::Error, OB::Error, OR::Error> {
+        if let Some(resp) = self.pending.pop_front() {
+            return Ok(Some(resp));
+        }
+        self.receive().await
+    }
+
+    /// Parse the next response from the rx buffer, then read what the UART has received.
+    async fn receive(&mut self) -> Result<Option<ResponseType>, U::Error, OB::Error, OR::Error> {
         let mut resp = None;
         let expected_frame_size = if self.version_rolling_mask.is_some() {
             FRAME_SIZE_VER
@@ -347,7 +362,8 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
     }
 
     /// Wait for the answer of chip `chip_addr` to a read of `reg_addr`. Other responses received
-    /// meanwhile, nonces included, are dropped.
+    /// meanwhile, nonces included, are kept for [`Chain::poll_response`] (up to `PENDING_SIZE`;
+    /// beyond, they are dropped).
     async fn wait_register(
         &mut self,
         chip_addr: u8,
@@ -355,13 +371,20 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
     ) -> Result<Option<u32>, U::Error, OB::Error, OR::Error> {
         let mut waited_ms = 0;
         while waited_ms < READ_TIMEOUT_MS {
-            match self.poll_response().await? {
+            match self.receive().await? {
                 Some(ResponseType::Reg(r))
                     if r.chip_addr == chip_addr && r.reg_addr == reg_addr =>
                 {
                     return Ok(Some(r.reg_value));
                 }
-                Some(_) => {}
+                Some(other) => {
+                    if let Err(resp) = self.pending.push_back(other) {
+                        warn!(
+                            "Dropping {:?}: too many responses while waiting for a register",
+                            resp
+                        );
+                    }
+                }
                 None => {
                     self.delay.delay_ms(1).await;
                     waited_ms += 1;
@@ -374,7 +397,7 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
     /// ## Read a register of one asic
     ///
     /// Returns `None` if the asic did not answer. Other responses received meanwhile, nonces
-    /// included, are dropped.
+    /// included, are kept for [`Chain::poll_response`].
     pub async fn read_register(
         &mut self,
         asic_index: usize,
@@ -594,7 +617,7 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
     /// ## Read the die temperature of one asic, in °C
     ///
     /// Returns `None` if the asic has no die temperature reading or did not answer. Other
-    /// responses received meanwhile, nonces included, are dropped.
+    /// responses received meanwhile, nonces included, are kept for [`Chain::poll_response`].
     pub async fn read_die_temp(
         &mut self,
         asic_index: usize,
@@ -609,7 +632,7 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
     ///
     /// `channel` is one of the chip's sense channels (0 to 3). Returns `None` if the asic has no
     /// such reading or did not answer. Other responses received meanwhile, nonces included, are
-    /// dropped.
+    /// kept for [`Chain::poll_response`].
     pub async fn read_chip_supply_voltage(
         &mut self,
         asic_index: usize,
@@ -653,6 +676,7 @@ impl<A: Asic, U: Read + ReadReady + Write + Baud, OB: OutputPin, OR: OutputPin, 
             rx_buf: [0; RX_BUF_SIZE],
             rx_free_pos: 0,
             rx_dropped: 0,
+            pending: Deque::new(),
             busy,
             reset,
             delay,
@@ -1183,6 +1207,7 @@ mod tests {
             rx_buf: [0; RX_BUF_SIZE],
             rx_free_pos: 0,
             rx_dropped: 0,
+            pending: Deque::new(),
             busy: MockPin,
             reset: MockPin,
             delay: MockDelay,
@@ -1529,5 +1554,42 @@ mod tests {
             job_ids.push(chain.send_job(0, [0; 32], [0; 32], 0, 0).await.unwrap());
         }
         assert_eq!(job_ids, (1..32).chain(0..2).collect::<Vec<u8>>());
+    }
+
+    /// Nonce response without version rolling, with its CRC.
+    fn nonce_frame(nonce: u32) -> [u8; FRAME_SIZE] {
+        let mut frame = [0xAA, 0x55, 0, 0, 0, 0, 0x00, 0x08, 0x80];
+        frame[2..6].copy_from_slice(&nonce.to_le_bytes());
+        frame[8] = (0x80..0xA0)
+            .find(|&crc| {
+                frame[8] = crc;
+                Response::parse(&frame, 8).is_ok()
+            })
+            .unwrap();
+        frame
+    }
+
+    #[tokio::test]
+    async fn read_register_keeps_the_nonces_received_meanwhile() {
+        let nonce = 0x1234_5678;
+        let rx = [
+            nonce_frame(nonce),
+            reg_frame(0x0000_04D2, 0, 0x8C),
+            nonce_frame(nonce + 1),
+        ]
+        .concat();
+        let mut chain = chain(&rx);
+        assert_eq!(chain.read_register(0, 0x8C).await.unwrap(), Some(0x04D2));
+        let nonces: Vec<u32> = poll_all(&mut chain)
+            .await
+            .into_iter()
+            .filter_map(|r| match r {
+                ResponseType::Job(j) => Some(j.nonce),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(nonces, [nonce, nonce + 1]);
+        // each nonce is counted once, when it is received
+        assert_eq!(chain.chip_nonce_counts(), &[2]);
     }
 }
